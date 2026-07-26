@@ -65,22 +65,37 @@ function canUseApplicationDefault() {
   );
 }
 
-export function firebaseAdminConfigured() {
-  return Boolean(loadServiceAccount()) || canUseApplicationDefault();
+function firebaseConfigJson(): {
+  projectId?: string;
+  storageBucket?: string;
+} | null {
+  const raw = process.env.FIREBASE_CONFIG;
+  if (!raw || !raw.trim().startsWith("{")) return null;
+  try {
+    return JSON.parse(raw) as { projectId?: string; storageBucket?: string };
+  } catch {
+    return null;
+  }
 }
 
-function storageBucket() {
+export function resolveStorageBucket(): string | undefined {
   return (
     process.env.FIREBASE_STORAGE_BUCKET ||
-    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+    firebaseConfigJson()?.storageBucket ||
+    undefined
   );
+}
+
+export function firebaseAdminConfigured() {
+  return Boolean(loadServiceAccount()) || canUseApplicationDefault();
 }
 
 export function getAdminApp(): App | null {
   if (getApps().length) return getApps()[0]!;
 
   const sa = loadServiceAccount();
-  const bucket = storageBucket();
+  const bucket = resolveStorageBucket();
 
   if (sa) {
     return initializeApp({
@@ -92,6 +107,10 @@ export function getAdminApp(): App | null {
 
   if (canUseApplicationDefault()) {
     try {
+      // Prefer no-arg init on App Hosting (uses FIREBASE_CONFIG + ADC).
+      if (process.env.FIREBASE_CONFIG) {
+        return initializeApp();
+      }
       return initializeApp({
         credential: applicationDefault(),
         storageBucket: bucket,

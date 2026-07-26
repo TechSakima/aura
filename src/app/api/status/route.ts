@@ -19,6 +19,6 @@ export async function GET() {
     ],
     error: ready
       ? null
-      : "Firebase Admin + Storage bucket required. Add serviceAccountKey.json.",
+      : "Firebase Admin + Storage bucket required. On App Hosting, associate a web app and set NEXT_PUBLIC_* / FIREBASE_STORAGE_BUCKET.",
   });
 }

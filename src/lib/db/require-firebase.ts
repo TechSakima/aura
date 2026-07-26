@@ -2,10 +2,13 @@ import {
   firebaseAdminConfigured,
   getAdminDb,
   getAdminStorage,
+  resolveStorageBucket,
 } from "@/lib/firebase/admin";
 
 export class FirebaseNotConfiguredError extends Error {
-  constructor(message = "Firebase Admin is required. Add serviceAccountKey.json and a Storage bucket.") {
+  constructor(
+    message = "Firebase Admin is required. Add serviceAccountKey.json and a Storage bucket.",
+  ) {
     super(message);
     this.name = "FirebaseNotConfiguredError";
   }
@@ -17,9 +20,7 @@ export function assertFirebaseReady() {
   }
   const db = getAdminDb();
   const storage = getAdminStorage();
-  const bucket =
-    process.env.FIREBASE_STORAGE_BUCKET ||
-    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  const bucket = resolveStorageBucket();
   if (!db || !storage || !bucket) {
     throw new FirebaseNotConfiguredError(
       "Firebase Admin or Storage bucket is not configured.",

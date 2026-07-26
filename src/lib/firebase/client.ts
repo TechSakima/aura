@@ -4,14 +4,19 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-export function firebaseConfigured() {
-  return Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-}
+type WebAppConfig = {
+  apiKey?: string;
+  authDomain?: string;
+  projectId?: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
+  measurementId?: string;
+};
 
-export function getFirebaseApp(): FirebaseApp | null {
-  if (!firebaseConfigured()) return null;
-  if (getApps().length) return getApps()[0]!;
-  return initializeApp({
+function configFromNextPublic(): WebAppConfig | null {
+  if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) return null;
+  return {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
@@ -19,7 +24,41 @@ export function getFirebaseApp(): FirebaseApp | null {
     messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-  });
+  };
+}
+
+/** App Hosting injects this at build/runtime when a web app is associated. */
+function configFromWebAppEnv(): WebAppConfig | null {
+  const raw = process.env.FIREBASE_WEBAPP_CONFIG;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as WebAppConfig;
+  } catch {
+    return null;
+  }
+}
+
+export function firebaseConfigured() {
+  if (configFromNextPublic()?.apiKey) return true;
+  if (configFromWebAppEnv()?.apiKey) return true;
+  // App Hosting can bake defaults into the firebase package during install.
+  return Boolean(process.env.K_SERVICE || process.env.FIREBASE_CONFIG);
+}
+
+export function getFirebaseApp(): FirebaseApp | null {
+  if (getApps().length) return getApps()[0]!;
+
+  const explicit = configFromNextPublic() || configFromWebAppEnv();
+  if (explicit?.apiKey) {
+    return initializeApp(explicit);
+  }
+
+  // App Hosting / auto-initialized Firebase JS SDK (no-arg constructor).
+  try {
+    return initializeApp();
+  } catch {
+    return null;
+  }
 }
 
 export function getFirebaseAuth() {
