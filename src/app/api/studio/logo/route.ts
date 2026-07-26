@@ -7,16 +7,26 @@ export async function POST(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const form = await req.formData();
-  const file = form.get("file");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "file required" }, { status: 400 });
-  }
+  try {
+    const form = await req.formData();
+    const file = form.get("file");
+    if (!(file instanceof File) && !(file instanceof Blob)) {
+      return NextResponse.json({ error: "file required" }, { status: 400 });
+    }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const logoUrl = await saveBrandLogo(buffer);
-  await updateDb((db) => {
-    db.studio.logoUrl = logoUrl;
-  });
-  return NextResponse.json({ logoUrl });
+    const buffer = Buffer.from(await file.arrayBuffer());
+    if (!buffer.length) {
+      return NextResponse.json({ error: "empty file" }, { status: 400 });
+    }
+
+    const logoUrl = await saveBrandLogo(buffer);
+    await updateDb((db) => {
+      db.studio.logoUrl = logoUrl;
+    });
+    return NextResponse.json({ logoUrl });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Logo upload failed";
+    console.error("[studio/logo]", e);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

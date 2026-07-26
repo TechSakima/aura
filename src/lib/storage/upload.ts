@@ -28,16 +28,26 @@ export async function uploadBuffer(opts: {
   const bucket = storage.bucket(bucketName);
   const file = bucket.file(opts.objectPath);
   const token = randomUUID();
-  await file.save(opts.buffer, {
-    resumable: false,
-    metadata: {
-      contentType: opts.contentType,
-      metadata: opts.makePublic ? { firebaseStorageDownloadTokens: token } : {},
-      cacheControl: opts.makePublic
-        ? "public, max-age=31536000, immutable"
-        : "private, max-age=0",
-    },
-  });
+  try {
+    await file.save(opts.buffer, {
+      resumable: false,
+      metadata: {
+        contentType: opts.contentType,
+        metadata: opts.makePublic
+          ? { firebaseStorageDownloadTokens: token }
+          : {},
+        cacheControl: opts.makePublic
+          ? "public, max-age=31536000, immutable"
+          : "private, max-age=0",
+      },
+    });
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : "upload failed";
+    throw new Error(
+      `Storage upload failed (${bucketName}/${opts.objectPath}): ${detail}. ` +
+        "Ensure App Hosting compute SA has roles/storage.objectAdmin on the bucket.",
+    );
+  }
 
   if (opts.makePublic) {
     try {
@@ -50,7 +60,7 @@ export async function uploadBuffer(opts: {
     return { path: opts.objectPath, url };
   }
 
-  // Private: serve through our media proxy
+  // Private: serve through our media proxy (same-origin on App Hosting / Hosting)
   return {
     path: opts.objectPath,
     url: `/api/media/${opts.objectPath.split("/").map(encodeURIComponent).join("/")}`,

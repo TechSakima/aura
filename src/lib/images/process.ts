@@ -265,17 +265,27 @@ export async function saveWatermarkAsset(
 }
 
 export async function saveBrandLogo(buffer: Buffer): Promise<string> {
-  const objectPath = storageObjectPath("brand", `logo-${Date.now()}.webp`);
-  const webp = await sharp(buffer)
-    .rotate()
-    .resize({ width: 800, withoutEnlargement: true })
-    .webp({ quality: 85 })
-    .toBuffer();
+  let out: Buffer;
+  let contentType = "image/webp";
+  let ext = "webp";
+  try {
+    out = await sharp(buffer)
+      .rotate()
+      .resize({ width: 800, withoutEnlargement: true })
+      .webp({ quality: 85 })
+      .toBuffer();
+  } catch {
+    // Sharp can fail on some App Hosting images; store original bytes instead.
+    out = buffer;
+    contentType = "application/octet-stream";
+    ext = "bin";
+  }
+  const objectPath = storageObjectPath("brand", `logo-${Date.now()}.${ext}`);
   // Serve via /api/media — Firebase “public” object ACLs are often blocked.
   const uploaded = await uploadBuffer({
-    buffer: webp,
+    buffer: out,
     objectPath,
-    contentType: "image/webp",
+    contentType,
     makePublic: false,
   });
   return uploaded.url;

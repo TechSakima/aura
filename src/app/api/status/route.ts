@@ -14,6 +14,7 @@ export async function GET() {
     mediaBackend: ready ? mediaBackend() : "unavailable",
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || null,
     hosting: [
+      "aura--aura-photo-manager.us-east4.hosted.app",
       "aura-photo-manager.web.app",
       "aura-photo-manager.firebaseapp.com",
     ],
