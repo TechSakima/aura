@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Public derivative URLs use download tokens set by the Admin SDK.
+// Direct browser list/write is denied; server uses Admin SDK.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

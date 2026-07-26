@@ -1,0 +1,19 @@
+# Firebase App Hosting — Cloud Run defaults for Next.js + image work
+runConfig:
+  cpu: 1
+  memoryMiB: 1024
+  maxInstances: 10
+  minInstances: 0
+  concurrency: 80
+
+# Public web config: set in Firebase Console → App Hosting → Environment
+# (or associate a Firebase web app so FIREBASE_WEBAPP_CONFIG is injected).
+#
+# Admin SDK uses Application Default Credentials on App Hosting — no key file.
+# Optional overrides:
+# env:
+#   - variable: FIREBASE_STORAGE_BUCKET
+#     value: aura-photo-manager.firebasestorage.app
+#     availability:
+#       - BUILD
+#       - RUNTIME

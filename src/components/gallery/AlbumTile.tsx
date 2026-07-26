@@ -1,0 +1,78 @@
+"use client";
+
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { cn } from "@/lib/cn";
+
+export function AlbumTile({
+  href,
+  onClick,
+  coverUrl,
+  label,
+  meta,
+  featured,
+  className,
+}: {
+  href?: string;
+  onClick?: () => void;
+  coverUrl?: string | null;
+  label: string;
+  meta?: string;
+  featured?: boolean;
+  className?: string;
+}) {
+  const inner = (
+    <>
+      <div
+        className={cn(
+          "relative overflow-hidden bg-line",
+          featured ? "aspect-[16/10] sm:aspect-[21/9]" : "aspect-[4/3]",
+        )}
+      >
+        {coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={coverUrl}
+            alt=""
+            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink to-accent/50" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/20 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-4 text-surface sm:p-5">
+          <p className={cn("font-display", featured ? "text-2xl sm:text-3xl" : "text-xl")}>
+            {label}
+          </p>
+          {meta ? <p className="mt-1 text-sm text-surface/75">{meta}</p> : null}
+        </div>
+      </div>
+    </>
+  );
+
+  const shared = cn(
+    "group block w-full overflow-hidden rounded-md border border-line bg-surface text-left no-underline transition-opacity hover:opacity-95",
+    featured && "sm:col-span-2",
+    className,
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className={shared}>
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={shared}>
+      {inner}
+    </button>
+  );
+}
+
+export function AlbumTileGrid({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">{children}</div>
+  );
+}

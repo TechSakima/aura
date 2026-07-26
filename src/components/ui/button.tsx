@@ -1,0 +1,44 @@
+import { cn } from "@/lib/cn";
+import type { ButtonHTMLAttributes } from "react";
+
+type Tone = "accent" | "neutral" | "danger" | "ghost";
+type Size = "sm" | "md" | "lg";
+
+const toneClass: Record<Tone, string> = {
+  accent: "bg-accent text-accent-ink hover:opacity-90",
+  neutral: "bg-ink text-surface hover:opacity-90",
+  danger: "bg-danger text-danger-ink hover:opacity-90",
+  ghost: "bg-transparent text-ink hover:bg-line/40",
+};
+
+const sizeClass: Record<Size, string> = {
+  sm: "min-h-9 px-3 text-sm",
+  md: "min-h-11 px-4 text-sm",
+  lg: "min-h-12 px-5 text-base",
+};
+
+export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  tone?: Tone;
+  size?: Size;
+};
+
+export function Button({
+  className,
+  tone = "accent",
+  size = "md",
+  type = "button",
+  ...props
+}: ButtonProps) {
+  return (
+    <button
+      type={type}
+      className={cn(
+        "inline-flex touch-target items-center justify-center gap-2 rounded-md font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50",
+        toneClass[tone],
+        sizeClass[size],
+        className,
+      )}
+      {...props}
+    />
+  );
+}
