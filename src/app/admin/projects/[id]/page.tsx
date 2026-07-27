@@ -76,7 +76,7 @@ export default function ProjectDetailPage() {
           ...shoot,
           type: shoot.type,
           status: shoot.status,
-          shootDate: shoot.shootDate,
+          shootDate: shoot.startsAt?.slice(0, 10),
           currentStep: progress.currentStep,
           label: progress.currentStep.replace("-", " "),
           quoteToken: w.proposal?.token,
@@ -87,7 +87,7 @@ export default function ProjectDetailPage() {
           ...shoot,
           type: shoot.type,
           status: shoot.status,
-          shootDate: shoot.shootDate,
+          shootDate: shoot.startsAt?.slice(0, 10),
         });
       }
     }

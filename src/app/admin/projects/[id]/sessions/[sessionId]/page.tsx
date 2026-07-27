@@ -116,7 +116,10 @@ function WizardInner() {
       projectId={projectId}
       projectName={projectName}
       sessionType={data.shoot.type}
-      sessionDate={data.shoot.shootDate}
+      sessionDate={
+        data.shoot.startsAt?.slice(0, 10) ||
+        (data.shoot as { shootDate?: string }).shootDate
+      }
       quoteToken={data.proposal?.token}
       galleryToken={data.gallery?.publicToken}
       step={step}
