@@ -67,14 +67,11 @@ env:
     secret: RESEND_API_KEY
     availability:
       - RUNTIME
-  # Stripe — create App Hosting secrets first, then uncomment:
-  #   npx firebase-tools apphosting:secrets:set STRIPE_SECRET_KEY --backend aura
-  #   npx firebase-tools apphosting:secrets:set STRIPE_WEBHOOK_SECRET --backend aura
-  # - variable: STRIPE_SECRET_KEY
-  #   secret: STRIPE_SECRET_KEY
-  #   availability:
-  #     - RUNTIME
-  # - variable: STRIPE_WEBHOOK_SECRET
-  #   secret: STRIPE_WEBHOOK_SECRET
-  #   availability:
-  #     - RUNTIME
+  - variable: STRIPE_SECRET_KEY
+    secret: STRIPE_SECRET_KEY
+    availability:
+      - RUNTIME
+  - variable: STRIPE_WEBHOOK_SECRET
+    secret: STRIPE_WEBHOOK_SECRET
+    availability:
+      - RUNTIME
