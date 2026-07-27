@@ -21,7 +21,7 @@ export function createEmptyStudio(opts: {
     brandTagline: "Photography, delivered with care",
     timeZone: "America/Denver",
     dateFormat: "mm/dd/yyyy",
-    theme: { background: "#F3F3F3", accent: "#1D1D1D", fontPreset: "sans" },
+    theme: { background: "#F3F1ED", accent: "#1C1915", fontPreset: "sans", presetId: "linen" },
     homepage: {
       enabled: false,
       slug: `${slug}-${id.slice(0, 6)}`,

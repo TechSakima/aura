@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { ShootPublicLinks } from "@/components/admin/ShootPublicLinks";
 import { Button, useConfirm, useToast } from "@/components/ui";
 import type { Shoot } from "@/lib/types";
 import type { WizardGallery } from "@/components/wizard/useShootWizard";
@@ -9,14 +8,12 @@ import type { WizardGallery } from "@/components/wizard/useShootWizard";
 export function WrapStep({
   shoot,
   gallery,
-  quoteToken,
   photoCount,
   favoriteCount,
   onChanged,
 }: {
   shoot: Shoot;
   gallery: WizardGallery | null;
-  quoteToken?: string | null;
   photoCount: number;
   favoriteCount: number;
   onChanged: () => Promise<unknown>;
@@ -54,40 +51,36 @@ export function WrapStep({
     await onChanged();
   }
 
+  const archived =
+    gallery?.status === "archived" || shoot.status === "archived";
+
   return (
-    <div className="space-y-5">
+    <div className="max-w-lg space-y-8">
       <div>
         <h2 className="font-display text-2xl">Wrap</h2>
         <p className="mt-1 text-sm text-muted">
-          Open the client pages, check favorites, then archive when the window closes.
+          Archive when the gallery window closes.
         </p>
       </div>
-
-      <ShootPublicLinks
-        quoteToken={quoteToken}
-        galleryToken={gallery?.publicToken}
-        size="md"
-        showCopy
-      />
 
       {!gallery ? (
         <p className="text-sm text-muted">No gallery yet — finish Delivery first.</p>
       ) : (
-        <div className="space-y-4">
-          <dl className="grid gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-md border border-line p-3">
+        <>
+          <dl className="divide-y divide-line border-y border-line text-sm">
+            <div className="flex items-baseline justify-between gap-4 py-3">
               <dt className="text-muted">Status</dt>
               <dd className="font-medium">{gallery.status}</dd>
             </div>
-            <div className="rounded-md border border-line p-3">
+            <div className="flex items-baseline justify-between gap-4 py-3">
               <dt className="text-muted">Photos</dt>
               <dd className="font-medium">{photoCount}</dd>
             </div>
-            <div className="rounded-md border border-line p-3">
-              <dt className="text-muted">Client favorites</dt>
+            <div className="flex items-baseline justify-between gap-4 py-3">
+              <dt className="text-muted">Favorites</dt>
               <dd className="font-medium">{favoriteCount}</dd>
             </div>
-            <div className="rounded-md border border-line p-3">
+            <div className="flex items-baseline justify-between gap-4 py-3">
               <dt className="text-muted">Expires</dt>
               <dd className="font-medium">
                 {new Date(gallery.expiresAt).toLocaleDateString()}
@@ -95,16 +88,19 @@ export function WrapStep({
             </div>
           </dl>
 
-          {gallery.status !== "archived" && shoot.status !== "archived" ? (
-            <div>
-              <Button tone="danger" disabled={archiving} onClick={() => void archive()}>
-                {archiving ? "Archiving…" : "Archive & download zip"}
-              </Button>
-            </div>
+          {archived ? (
+            <p className="text-sm text-muted">Archived.</p>
           ) : (
-            <p className="text-sm text-muted">This job is archived. Nice work.</p>
+            <Button
+              tone="danger"
+              className="min-h-11"
+              disabled={archiving}
+              onClick={() => void archive()}
+            >
+              {archiving ? "Archiving…" : "Archive & download zip"}
+            </Button>
           )}
-        </div>
+        </>
       )}
     </div>
   );

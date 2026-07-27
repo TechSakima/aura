@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { GalleryThemeId } from "@/lib/types";
+import { resolveGalleryTheme } from "@/lib/themes";
 
 export function GalleryHero({
   images,
@@ -28,6 +29,8 @@ export function GalleryHero({
   const slides = images.length ? images : [];
   const [index, setIndex] = useState(0);
   const [entered, setEntered] = useState(false);
+  const theme = resolveGalleryTheme(themeId);
+  const layout = theme.layout;
   const minH = compact
     ? "min-h-[42vh] sm:min-h-[48vh]"
     : "min-h-[72vh] sm:min-h-[85vh]";
@@ -50,15 +53,12 @@ export function GalleryHero({
       ? `${coverFocalX}% ${coverFocalY}%`
       : "center";
 
-  /** Echo / Lark: split title + CTA on large screens (collection sleek). */
-  const splitLayout = themeId === "echo" || themeId === "lark";
-
   const titleClass =
-    themeId === "sage"
+    layout === "centered"
       ? "font-display text-4xl font-light tracking-[0.08em] sm:text-6xl md:text-7xl"
-      : themeId === "spring"
+      : layout === "vertical"
         ? "font-display text-4xl uppercase tracking-[0.2em] [writing-mode:vertical-rl] rotate-180 sm:text-5xl"
-        : themeId === "lark"
+        : themeId === "lark" || themeId === "obsidian"
           ? "font-sans text-3xl font-semibold uppercase tracking-[0.12em] sm:text-5xl md:text-6xl"
           : "font-sans text-3xl font-semibold uppercase tracking-[0.16em] sm:text-5xl md:text-6xl";
 
@@ -103,18 +103,16 @@ export function GalleryHero({
         className={cn(
           "relative z-10 flex px-5 sm:px-10",
           minH,
-          themeId === "spring"
+          layout === "vertical"
             ? "items-start justify-center pb-12 pl-6 sm:pl-12"
-            : themeId === "sage"
+            : layout === "centered"
               ? "items-center justify-center pb-12 text-center"
-              : splitLayout
-                ? "items-end justify-center pb-14 sm:pb-16"
-                : "items-end justify-center pb-14 text-center sm:pb-16",
+              : "items-end justify-center pb-14 sm:pb-16",
           entered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
           "transition-all duration-700 ease-out",
         )}
       >
-        {splitLayout ? (
+        {layout === "split" ? (
           <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center gap-8 text-center sm:flex-row sm:items-end sm:justify-between sm:text-left">
             <div>
               <h1 className={titleClass}>{title}</h1>
@@ -138,11 +136,10 @@ export function GalleryHero({
           <div
             className={cn(
               "mx-auto w-full max-w-[var(--shell-max)]",
-              themeId === "sage" ? "flex flex-col items-center" : "",
-              themeId === "spring" ? "" : "",
+              layout === "centered" ? "flex flex-col items-center" : "",
             )}
           >
-            {dateLabel && themeId !== "spring" ? (
+            {dateLabel && layout !== "vertical" ? (
               <p className="mb-3 text-[11px] uppercase tracking-[0.28em] text-surface/85">
                 {dateLabel}
               </p>
@@ -150,7 +147,7 @@ export function GalleryHero({
 
             <h1 className={titleClass}>{title}</h1>
 
-            {daysLeft != null && daysLeft >= 0 && themeId !== "spring" ? (
+            {daysLeft != null && daysLeft >= 0 && layout !== "vertical" ? (
               <p className="mt-4 text-xs uppercase tracking-[0.16em] text-surface/70">
                 {daysLeft === 0
                   ? "Last day to download"

@@ -5,6 +5,7 @@ import { markGalleryLive } from "@/lib/gallery-live";
 import { reprocessGalleryWatermarks } from "@/lib/images/rewatermark";
 import { notifyStudio } from "@/lib/notify/send";
 import { hashPin, PinValidationError } from "@/lib/pin";
+import { isGalleryThemeId } from "@/lib/themes";
 
 export async function GET(
   _req: Request,
@@ -64,15 +65,19 @@ export async function PATCH(
         g.showOnHomepage = Boolean(body.showOnHomepage);
       }
       if (body.design && typeof body.design === "object") {
+        const nextThemeId = isGalleryThemeId(body.design.themeId)
+          ? body.design.themeId
+          : g.design?.themeId || "echo";
         g.design = {
           coverStyle: body.design.coverStyle || g.design?.coverStyle || "full",
-          themeId: body.design.themeId || g.design?.themeId || "echo",
+          themeId: nextThemeId,
           gridMode: body.design.gridMode || g.design?.gridMode || "masonry",
           coverPhotoId: body.design.coverPhotoId ?? g.design?.coverPhotoId,
           coverFocalX: body.design.coverFocalX ?? g.design?.coverFocalX,
           coverFocalY: body.design.coverFocalY ?? g.design?.coverFocalY,
-          background: body.design.background ?? g.design?.background,
-          accent: body.design.accent ?? g.design?.accent,
+          // Colors come from curated themes — clear freeform overrides
+          background: undefined,
+          accent: undefined,
           appIconUrl: body.design.appIconUrl ?? g.design?.appIconUrl,
         };
       }

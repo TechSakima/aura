@@ -70,7 +70,15 @@ export type GalleryCoverStyle = "full" | "third" | "none";
 
 export type GalleryGridMode = "masonry" | "justified" | "columns";
 
-export type GalleryThemeId = "echo" | "spring" | "lark" | "sage";
+export type GalleryThemeId =
+  | "echo"
+  | "spring"
+  | "lark"
+  | "sage"
+  | "dusk"
+  | "obsidian"
+  | "velvet"
+  | "ember";
 
 export type ContractStatus =
   | "draft"
@@ -111,6 +119,8 @@ export type PrintPartner = {
 };
 
 export type StudioTheme = {
+  /** Curated preset id when chosen from the theme picker */
+  presetId?: string;
   background: string;
   accent: string;
   fontPreset: FontPresetId;
@@ -684,7 +694,8 @@ export const DEFAULT_GALLERY_DESIGN: GalleryDesign = {
 };
 
 export const DEFAULT_STUDIO_THEME: StudioTheme = {
-  background: "#F3F3F3",
-  accent: "#1D1D1D",
+  presetId: "linen",
+  background: "#F3F1ED",
+  accent: "#1C1915",
   fontPreset: "sans",
 };

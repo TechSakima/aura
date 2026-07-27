@@ -75,6 +75,24 @@ export function absoluteUrl(path: string) {
   return `${appOrigin()}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatSignedDate(isoDate: string) {
+  const d = new Date(`${isoDate}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export function wrapHtml(opts: {
   studioName: string;
   title: string;
@@ -430,6 +448,43 @@ ${nextStepHtml("Open the link, read the terms, and sign when ready. Reply to thi
     }),
     text: `Hi ${who},\n\nPlease review and sign your agreement.\n\nNext: Open the link, read the terms, and sign when ready.\n${href}`,
     idempotencyKey: `contract-sign/${opts.token}`,
+  });
+}
+
+/** Client: signed agreement copy */
+export async function emailContractSignedCopy(opts: {
+  studioId: string;
+  to: string;
+  clientName?: string;
+  title: string;
+  body: string;
+  signerName: string;
+  signedDate: string;
+  token: string;
+}) {
+  const db = await readStudioDb(opts.studioId);
+  const href = absoluteUrl(`/c/${opts.token}`);
+  const who = opts.clientName || opts.signerName || "there";
+  const when = formatSignedDate(opts.signedDate);
+  const agreementHtml = escapeHtml(opts.body).replace(/\n/g, "<br>");
+  const label = offeringLabel(opts.title) || opts.title;
+
+  return emailClient({
+    to: opts.to,
+    subject: `Signed agreement — ${db.studio.name}`,
+    fromDisplayName: db.studio.name,
+    replyTo: db.studio.ownerEmail,
+    html: wrapHtml({
+      studioName: db.studio.name,
+      title: label,
+      bodyHtml: `<p>Hi ${escapeHtml(who)},</p>
+<p>Signed by ${escapeHtml(opts.signerName)} · ${when}</p>
+<div style="margin-top:24px;padding:20px;border:1px solid #e8e4de;font-size:14px;line-height:1.65;color:#2a2622">${agreementHtml}</div>`,
+      ctaLabel: "View signed agreement",
+      ctaHref: href,
+    }),
+    text: `Hi ${who},\n\nSigned by ${opts.signerName} · ${when}\n\n${label}\n\n${opts.body}\n\n${href}`,
+    idempotencyKey: `contract-signed/${opts.token}`,
   });
 }
 

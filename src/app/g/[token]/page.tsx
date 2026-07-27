@@ -32,6 +32,10 @@ import {
 } from "@/components/ui";
 import type { Comment, Gallery } from "@/lib/types";
 import { filenameFromContentDisposition } from "@/lib/images/download-filename";
+import {
+  galleryThemeCssVars,
+  resolveGalleryTheme,
+} from "@/lib/themes";
 
 type PublicPhoto = MasonryPhoto & {
   kind: string;
@@ -310,8 +314,8 @@ export default function PublicGalleryPage() {
   const coverStyle = design?.coverStyle || "full";
   const themeId = design?.themeId || "echo";
   const gridMode = design?.gridMode || "masonry";
-  const pageBg = design?.background || "#f7f5f1";
-  const pageAccent = design?.accent || "#1c1915";
+  const galleryTheme = resolveGalleryTheme(themeId);
+  const themeStyle = galleryThemeCssVars(galleryTheme) as CSSProperties;
 
   const dateLabel = gallery.liveAt
     ? format(new Date(gallery.liveAt), "MMMM do, yyyy").toUpperCase()
@@ -366,16 +370,7 @@ export default function PublicGalleryPage() {
 
   if (view === "favorites" || view === "peek") {
     return (
-      <div
-        className="min-h-full text-ink"
-        style={
-          {
-            ["--gallery-page-bg" as string]: pageBg,
-            background: pageBg,
-            ["--color-accent" as string]: pageAccent,
-        } as CSSProperties
-      }
-    >
+      <div className="min-h-full text-ink" style={themeStyle}>
       {chrome}
         <AlbumView
           title={view === "favorites" ? "Favorites" : "Sneak peek"}
@@ -432,16 +427,7 @@ export default function PublicGalleryPage() {
   }
 
   return (
-    <div
-      className="min-h-full text-ink"
-      style={
-        {
-          ["--gallery-page-bg" as string]: pageBg,
-          background: pageBg,
-          ["--color-accent" as string]: pageAccent,
-        } as CSSProperties
-      }
-    >
+    <div className="min-h-full text-ink" style={themeStyle}>
       {chrome}
 
       {coverStyle !== "none" ? (

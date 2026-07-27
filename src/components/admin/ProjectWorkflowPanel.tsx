@@ -450,6 +450,38 @@ export function ProjectWorkflowPanel({
     }
   }
 
+  async function emailDepositLink() {
+    if (!projectDepositLink) {
+      push("Create a deposit first", "danger");
+      return;
+    }
+    const to = project.email?.trim();
+    if (!to) {
+      push("Add project email in Contact", "danger");
+      return;
+    }
+    setBusy("deposit");
+    const res = await fetch("/api/payments/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "email",
+        id: projectDepositLink.id,
+        email: to,
+      }),
+    });
+    setBusy(null);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      push(String(data.error || "Could not email pay link"), "danger");
+      return;
+    }
+    push(
+      data.emailed === false ? "Email skipped" : "Pay link emailed",
+      data.emailed === false ? "neutral" : "success",
+    );
+  }
+
   async function createGallery() {
     const session = toolSession || primarySession;
     if (!session) {
@@ -803,13 +835,26 @@ export function ProjectWorkflowPanel({
                       {depositPaid ? "Paid" : "Create deposit"}
                     </Button>
                     {projectDepositLink || invoices.length > 0 ? (
-                      <Button
-                        tone="neutral"
-                        className="min-h-11"
-                        onClick={() => void copyDepositLink()}
-                      >
-                        Copy pay link
-                      </Button>
+                      <>
+                        <Button
+                          tone="neutral"
+                          className="min-h-11"
+                          onClick={() => void copyDepositLink()}
+                        >
+                          Copy pay link
+                        </Button>
+                        {!depositPaid && projectDepositLink ? (
+                          <Button
+                            tone="neutral"
+                            className="min-h-11"
+                            pending={busy === "deposit"}
+                            pendingLabel="Sending…"
+                            onClick={() => void emailDepositLink()}
+                          >
+                            Email pay link
+                          </Button>
+                        ) : null}
+                      </>
                     ) : null}
                   </>
                 ) : null}

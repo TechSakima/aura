@@ -15,6 +15,7 @@ import {
   useUploadSession,
 } from "@/components/ui";
 import { GalleryDesignPanel } from "@/components/admin/GalleryDesignPanel";
+import { cn } from "@/lib/cn";
 import type { Shoot, WatermarkPreset } from "@/lib/types";
 import type { WizardGallery, WizardPhoto } from "@/components/wizard/useShootWizard";
 
@@ -42,6 +43,7 @@ export function DeliveryStep({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [tab, setTab] = useState<"photos" | "design">("photos");
+  const [goingLive, setGoingLive] = useState(false);
 
   const peekPhotos = useMemo(
     () => photos.filter((p) => p.kind === "peek"),
@@ -52,7 +54,10 @@ export function DeliveryStep({
     [photos],
   );
   const mainPhotos = useMemo(
-    () => photos.filter((p) => p.kind === "main" || (!["peek", "video"].includes(p.kind))),
+    () =>
+      photos.filter(
+        (p) => p.kind === "main" || !["peek", "video"].includes(p.kind),
+      ),
     [photos],
   );
 
@@ -127,6 +132,13 @@ export function DeliveryStep({
     await onChanged();
   }
 
+  async function goLive() {
+    setGoingLive(true);
+    await patch({ goLive: true });
+    setGoingLive(false);
+    push("Gallery is live", "success");
+  }
+
   async function refreshWatermarks() {
     if (!gallery) return;
     push("Refreshing watermarks…", "neutral");
@@ -139,10 +151,7 @@ export function DeliveryStep({
       return;
     }
     const data = await res.json().catch(() => ({}));
-    push(
-      `Watermarks refreshed (${data.updated ?? 0} photos)`,
-      "success",
-    );
+    push(`Watermarks refreshed (${data.updated ?? 0} photos)`, "success");
     await onChanged();
   }
 
@@ -193,101 +202,110 @@ export function DeliveryStep({
 
   if (!gallery) {
     return (
-      <div className="space-y-5">
+      <div className="mx-auto max-w-md space-y-6">
         <div>
           <h2 className="font-display text-2xl">Delivery</h2>
           <p className="mt-1 text-sm text-muted">
-            Create the client gallery, set a download PIN, then upload photos.
+            Create the gallery, then upload.
           </p>
         </div>
-        <form onSubmit={createGallery} className="max-w-md space-y-4">
+        <form onSubmit={createGallery} className="space-y-4">
           <Field>
-            <Label>Gallery title</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
+            <Label htmlFor="gallery-title">Gallery title</Label>
+            <Input
+              id="gallery-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+            />
           </Field>
           <Field>
-            <Label>Download PIN (4 digits)</Label>
+            <Label htmlFor="gallery-pin">Download PIN</Label>
             <Input
+              id="gallery-pin"
               inputMode="numeric"
               pattern="\d{4}"
               maxLength={4}
               value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onChange={(e) =>
+                setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              placeholder="4 digits"
               required
             />
           </Field>
-          <Button type="submit">Create gallery</Button>
+          <Button type="submit" className="min-h-11 w-full sm:w-auto">
+            Create gallery
+          </Button>
         </form>
       </div>
     );
   }
 
+  const isDraft = gallery.status === "draft";
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {uploadSession.dialog}
 
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="font-display text-2xl">Delivery</h2>
-          <p className="mt-1 text-sm text-muted">
-            {gallery.title} · {gallery.status} · {photos.length} photos
+      <header className="flex flex-col gap-4 border-b border-line pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <h2 className="font-display text-2xl tracking-tight">{gallery.title}</h2>
+          <p className="text-sm text-muted">
+            {gallery.status}
+            <span className="mx-2 text-line">·</span>
+            {photos.length} {photos.length === 1 ? "file" : "files"}
           </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
           <a
             href={`/g/${gallery.publicToken}`}
             target="_blank"
             rel="noreferrer"
-            className="mt-1 inline-block text-sm text-accent"
+            className="inline-flex min-h-11 items-center px-1 text-sm text-muted no-underline hover:text-ink"
           >
-            Open public gallery
+            Preview
           </a>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            tone={tab === "photos" ? "accent" : "ghost"}
-            onClick={() => setTab("photos")}
-          >
-            Photos
-          </Button>
-          <Button
-            size="sm"
-            tone={tab === "design" ? "accent" : "ghost"}
-            onClick={() => setTab("design")}
-          >
-            Layout
-          </Button>
-          <FileUploadButton
-            label="Upload gallery"
-            multiple
-            disabled={uploadSession.busy}
-            onFiles={(files) => void uploadFiles("main", files)}
-          />
-          <FileUploadButton
-            label="Upload sneak peek"
-            multiple
-            tone="neutral"
-            disabled={uploadSession.busy}
-            onFiles={(files) => void uploadFiles("peek", files)}
-          />
-          <FileUploadButton
-            label="Upload video"
-            accept="video/*"
-            multiple
-            tone="neutral"
-            disabled={uploadSession.busy}
-            onFiles={(files) => void uploadFiles("video", files)}
-          />
-          {gallery.status === "draft" ? (
+          {isDraft ? (
             <Button
-              onClick={async () => {
-                await patch({ goLive: true });
-                push("Gallery is live", "success");
-              }}
+              className="min-h-11"
+              pending={goingLive}
+              pendingLabel="Publishing…"
+              onClick={() => void goLive()}
             >
               Go live
             </Button>
           ) : null}
         </div>
+      </header>
+
+      <div
+        role="tablist"
+        aria-label="Delivery views"
+        className="flex gap-1 border-b border-line"
+      >
+        {(
+          [
+            { id: "photos", label: "Photos" },
+            { id: "design", label: "Layout" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "-mb-px min-h-11 border-b-2 px-3 text-sm transition-colors",
+              tab === t.id
+                ? "border-ink text-ink"
+                : "border-transparent text-muted hover:text-ink",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {tab === "design" ? (
@@ -303,133 +321,210 @@ export function DeliveryStep({
       ) : null}
 
       {tab === "photos" ? (
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-end gap-x-6 gap-y-3 border-y border-line py-3">
-            <label className="inline-flex items-center gap-2 text-sm">
-              <Switch
-                checked={gallery.commentsEnabled}
-                onCheckedChange={(v) => void patch({ commentsEnabled: v })}
-                label="Comments"
-              />
-              Comments
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <Switch
-                checked={gallery.watermarkEnabled}
-                onCheckedChange={(v) => void patch({ watermarkEnabled: v })}
-                label="Watermark"
-              />
-              Watermark
-            </label>
-            <Field className="min-w-[10rem]">
-              <Label>Watermark preset</Label>
-              <Select
-                value={gallery.watermarkPresetId || ""}
-                onChange={(e) => void patch({ watermarkPresetId: e.target.value })}
-              >
-                <option value="">Studio default</option>
-                {watermarkPresets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button
-              size="sm"
-              tone="ghost"
-              type="button"
-              onClick={() => void refreshWatermarks()}
-            >
-              Refresh watermarks
-            </Button>
-            <Field className="min-w-[8rem]">
-              <Label>PIN</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={resetPin}
-                  maxLength={4}
-                  placeholder="####"
-                  onChange={(e) =>
-                    setResetPin(e.target.value.replace(/\D/g, "").slice(0, 4))
-                  }
-                />
-                <Button
-                  size="sm"
-                  tone="neutral"
-                  onClick={async () => {
-                    if (!/^\d{4}$/.test(resetPin)) {
-                      push("PIN must be 4 digits", "danger");
-                      return;
-                    }
-                    await patch({ pin: resetPin });
-                    setResetPin("");
-                    push("PIN updated", "success");
-                  }}
-                >
-                  Save
-                </Button>
-              </div>
-            </Field>
-          </div>
-
-          {selected.size > 0 ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-line/30 px-3 py-2">
-              <span className="text-sm">{selected.size} selected</span>
-              <Button
-                size="sm"
-                tone="danger"
-                disabled={deleting}
-                onClick={() => void deleteIds([...selected])}
-              >
-                Delete selected
-              </Button>
-              <Button
-                size="sm"
-                tone="ghost"
-                onClick={() => setSelected(new Set())}
-              >
-                Clear
-              </Button>
-            </div>
-          ) : null}
-
+        <div className="space-y-8">
           {photos.length === 0 ? (
-            <EmptyState
-              title="No photos yet"
-              description="Upload gallery, sneak peek, or video."
-            />
-          ) : (
-            <div className="space-y-8">
-              <PhotoGroup
-                title="Sneak peek"
-                photos={peekPhotos}
-                selected={selected}
-                onToggle={toggleSelect}
-                onToggleAll={(on) => toggleGroup(peekPhotos, on)}
-                onDeleteOne={(id) => void deleteIds([id])}
-                deleting={deleting}
+            <div className="space-y-6 py-6 text-center sm:py-10">
+              <EmptyState
+                title="No photos yet"
+                description="Upload the gallery, then sneak peek or video if needed."
               />
-              <PhotoGroup
-                title="Gallery"
-                photos={mainPhotos}
-                selected={selected}
-                onToggle={toggleSelect}
-                onToggleAll={(on) => toggleGroup(mainPhotos, on)}
-                onDeleteOne={(id) => void deleteIds([id])}
-                deleting={deleting}
-              />
-              <PhotoGroup
-                title="Video"
-                photos={videoPhotos}
-                selected={selected}
-                onToggle={toggleSelect}
-                onToggleAll={(on) => toggleGroup(videoPhotos, on)}
-                onDeleteOne={(id) => void deleteIds([id])}
-                deleting={deleting}
-              />
+              <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <FileUploadButton
+                  label="Upload gallery"
+                  multiple
+                  className="min-h-11"
+                  disabled={uploadSession.busy}
+                  onFiles={(files) => void uploadFiles("main", files)}
+                />
+                <FileUploadButton
+                  label="Sneak peek"
+                  multiple
+                  tone="ghost"
+                  className="min-h-11"
+                  disabled={uploadSession.busy}
+                  onFiles={(files) => void uploadFiles("peek", files)}
+                />
+                <FileUploadButton
+                  label="Video"
+                  accept="video/*"
+                  multiple
+                  tone="ghost"
+                  className="min-h-11"
+                  disabled={uploadSession.busy}
+                  onFiles={(files) => void uploadFiles("video", files)}
+                />
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  <FileUploadButton
+                    label="Add photos"
+                    multiple
+                    className="min-h-11"
+                    disabled={uploadSession.busy}
+                    onFiles={(files) => void uploadFiles("main", files)}
+                  />
+                  <FileUploadButton
+                    label="Sneak peek"
+                    multiple
+                    tone="ghost"
+                    className="min-h-11"
+                    disabled={uploadSession.busy}
+                    onFiles={(files) => void uploadFiles("peek", files)}
+                  />
+                  <FileUploadButton
+                    label="Video"
+                    accept="video/*"
+                    multiple
+                    tone="ghost"
+                    className="min-h-11"
+                    disabled={uploadSession.busy}
+                    onFiles={(files) => void uploadFiles("video", files)}
+                  />
+                </div>
+                {selected.size > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-muted">
+                      {selected.size} selected
+                    </span>
+                    <Button
+                      size="sm"
+                      tone="danger"
+                      className="min-h-11"
+                      disabled={deleting}
+                      onClick={() => void deleteIds([...selected])}
+                    >
+                      Delete
+                    </Button>
+                    <Button
+                      size="sm"
+                      tone="ghost"
+                      className="min-h-11"
+                      onClick={() => setSelected(new Set())}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-10">
+                <PhotoGroup
+                  title="Gallery"
+                  photos={mainPhotos}
+                  selected={selected}
+                  onToggle={toggleSelect}
+                  onToggleAll={(on) => toggleGroup(mainPhotos, on)}
+                  onDeleteOne={(id) => void deleteIds([id])}
+                  deleting={deleting}
+                />
+                <PhotoGroup
+                  title="Sneak peek"
+                  photos={peekPhotos}
+                  selected={selected}
+                  onToggle={toggleSelect}
+                  onToggleAll={(on) => toggleGroup(peekPhotos, on)}
+                  onDeleteOne={(id) => void deleteIds([id])}
+                  deleting={deleting}
+                  hideWhenEmpty
+                />
+                <PhotoGroup
+                  title="Video"
+                  photos={videoPhotos}
+                  selected={selected}
+                  onToggle={toggleSelect}
+                  onToggleAll={(on) => toggleGroup(videoPhotos, on)}
+                  onDeleteOne={(id) => void deleteIds([id])}
+                  deleting={deleting}
+                  hideWhenEmpty
+                />
+              </div>
+            </>
           )}
+
+          <section className="space-y-5 border-t border-line pt-8">
+            <h3 className="font-display text-xl">Settings</h3>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-4">
+                <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
+                  <span>Comments</span>
+                  <Switch
+                    checked={gallery.commentsEnabled}
+                    onCheckedChange={(v) => void patch({ commentsEnabled: v })}
+                    label="Comments"
+                  />
+                </label>
+                <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
+                  <span>Watermark</span>
+                  <Switch
+                    checked={gallery.watermarkEnabled}
+                    onCheckedChange={(v) => void patch({ watermarkEnabled: v })}
+                    label="Watermark"
+                  />
+                </label>
+                {gallery.watermarkEnabled ? (
+                  <Field>
+                    <Label htmlFor="wm-preset">Watermark preset</Label>
+                    <Select
+                      id="wm-preset"
+                      value={gallery.watermarkPresetId || ""}
+                      onChange={(e) =>
+                        void patch({ watermarkPresetId: e.target.value })
+                      }
+                    >
+                      <option value="">Studio default</option>
+                      {watermarkPresets.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <Button
+                      type="button"
+                      tone="ghost"
+                      size="sm"
+                      className="mt-2 min-h-11"
+                      onClick={() => void refreshWatermarks()}
+                    >
+                      Refresh watermarks
+                    </Button>
+                  </Field>
+                ) : null}
+              </div>
+              <Field>
+                <Label htmlFor="reset-pin">Download PIN</Label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="reset-pin"
+                    value={resetPin}
+                    maxLength={4}
+                    inputMode="numeric"
+                    placeholder="New 4-digit PIN"
+                    onChange={(e) =>
+                      setResetPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+                    }
+                  />
+                  <Button
+                    tone="neutral"
+                    className="min-h-11 shrink-0"
+                    onClick={async () => {
+                      if (!/^\d{4}$/.test(resetPin)) {
+                        push("PIN must be 4 digits", "danger");
+                        return;
+                      }
+                      await patch({ pin: resetPin });
+                      setResetPin("");
+                      push("PIN updated", "success");
+                    }}
+                  >
+                    Update PIN
+                  </Button>
+                </div>
+              </Field>
+            </div>
+          </section>
         </div>
       ) : null}
     </div>
@@ -444,6 +539,7 @@ function PhotoGroup({
   onToggleAll,
   onDeleteOne,
   deleting,
+  hideWhenEmpty,
 }: {
   title: string;
   photos: WizardPhoto[];
@@ -452,14 +548,11 @@ function PhotoGroup({
   onToggleAll: (on: boolean) => void;
   onDeleteOne: (id: string) => void;
   deleting: boolean;
+  hideWhenEmpty?: boolean;
 }) {
   if (photos.length === 0) {
-    return (
-      <section>
-        <h3 className="font-display text-xl">{title}</h3>
-        <p className="mt-1 text-sm text-muted">None yet</p>
-      </section>
-    );
+    if (hideWhenEmpty) return null;
+    return null;
   }
 
   const allSelected = photos.every((p) => selected.has(p.id));
@@ -467,27 +560,29 @@ function PhotoGroup({
   return (
     <section>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-display text-xl">
+        <h3 className="text-sm font-medium text-ink">
           {title}{" "}
-          <span className="text-base font-normal text-muted">({photos.length})</span>
+          <span className="font-normal text-muted">({photos.length})</span>
         </h3>
-        <label className="inline-flex items-center gap-2 text-sm text-muted">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={(e) => onToggleAll(e.target.checked)}
-          />
-          Select all
-        </label>
+        <button
+          type="button"
+          className="min-h-11 text-sm text-muted hover:text-ink"
+          onClick={() => onToggleAll(!allSelected)}
+        >
+          {allSelected ? "Deselect all" : "Select all"}
+        </button>
       </div>
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {photos.map((p) => {
           const on = selected.has(p.id);
           return (
-            <li key={p.id} className="group relative overflow-hidden rounded-md border border-line">
+            <li
+              key={p.id}
+              className="group relative overflow-hidden border border-line"
+            >
               <button
                 type="button"
-                className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded border border-line bg-surface/90"
+                className="absolute left-2 top-2 z-10 flex size-8 items-center justify-center border border-line bg-surface/95 text-sm"
                 aria-label={on ? "Deselect" : "Select"}
                 onClick={() => onToggle(p.id)}
               >
@@ -497,7 +592,10 @@ function PhotoGroup({
               <img
                 src={p.thumbUrl}
                 alt=""
-                className={`aspect-square w-full object-cover ${on ? "opacity-80" : ""}`}
+                className={cn(
+                  "aspect-square w-full object-cover",
+                  on && "opacity-75",
+                )}
               />
               <div className="absolute inset-x-0 bottom-0 flex justify-end bg-gradient-to-t from-ink/70 to-transparent p-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                 <Button

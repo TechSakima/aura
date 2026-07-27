@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { COL } from "@/lib/db/collections";
 import { assertFirebaseReady } from "@/lib/db/require-firebase";
-import { getStudioDoc, updateStudioDb } from "@/lib/db/store";
-import { notifyStudio } from "@/lib/notify/send";
+import { getStudioDoc, readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  emailContractSignedCopy,
+  notifyStudio,
+} from "@/lib/notify/send";
+
 import type { Contract } from "@/lib/types";
 
 async function findContract(token: string) {
@@ -97,5 +101,21 @@ export async function POST(
     body: `${contract.title} signed by ${signerName}`,
     href: `/admin/projects/${contract.projectId}`,
   });
+
+  const db = await readStudioDb(contract.studioId);
+  const project = db.projects.find((p) => p.id === contract.projectId);
+  if (project?.email) {
+    await emailContractSignedCopy({
+      studioId: contract.studioId,
+      to: project.email,
+      clientName: project.name,
+      title: contract.title,
+      body: contract.body,
+      signerName,
+      signedDate,
+      token,
+    });
+  }
+
   return NextResponse.json({ ok: true, signedAt, signedDate });
 }

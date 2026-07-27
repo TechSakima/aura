@@ -7,41 +7,12 @@ import type {
   GalleryCoverStyle,
   GalleryDesign,
   GalleryGridMode,
-  GalleryThemeId,
 } from "@/lib/types";
 import { DEFAULT_GALLERY_DESIGN } from "@/lib/types";
-
-const THEMES: {
-  id: GalleryThemeId;
-  label: string;
-  sample: string;
-  fontClass: string;
-}[] = [
-  {
-    id: "echo",
-    label: "Echo",
-    sample: "ECHO",
-    fontClass: "font-sans text-[10px] font-semibold uppercase tracking-[0.14em]",
-  },
-  {
-    id: "spring",
-    label: "Spring",
-    sample: "Spring",
-    fontClass: "font-display text-[11px] tracking-wide",
-  },
-  {
-    id: "lark",
-    label: "Lark",
-    sample: "Lark",
-    fontClass: "font-sans text-[11px] font-medium tracking-tight",
-  },
-  {
-    id: "sage",
-    label: "Sage",
-    sample: "Sage",
-    fontClass: "font-display text-[12px] font-light italic tracking-wide",
-  },
-];
+import {
+  GALLERY_THEME_PRESETS,
+  resolveGalleryTheme,
+} from "@/lib/themes";
 
 const COVER_STYLES: { id: GalleryCoverStyle; label: string }[] = [
   { id: "full", label: "Full" },
@@ -54,16 +25,6 @@ const GRID_MODES: { id: GalleryGridMode; label: string }[] = [
   { id: "justified", label: "Justified" },
   { id: "columns", label: "Columns" },
 ];
-
-const THEME_PREVIEW: Record<
-  GalleryThemeId,
-  { bg: string; accent: string; ink: string }
-> = {
-  echo: { bg: "#F3F3F3", accent: "#1D1D1D", ink: "#1D1D1D" },
-  spring: { bg: "#F7F1EA", accent: "#3D5A40", ink: "#2A2A2A" },
-  lark: { bg: "#EEF2F6", accent: "#1F3A5F", ink: "#15202B" },
-  sage: { bg: "#F1F4EF", accent: "#4A5D4E", ink: "#222" },
-};
 
 function CoverStyleIcon({ id }: { id: GalleryCoverStyle }) {
   if (id === "none") {
@@ -111,25 +72,32 @@ export function GalleryDesignPanel({
   const [design, setDesign] = useState<GalleryDesign>({
     ...DEFAULT_GALLERY_DESIGN,
     ...(initial || {}),
+    // Themes own colors — drop legacy freeform overrides in the editor
+    background: undefined,
+    accent: undefined,
   });
   const [onHome, setOnHome] = useState(Boolean(showOnHomepage));
   const [saving, setSaving] = useState(false);
 
-  const preview = useMemo(() => {
-    const t = THEME_PREVIEW[design.themeId] || THEME_PREVIEW.echo;
-    return {
-      bg: design.background || t.bg,
-      accent: design.accent || t.accent,
-      ink: t.ink,
-    };
-  }, [design]);
+  const preview = useMemo(
+    () => resolveGalleryTheme(design.themeId),
+    [design.themeId],
+  );
 
-  const themeMeta = THEMES.find((t) => t.id === design.themeId) || THEMES[0];
+  const lightThemes = GALLERY_THEME_PRESETS.filter((t) => t.mode === "light");
+  const darkThemes = GALLERY_THEME_PRESETS.filter((t) => t.mode === "dark");
 
   async function save() {
     setSaving(true);
     try {
-      await onSave({ design, showOnHomepage: onHome });
+      await onSave({
+        design: {
+          ...design,
+          background: undefined,
+          accent: undefined,
+        },
+        showOnHomepage: onHome,
+      });
     } finally {
       setSaving(false);
     }
@@ -154,7 +122,7 @@ export function GalleryDesignPanel({
                   setDesign((d) => ({ ...d, coverStyle: c.id }))
                 }
                 className={cn(
-                  "overflow-hidden rounded-md border text-left transition",
+                  "overflow-hidden border text-left transition",
                   design.coverStyle === c.id
                     ? "border-accent ring-1 ring-accent"
                     : "border-line hover:border-ink/30",
@@ -169,40 +137,51 @@ export function GalleryDesignPanel({
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           <Label>Theme</Label>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {THEMES.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() =>
-                  setDesign((d) => ({ ...d, themeId: t.id }))
-                }
-                className={cn(
-                  "rounded-md border p-2 text-left transition",
-                  design.themeId === t.id
-                    ? "border-accent ring-1 ring-accent"
-                    : "border-line hover:border-ink/30",
-                )}
-              >
-                <span
-                  className="mb-2 flex h-14 items-center justify-center rounded-sm bg-ink text-surface"
-                  style={{
-                    background: coverPhotoUrl
-                      ? `linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,.2)), center/cover url(${coverPhotoUrl})`
-                      : undefined,
-                  }}
-                >
-                  <span className={cn(t.fontClass, "text-surface")}>
-                    {t.sample}
-                  </span>
-                </span>
-                <span className="text-[11px] uppercase tracking-wider">
-                  {t.label}
-                </span>
-              </button>
-            ))}
+          <div className="space-y-3">
+            <p className="text-xs uppercase tracking-[0.14em] text-muted">
+              Light
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {lightThemes.map((t) => (
+                <ThemeSwatch
+                  key={t.id}
+                  theme={t}
+                  selected={design.themeId === t.id}
+                  coverPhotoUrl={coverPhotoUrl}
+                  onSelect={() =>
+                    setDesign((d) => ({
+                      ...d,
+                      themeId: t.id,
+                      background: undefined,
+                      accent: undefined,
+                    }))
+                  }
+                />
+              ))}
+            </div>
+            <p className="text-xs uppercase tracking-[0.14em] text-muted">
+              Dark
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {darkThemes.map((t) => (
+                <ThemeSwatch
+                  key={t.id}
+                  theme={t}
+                  selected={design.themeId === t.id}
+                  coverPhotoUrl={coverPhotoUrl}
+                  onSelect={() =>
+                    setDesign((d) => ({
+                      ...d,
+                      themeId: t.id,
+                      background: undefined,
+                      accent: undefined,
+                    }))
+                  }
+                />
+              ))}
+            </div>
           </div>
         </div>
 
@@ -217,9 +196,9 @@ export function GalleryDesignPanel({
                   setDesign((d) => ({ ...d, gridMode: g.id }))
                 }
                 className={cn(
-                  "rounded-md border px-3 py-2 text-[11px] uppercase tracking-wider transition",
+                  "min-h-11 border px-3 py-2 text-[11px] uppercase tracking-wider transition",
                   design.gridMode === g.id
-                    ? "border-accent bg-accent text-surface"
+                    ? "border-accent bg-accent text-accent-ink"
                     : "border-line hover:border-ink/30",
                 )}
               >
@@ -227,35 +206,6 @@ export function GalleryDesignPanel({
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field>
-            <Label>Background</Label>
-            <Input
-              value={design.background || ""}
-              placeholder="Theme default"
-              onChange={(e) =>
-                setDesign((d) => ({
-                  ...d,
-                  background: e.target.value || undefined,
-                }))
-              }
-            />
-          </Field>
-          <Field>
-            <Label>Accent</Label>
-            <Input
-              value={design.accent || ""}
-              placeholder="Theme default"
-              onChange={(e) =>
-                setDesign((d) => ({
-                  ...d,
-                  accent: e.target.value || undefined,
-                }))
-              }
-            />
-          </Field>
         </div>
 
         <Field>
@@ -272,7 +222,7 @@ export function GalleryDesignPanel({
           />
         </Field>
 
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-11 items-center gap-3 text-sm">
           <Switch
             checked={onHome}
             onCheckedChange={setOnHome}
@@ -283,6 +233,7 @@ export function GalleryDesignPanel({
 
         <Button
           type="button"
+          className="min-h-11"
           pending={saving}
           pendingLabel="Saving…"
           onClick={() => void save()}
@@ -318,60 +269,92 @@ export function GalleryDesignPanel({
               <p className="text-[7px] uppercase tracking-[0.2em] text-surface/80">
                 July 22nd, 2026
               </p>
-              <p className={cn("mt-1 text-surface", themeMeta.fontClass)}>
-                Gallery
-              </p>
-              <span className="mt-3 border border-surface/90 px-2.5 py-1 text-[7px] uppercase tracking-[0.18em]">
-                View gallery
-              </span>
-            </div>
-          ) : (
-            <div className="px-3 pt-4 text-center">
-              <p className={cn(themeMeta.fontClass)} style={{ color: preview.ink }}>
-                Gallery
+              <p
+                className={cn(
+                  "mt-1 px-3 text-center text-surface",
+                  preview.fontClass.replace("text-[10px]", "text-[9px]")
+                    .replace("text-[11px]", "text-[10px]")
+                    .replace("text-[12px]", "text-[11px]"),
+                )}
+              >
+                {preview.sample}
               </p>
             </div>
-          )}
+          ) : null}
 
-          <div className="p-2">
+          <div className="space-y-2 p-3">
             <div
               className={cn(
+                "grid gap-1",
                 design.gridMode === "columns"
-                  ? "grid grid-cols-2 gap-0.5"
+                  ? "grid-cols-2"
                   : design.gridMode === "justified"
-                    ? "flex flex-wrap gap-0.5"
-                    : "columns-2 gap-0.5",
+                    ? "grid-cols-3"
+                    : "grid-cols-2",
               )}
             >
-              {[0.9, 1.3, 1.1, 0.8, 1.4, 1].map((a, i) => (
+              {[1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
                   className={cn(
-                    "break-inside-avoid",
-                    design.gridMode === "masonry" ? "mb-0.5" : "",
-                    design.gridMode === "justified"
-                      ? "h-8 grow basis-10"
-                      : "",
-                    design.gridMode === "columns" ? "aspect-[4/5]" : "",
+                    "bg-ink/10",
+                    design.gridMode === "masonry" && i === 1
+                      ? "row-span-2 aspect-[3/4]"
+                      : "aspect-square",
                   )}
                   style={{
-                    aspectRatio:
-                      design.gridMode === "masonry" ? String(a) : undefined,
                     background: `${preview.accent}28`,
                   }}
                 />
               ))}
             </div>
           </div>
-
-          <div className="flex justify-around border-t border-ink/10 py-2 text-[9px] text-ink/40">
-            <span>⌂</span>
-            <span>♡</span>
-            <span>↗</span>
-            <span>○</span>
-          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function ThemeSwatch({
+  theme,
+  selected,
+  coverPhotoUrl,
+  onSelect,
+}: {
+  theme: (typeof GALLERY_THEME_PRESETS)[number];
+  selected: boolean;
+  coverPhotoUrl?: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "border p-2 text-left transition",
+        selected
+          ? "border-accent ring-1 ring-accent"
+          : "border-line hover:border-ink/30",
+      )}
+    >
+      <span
+        className="mb-2 flex h-14 items-center justify-center"
+        style={{
+          background: coverPhotoUrl
+            ? `linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,.2)), center/cover url(${coverPhotoUrl})`
+            : theme.bg,
+          color: coverPhotoUrl ? "#faf8f5" : theme.ink,
+          borderBottom: `3px solid ${theme.accent}`,
+        }}
+      >
+        <span
+          className={cn(theme.fontClass)}
+          style={{ color: coverPhotoUrl ? "#faf8f5" : theme.ink }}
+        >
+          {theme.sample}
+        </span>
+      </span>
+      <span className="text-[11px] uppercase tracking-wider">{theme.label}</span>
+    </button>
   );
 }

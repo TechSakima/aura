@@ -6,6 +6,10 @@ import { useParams } from "next/navigation";
 import { Button, Field, Input, Label } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { displayHost } from "@/lib/urls";
+import {
+  resolveStudioThemePreset,
+  studioThemeCssVars,
+} from "@/lib/themes";
 
 type HomePayload = {
   studio: {
@@ -17,7 +21,12 @@ type HomePayload = {
     phone?: string;
     address?: string;
     socialLinks?: { label: string; url: string }[];
-    theme?: { background?: string; accent?: string; fontPreset?: string };
+    theme?: {
+      presetId?: string;
+      background?: string;
+      accent?: string;
+      fontPreset?: string;
+    };
     showBooking?: boolean;
     layout?: "masonry" | "grid" | "list";
     bookingHref?: string;
@@ -94,10 +103,8 @@ export default function GalleryHomepagePage() {
     data.studio.phone,
   ].filter(Boolean);
   const layout = data.studio.layout || "masonry";
-  const themeStyle = {
-    background: data.studio.theme?.background || undefined,
-    ["--color-accent" as string]: data.studio.theme?.accent || undefined,
-  } as CSSProperties;
+  const themePreset = resolveStudioThemePreset(data.studio.theme);
+  const themeStyle = studioThemeCssVars(themePreset) as CSSProperties;
 
   return (
     <div className="min-h-full bg-canvas text-ink" style={themeStyle}>

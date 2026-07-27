@@ -144,7 +144,7 @@ function WizardInner() {
       onNext={() => void onNext()}
       onSkip={step === "prep" ? () => void onSkip() : undefined}
       canSkip={step === "prep"}
-      nextLabel={step === "wrap" ? "Back to project" : "Continue"}
+      nextLabel={step === "wrap" ? "Done" : "Continue"}
     >
       {step === "prep" ? (
         <PrepStep
@@ -175,7 +175,6 @@ function WizardInner() {
         <WrapStep
           shoot={data.shoot}
           gallery={data.gallery}
-          quoteToken={data.proposal?.token}
           photoCount={data.photoCount}
           favoriteCount={data.gallery?.favoritePhotoIds?.length || 0}
           onChanged={reload}

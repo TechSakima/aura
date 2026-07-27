@@ -77,9 +77,14 @@ export async function PATCH(req: Request) {
       s.dateFormat = body.dateFormat as DateFormat;
     }
     if (body.theme && typeof body.theme === "object") {
+      const presetId =
+        typeof body.theme.presetId === "string"
+          ? body.theme.presetId
+          : undefined;
       s.theme = {
-        background: String(body.theme.background || s.theme?.background || "#F3F3F3"),
-        accent: String(body.theme.accent || s.theme?.accent || "#1D1D1D"),
+        presetId,
+        background: String(body.theme.background || s.theme?.background || "#F3F1ED"),
+        accent: String(body.theme.accent || s.theme?.accent || "#1C1915"),
         fontPreset: (body.theme.fontPreset ||
           s.theme?.fontPreset ||
           "sans") as FontPresetId,

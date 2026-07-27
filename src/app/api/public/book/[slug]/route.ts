@@ -138,15 +138,12 @@ export async function POST(
     return NextResponse.json({ error: "Could not create booking" }, { status: 500 });
   }
 
-  const origin = absoluteUrl("/").replace(/\/$/, "");
-  const projectHref = `/admin/projects/${createdProjectId}`;
-
   await notifyStudio({
     studioId: studio.id,
     type: "booking_submitted",
-    title: "New inquiry from booking form",
-    body: `${name} requested ${stPreview.name} · Open this Project to review the inquiry`,
-    href: projectHref,
+    title: "New booking request",
+    body: `${name} · ${stPreview.name}`,
+    href: "/admin/bookings",
   });
   await emailClient({
     to: email,
@@ -167,6 +164,6 @@ ${nextStepHtml("No action needed yet. We'll email you when your booking is confi
   return NextResponse.json({
     ok: true,
     booking,
-    projectHref: `${origin}${projectHref}`,
+    projectHref: absoluteUrl(`/admin/projects/${createdProjectId}`),
   });
 }

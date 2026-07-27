@@ -18,6 +18,12 @@ import {
   useUploadSession,
 } from "@/components/ui";
 import { resolveMediaUrl } from "@/lib/media-url";
+import {
+  STUDIO_THEME_PRESETS,
+  resolveStudioThemePreset,
+  studioThemeFromPreset,
+} from "@/lib/themes";
+import { cn } from "@/lib/cn";
 import type {
   PrintPartner,
   WatermarkPosition,
@@ -41,11 +47,7 @@ export default function SettingsPage() {
   const [region, setRegion] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [coverLogoUrl, setCoverLogoUrl] = useState("");
-  const [fontPreset, setFontPreset] = useState<"sans" | "serif" | "display">(
-    "sans",
-  );
-  const [accent, setAccent] = useState("#1D1D1D");
-  const [background, setBackground] = useState("#F3F3F3");
+  const [themePresetId, setThemePresetId] = useState("linen");
   const [homepageEnabled, setHomepageEnabled] = useState(false);
   const [homepageSlug, setHomepageSlug] = useState("");
   const [homepageBio, setHomepageBio] = useState("");
@@ -122,9 +124,7 @@ export default function SettingsPage() {
     setRegion(data.studio.region || "");
     setPostalCode(data.studio.postalCode || "");
     setCoverLogoUrl(data.studio.coverLogoUrl || "");
-    setFontPreset(data.studio.theme?.fontPreset || "sans");
-    setAccent(data.studio.theme?.accent || "#1D1D1D");
-    setBackground(data.studio.theme?.background || "#F3F3F3");
+    setThemePresetId(resolveStudioThemePreset(data.studio.theme).id);
     setHomepageEnabled(Boolean(data.studio.homepage?.enabled));
     setHomepageSlug(data.studio.homepage?.slug || "");
     setHomepageBio(data.studio.homepage?.biography || "");
@@ -212,7 +212,10 @@ export default function SettingsPage() {
         postalCode,
         coverLogoUrl,
         socialLinks,
-        theme: { background, accent, fontPreset },
+        theme: studioThemeFromPreset(
+          STUDIO_THEME_PRESETS.find((p) => p.id === themePresetId) ||
+            STUDIO_THEME_PRESETS[0]!,
+        ),
         homepage: {
           enabled: homepageEnabled,
           slug: homepageSlug,
@@ -564,36 +567,95 @@ export default function SettingsPage() {
                 />
               </div>
             </Field>
-            <Field>
-              <Label htmlFor="font">Font preset</Label>
-              <Select
-                id="font"
-                value={fontPreset}
-                onChange={(e) =>
-                  setFontPreset(e.target.value as "sans" | "serif" | "display")
-                }
-              >
-                <option value="sans">Sans</option>
-                <option value="serif">Serif</option>
-                <option value="display">Display</option>
-              </Select>
-            </Field>
-            <Field>
-              <Label htmlFor="accent">Accent color</Label>
-              <Input
-                id="accent"
-                value={accent}
-                onChange={(e) => setAccent(e.target.value)}
-              />
-            </Field>
-            <Field>
-              <Label htmlFor="bg">Background color</Label>
-              <Input
-                id="bg"
-                value={background}
-                onChange={(e) => setBackground(e.target.value)}
-              />
-            </Field>
+            <div className="space-y-3">
+              <Label>Theme</Label>
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2 text-xs uppercase tracking-[0.14em] text-muted">
+                    Light
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {STUDIO_THEME_PRESETS.filter((p) => p.mode === "light").map(
+                      (p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setThemePresetId(p.id)}
+                          className={cn(
+                            "border p-2 text-left transition",
+                            themePresetId === p.id
+                              ? "border-accent ring-1 ring-accent"
+                              : "border-line hover:border-ink/30",
+                          )}
+                        >
+                          <span
+                            className="mb-2 flex h-12 items-end justify-between px-2 pb-2"
+                            style={{
+                              background: p.background,
+                              color: p.ink,
+                              borderBottom: `3px solid ${p.accent}`,
+                            }}
+                          >
+                            <span className="text-[10px] font-medium uppercase tracking-wider">
+                              Aa
+                            </span>
+                            <span
+                              className="size-3"
+                              style={{ background: p.accent }}
+                            />
+                          </span>
+                          <span className="text-[11px] uppercase tracking-wider">
+                            {p.label}
+                          </span>
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-xs uppercase tracking-[0.14em] text-muted">
+                    Dark
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {STUDIO_THEME_PRESETS.filter((p) => p.mode === "dark").map(
+                      (p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setThemePresetId(p.id)}
+                          className={cn(
+                            "border p-2 text-left transition",
+                            themePresetId === p.id
+                              ? "border-accent ring-1 ring-accent"
+                              : "border-line hover:border-ink/30",
+                          )}
+                        >
+                          <span
+                            className="mb-2 flex h-12 items-end justify-between px-2 pb-2"
+                            style={{
+                              background: p.background,
+                              color: p.ink,
+                              borderBottom: `3px solid ${p.accent}`,
+                            }}
+                          >
+                            <span className="text-[10px] font-medium uppercase tracking-wider">
+                              Aa
+                            </span>
+                            <span
+                              className="size-3"
+                              style={{ background: p.accent }}
+                            />
+                          </span>
+                          <span className="text-[11px] uppercase tracking-wider">
+                            {p.label}
+                          </span>
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
             <PartnerListEditor partners={printPartners} onChange={setPrintPartners} />
             <Button type="submit" pending={savingStudio} pendingLabel="Saving…">
               Save studio
