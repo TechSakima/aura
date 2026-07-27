@@ -35,14 +35,15 @@ export async function GET(
     .map((p) => ({
       id: p.id,
       kind: p.kind,
-      thumbUrl: p.thumbUrl,
-      url:
+      thumbUrl: resolveMediaUrl(p.thumbUrl),
+      url: resolveMediaUrl(
         p.kind === "video"
           ? p.videoUrl || p.webUrl
           : gallery.watermarkEnabled
             ? p.watermarkedUrl
             : p.webUrl,
-      videoUrl: p.videoUrl,
+      ),
+      videoUrl: resolveMediaUrl(p.videoUrl),
       aspect: p.aspect,
       version: p.version,
     }));
@@ -65,7 +66,7 @@ export async function GET(
         token: s.token,
         label: s.label,
         count: s.photoIds.length,
-        coverUrl: cover?.thumbUrl || cover?.url,
+        coverUrl: resolveMediaUrl(cover?.thumbUrl || cover?.url),
       };
     });
 
@@ -79,7 +80,10 @@ export async function GET(
   const { downloadPinHash: _, ...safe } = gallery;
 
   return NextResponse.json({
-    gallery: safe,
+    gallery: {
+      ...safe,
+      coverPhotoUrl: resolveMediaUrl(safe.coverPhotoUrl),
+    },
     photos,
     clientName: project?.name || null,
     subAlbums,

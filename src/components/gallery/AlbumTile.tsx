@@ -51,7 +51,7 @@ export function AlbumTile({
   );
 
   const shared = cn(
-    "group block w-full overflow-hidden rounded-md border border-line bg-surface text-left no-underline transition-opacity hover:opacity-95",
+    "group block w-full overflow-hidden bg-ink text-left no-underline",
     featured && "sm:col-span-2",
     className,
   );

@@ -6,6 +6,7 @@ import {
   storageObjectPath,
   uploadBuffer,
 } from "@/lib/storage/upload";
+import { readImageDimensions } from "@/lib/images/dimensions";
 import type { WatermarkPreset } from "@/lib/types";
 
 type SharpFn = typeof import("sharp");
@@ -121,14 +122,18 @@ async function processUploadRaw(opts: {
     }),
   ]);
 
+  const dims = readImageDimensions(opts.buffer);
+  const width = dims?.width ?? 1;
+  const height = dims?.height ?? 1;
+
   return {
     storagePath: original.path,
     thumbUrl: thumb.url,
     webUrl: web.url,
     watermarkedUrl: wm.url,
-    width: 1,
-    height: 1,
-    aspect: 1,
+    width,
+    height,
+    aspect: width / height,
   };
 }
 

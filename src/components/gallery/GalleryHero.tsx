@@ -101,15 +101,15 @@ export function GalleryHero({
 
       <div
         className={cn(
-          "relative z-10 flex px-5 pt-16 sm:px-10",
+          "relative z-10 flex px-5 sm:px-10",
           minH,
           themeId === "spring"
-            ? "items-start justify-center pl-6 sm:pl-12"
+            ? "items-start justify-center pb-12 pl-6 sm:pl-12"
             : themeId === "sage"
-              ? "items-center justify-center text-center"
+              ? "items-center justify-center pb-12 text-center"
               : splitLayout
-                ? "items-end justify-center pb-14 sm:items-end sm:pb-16"
-                : "items-center justify-center text-center",
+                ? "items-end justify-center pb-14 sm:pb-16"
+                : "items-end justify-center pb-14 text-center sm:pb-16",
           entered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
           "transition-all duration-700 ease-out",
         )}

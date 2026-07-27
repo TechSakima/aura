@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { differenceInCalendarDays, format } from "date-fns";
@@ -8,6 +8,14 @@ import {
   AlbumShareButton,
   AlbumView,
 } from "@/components/gallery/AlbumView";
+import { AlbumTile, AlbumTileGrid } from "@/components/gallery/AlbumTile";
+import {
+  GalleryNavItem,
+  GalleryTileAction,
+  IconDownload,
+  IconHeart,
+  IconShare,
+} from "@/components/gallery/GalleryIcons";
 import { GalleryHero } from "@/components/gallery/GalleryHero";
 import { MasonryGrid, type MasonryPhoto } from "@/components/gallery/MasonryGrid";
 import { PhotoLightbox } from "@/components/gallery/PhotoLightbox";
@@ -53,28 +61,6 @@ type GalleryPayload = {
 
 type DownloadMode = "all" | "single" | "favorites";
 type ViewMode = "hub" | "favorites" | "peek";
-
-function IconButton({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className="inline-flex h-9 w-9 items-center justify-center text-ink/80 transition hover:text-ink"
-    >
-      {children}
-    </button>
-  );
-}
 
 export default function PublicGalleryPage() {
   const params = useParams<{ token: string }>();
@@ -329,55 +315,49 @@ export default function PublicGalleryPage() {
       : null;
 
   const chrome = (
-    <header className="sticky top-0 z-30 border-b border-ink/5 bg-[color:var(--gallery-page-bg)]/92 backdrop-blur-md">
-      <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3 sm:px-8">
+    <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur-md">
+      <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 py-2.5 sm:px-8">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold tracking-wide text-ink">
+          <p className="truncate text-sm font-semibold uppercase tracking-[0.14em] text-ink">
             {gallery.title}
           </p>
-          <p className="truncate text-[10px] uppercase tracking-[0.2em] text-muted">
+          <p className="truncate text-[10px] uppercase tracking-[0.22em] text-muted">
             {studio.name}
           </p>
         </div>
         {!expired ? (
-          <div className="flex shrink-0 items-center gap-0.5">
-            {favorites.length > 0 ? (
-              <IconButton
-                label="Favorites"
-                onClick={() => setView("favorites")}
-              >
-                ♥
-              </IconButton>
-            ) : (
-              <IconButton
-                label="Favorites"
-                onClick={() => setView("favorites")}
-              >
-                ♡
-              </IconButton>
-            )}
-            <IconButton
+          <nav
+            aria-label="Gallery"
+            className="flex shrink-0 items-center gap-0.5 sm:gap-1"
+          >
+            <GalleryNavItem
+              label={
+                favorites.length > 0
+                  ? `Favorites (${favorites.length})`
+                  : "Favorites"
+              }
+              onClick={() => setView("favorites")}
+              active={view === "favorites"}
+            >
+              <IconHeart filled={favorites.length > 0} />
+            </GalleryNavItem>
+            <GalleryNavItem
               label="Download"
               onClick={() => startDownload("all")}
             >
-              ↓
-            </IconButton>
-            <IconButton label="Share" onClick={() => void shareAlbum()}>
-              ↗
-            </IconButton>
-            {peekPhotos.length > 0 ? (
-              <IconButton
-                label="Sneak peek"
-                onClick={() => setView("peek")}
-              >
-                ◌
-              </IconButton>
-            ) : null}
-          </div>
+              <IconDownload />
+            </GalleryNavItem>
+            <GalleryNavItem label="Share" onClick={() => void shareAlbum()}>
+              <IconShare />
+            </GalleryNavItem>
+          </nav>
         ) : null}
       </div>
     </header>
   );
+
+  const peekCover =
+    peekPhotos[0]?.thumbUrl || peekPhotos[0]?.url || undefined;
 
   if (view === "favorites" || view === "peek") {
     return (
@@ -413,13 +393,13 @@ export default function PublicGalleryPage() {
                   <button
                     type="button"
                     aria-label="Toggle favorite"
-                    className="bg-surface/90 px-2 py-1 text-sm"
+                    className="bg-surface/90 p-1.5"
                     onClick={(e) => {
                       e.stopPropagation();
                       void toggleFavorite(photo.id);
                     }}
                   >
-                    {favorites.includes(photo.id) ? "♥" : "♡"}
+                    <IconHeart filled={favorites.includes(photo.id)} />
                   </button>
                 )
           }
@@ -500,64 +480,73 @@ export default function PublicGalleryPage() {
           </p>
         ) : (
           <>
-            <div className="px-0 pt-0">
-            <MasonryGrid
-              photos={mainPhotos}
-              gridMode={gridMode}
-              onPhotoClick={(p) => void openPhoto(p, mainPhotos)}
-              hoverActions={(photo) => (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Favorite"
-                    className="inline-flex h-8 w-8 items-center justify-center text-sm text-ink/80 hover:text-ink"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void toggleFavorite(photo.id);
-                    }}
-                  >
-                    {favorites.includes(photo.id) ? "♥" : "♡"}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Download"
-                    className="inline-flex h-8 w-8 items-center justify-center text-sm text-ink/80 hover:text-ink"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startDownload("single", photo.id);
-                    }}
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Share selection"
-                    className="inline-flex h-8 w-8 items-center justify-center text-sm text-ink/80 hover:text-ink"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSubSelected([photo.id]);
-                      setSubOpen(true);
-                    }}
-                  >
-                    ↗
-                  </button>
-                </>
-              )}
-            />
-            </div>
-
-            {subAlbums.length > 0 ? (
-              <ul className="mx-auto mt-12 flex max-w-[1400px] flex-wrap gap-6 border-t border-ink/10 px-4 pt-10 text-sm sm:px-8">
-                {subAlbums.map((album) => (
-                  <li key={album.id}>
-                    <Link href={`/s/${album.token}`} className="text-accent">
-                      {album.label}
-                      <span className="text-muted"> · {album.count}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+            {peekPhotos.length > 0 || subAlbums.length > 0 ? (
+              <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-8">
+                <AlbumTileGrid>
+                  {peekPhotos.length > 0 ? (
+                    <AlbumTile
+                      label="Sneak peek"
+                      meta={`${peekPhotos.length} photos`}
+                      coverUrl={peekCover}
+                      onClick={() => setView("peek")}
+                      featured={!subAlbums.length}
+                    />
+                  ) : null}
+                  {subAlbums.map((album) => (
+                    <AlbumTile
+                      key={album.id}
+                      href={`/s/${album.token}`}
+                      label={album.label}
+                      meta={`${album.count} photos`}
+                      coverUrl={album.coverUrl}
+                    />
+                  ))}
+                </AlbumTileGrid>
+              </div>
             ) : null}
+
+            <div className="px-0 pt-0">
+              <MasonryGrid
+                photos={mainPhotos}
+                gridMode={gridMode}
+                onPhotoClick={(p) => void openPhoto(p, mainPhotos)}
+                hoverActions={(photo) => (
+                  <>
+                    <GalleryTileAction
+                      label="Favorite"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void toggleFavorite(photo.id);
+                      }}
+                    >
+                      <IconHeart
+                        size={16}
+                        filled={favorites.includes(photo.id)}
+                      />
+                    </GalleryTileAction>
+                    <GalleryTileAction
+                      label="Download"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startDownload("single", photo.id);
+                      }}
+                    >
+                      <IconDownload size={16} />
+                    </GalleryTileAction>
+                    <GalleryTileAction
+                      label="Share"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSubSelected([photo.id]);
+                        setSubOpen(true);
+                      }}
+                    >
+                      <IconShare size={16} />
+                    </GalleryTileAction>
+                  </>
+                )}
+              />
+            </div>
 
             {clientName ? (
               <p className="mt-10 px-4 pb-6 text-center text-xs uppercase tracking-[0.18em] text-muted sm:px-8">
