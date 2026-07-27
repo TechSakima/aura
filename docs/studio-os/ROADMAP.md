@@ -28,13 +28,15 @@ Inspiration from Pixieset Studio Manager and Client Gallery. **Forever out:** Zo
 ## Locked product decisions
 
 - **No feature paywalls**: Every studio capability we ship (custom logo, cover logo, default cover image, color/font themes, removing Aura marks on client-facing surfaces, gallery layouts, video, booking forms, payment links UI, etc.) is available to all studios. No “Upgrade / Plus / Pro” gates in Settings or elsewhere. (Stripe’s own card processing fees are unrelated — those are the payment network, not an Aura upsell.)
-- **Clients → Projects**: Nav and primary entity rename. A Project holds contact fields (name/email/phone/notes), type, stage, paid total, and **many Sessions**. No separate Contacts CRM in this pass (keeps migration simple).
+- **Clients → Projects**: Nav and primary entity rename. A Project holds contact fields (name/email/phone/notes), type, stage, paid total, and **many Sessions**. No separate Contacts CRM in this pass (keeps migration simple). **UI must use Project/Session only** — `/admin/clients*` redirects to `/admin/projects*`.
 - **Shoots → Sessions**: Remove the single “photoshoot” job object as the hub. Sessions are dated occurrences under a Project (multi-day weddings, mini + full, etc.).
-- **Workflow**: Quote / prep / delivery / wrap live on the **Project**. Shoot-day helper + checklist live on a **Session**. Gallery can attach to Project (shared delivery) with optional session tagging later.
+- **Workflow**: Inquiry → questionnaire → pricing (optional) → contract → deposit → prep → delivery on the **Project**. Shoot-day helper on a **Session**. Gallery attaches at delivery.
+- **Pricing timing**: Per Session Type `pricingMode`: `upfront` (show price on booking) or `after_intake` (default — send Quote after questionnaire). Intake lives on questionnaires, not on Quote.
+- **Cancel policy**: Configured on contract templates (`untilPayment` and/or `daysBeforeSession`). Inquirer cancels via `/cancel/{token}` with a reason until the gate closes.
+- **Payments**: Project deposits/invoices are primary; Payment Links are reusable **templates** (copy / email / edit / archive), not the day-to-day money path.
 - **Client gallery Design (studio-only)**: Photographers customize each gallery (cover style, theme, photo layout/color, PWA icon) with a **live phone preview** — inspired by Pixieset Mobile Gallery App Design. Clients view only; they cannot edit design. All options free (no paywall).
 - **Public gallery quality bar**: Match Pixieset’s **sleek collection page** feel (hero + masonry + restrained chrome) — not a denser “admin-like” client view. No print store in the chrome.
 - **Gallery Homepage (not a website builder)**: Optional public page that **lists the studio’s published collections/galleries** with simple Homepage settings (bio, contact toggles, password, sort). Fixed layout + branding — no drag-and-drop pages/blog.
-- **Payments**: **Stripe Connect** — invoices + **reusable Payment Links** (Pixieset-style) first. Browser “tap to pay” is not real NFC; collect in-person via Checkout/Payment Link QR or Stripe Terminal later.
 - **Payments cost model**:
   - **Building Aura ↔ Stripe**: no Stripe license fee; test mode free; API free.
   - **Client pays processing fees**: invoice/payment-link totals are **grossed up** so the studio nets the intended amount (e.g. $200 deposit → client charged ~$200 + Stripe %). Show a clear line item like “Processing fee” on the checkout/invoice. Default on for Aura; studio can still choose net pricing later if we add a toggle.
@@ -53,6 +55,7 @@ Inspiration from Pixieset Studio Manager and Client Gallery. **Forever out:** Zo
 - **What “per-studio custom domains” means** (deferred, not required):
   - **Custom email domain**: studio sends as `hello@wildflower.com` via Resend (each studio adds DNS). Skipped in v1 so signup stays easy.
   - **Custom gallery/homepage host**: `photos.wildflower.com` → Aura Homepage/galleries (DNS CNAME). Skipped in v1; use `/h/{slug}` and `/g/{token}` on Aura’s host instead.
+- **Mobile**: Admin and public UI must work at **375px** (see `.cursor/rules/aura-responsive.mdc`).
 
 ```mermaid
 flowchart TB
@@ -353,54 +356,47 @@ MVP scaffold is in the repo. Remaining work is **Phase 6 — production depth** 
 
 | Pillar | MVP today | Gap |
 |--------|-----------|-----|
-| Resend | `notify/send.ts` + bell; some booking notify | Secrets/domain; full event catalog; Settings toggles |
-| Stripe | Gross-up + links UI; Connect stub | Live Checkout, webhooks, Cash App Pay, paid=net |
-| Gallery | Design + hero/masonry pass | Match refs `14–16` |
-| Calendar | List + busy check | Month/week UI; GCal push on confirm |
-| Documents | Contract + questionnaire MVP | Draw e-sign; templates IA; quotes under Documents |
+| Resend | Booking confirm/decline/cancel + questionnaire/contract/payment emails | Settings toggles polish |
+| Stripe | Connect + project deposits + payment template CRUD | Cash App Pay polish |
+| Gallery | Design + hero/masonry pass | Ongoing quality |
+| Calendar | List + busy + buffer + GCal push on confirm | Month/week UI |
+| Documents | Contract cancel policy + Project workflow panel | Draw e-sign; templates hub IA |
+| Admin IA | Projects canonical; Clients redirects; mobile AdminShell | Ongoing mobile passes |
 
 ---
 
 ## Phase 6 — Production depth (NEXT)
 
-Order: **Resend wire → Stripe real → gallery polish → calendar UI → documents depth**.
+Order historically: Resend → Stripe → gallery → calendar → documents. **Workflow consolidation + mobile** landed alongside.
 
 ### 6a — Resend ops + full event wiring
 1. Rotate any leaked key; set `RESEND_API_KEY` + `RESEND_FROM_EMAIL` in `.env.local` and App Hosting.
 2. Verify one Aura sending domain in Resend (Reply-To = studio email).
 3. Optional Cursor MCP: `"resend": { "url": "https://mcp.resend.com/mcp" }`.
-4. Wire event catalog (quote sent/accepted, gallery live, payment receipt, booking submit/confirm, contract/questionnaire send/complete).
+4. Wire event catalog (quote sent/accepted, gallery live, payment receipt, booking submit/confirm/decline/cancel, contract/questionnaire send/complete).
 5. Settings → Notifications toggles respected by send helpers.
 
 ### 6b — Real Stripe Connect
 - Checkout Sessions on connected accounts; webhook → transaction + Project `paidAmount` += net.
 - Live Payment Links / invoices; processing fee line; Cash App Pay + wallets via Checkout.
+- **Project deposit** via `POST /api/projects/[id]/deposit`; payment link templates support copy/email/edit/archive.
 - Authenticate Stripe Cursor MCP when implementing; never commit secrets.
 
 ### 6c — Gallery polish (refs 14–16) ✅
 - `/g` hero + View gallery CTA; chrome without print store; masonry + motion + theme fonts.
 - Design preview parity; Homepage settings polish (ref `15`).
 
-### 6d — Fuller calendar + GCal
-- Bookings month/week calendar; confirm pushes Google event when connected; busy checks stay.
+### 6d — Fuller calendar + GCal ✅
+- Bookings **month / week / day** calendar UI; Calendar Sync → Settings.
+- Confirm pushes Google event when connected (`googleEventId`); busy checks honor `bufferMinutes`.
 
 ### 6e — Documents depth
 - Draw e-sign; templates hub (contracts / questionnaires / quotes); quotes under Documents IA; Project-visible questionnaire answers; notify on lifecycle events.
-
-## Ops prerequisites (Phase 6)
-
-- Resend domain + keys; Stripe Connect + webhook secret; Google OAuth client
-- Cursor MCPs: Resend URL; Stripe plugin (auth required)
-- Keep `docs/studio-os/` + references in git
-
-## Suggested build order
-
-1. ~~Phase 1–5 MVP~~ (shipped scaffold)
-2. **Phase 6** — Resend → Stripe → gallery polish → calendar → documents depth
+- Cancel policy on contract templates ✅; Project workflow checklist ✅; Create deposit / Create gallery from Project ✅.
 
 ## Verify
 - 6a: Real inbox email; toggles work; catalog events fire.
 - 6b: Test-mode Checkout + webhook; paid=net; Cash App where eligible.
 - 6c: `/g` matches quality bar; no print store chrome.
-- 6d: Month calendar; confirm syncs GCal when connected.
+- 6d: Month/week/day calendar; confirm syncs GCal when connected; buffers on busy.
 - 6e: E-sign completed; templates hub + quotes under Documents.

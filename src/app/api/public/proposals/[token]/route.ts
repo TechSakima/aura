@@ -91,6 +91,7 @@ export async function POST(
       : null;
     if (project) {
       project.stage = "booked";
+      project.workflowStep = "contract";
       project.updatedAt = now;
     }
     return {

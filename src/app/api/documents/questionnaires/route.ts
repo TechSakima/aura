@@ -120,6 +120,11 @@ export async function POST(req: Request) {
 
   await updateStudioDb(admin.studioId, (d) => {
     d.questionnaireResponses.unshift(response);
+    const p = d.projects.find((x) => x.id === projectId);
+    if (p) {
+      p.workflowStep = "questionnaire";
+      p.updatedAt = now;
+    }
   });
 
   const url = absoluteUrl(`/q/${response.token}`);
@@ -136,7 +141,7 @@ export async function POST(req: Request) {
     type: "questionnaire_sent",
     title: "Questionnaire sent",
     body: `${project.name} · ${response.title}`,
-    href: "/admin/documents",
+    href: `/admin/projects/${projectId}`,
   });
 
   return NextResponse.json({ response, url });

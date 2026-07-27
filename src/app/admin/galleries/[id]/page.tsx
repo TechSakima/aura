@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-/** Legacy gallery URL → Delivery step in client workflow */
+/** Legacy gallery URL → Delivery step in project workflow */
 export default function GalleryRedirectPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -12,18 +12,23 @@ export default function GalleryRedirectPage() {
     void (async () => {
       const res = await fetch(`/api/galleries/${id}`);
       if (!res.ok) {
-        router.replace("/admin/clients");
+        router.replace("/admin/projects");
         return;
       }
       const data = await res.json();
-      const shootId = data.shoot?.id || data.gallery?.shootId;
-      const clientId = data.client?.id || data.shoot?.clientId;
-      if (!shootId || !clientId) {
-        router.replace("/admin/clients");
+      const sessionId =
+        data.shoot?.id || data.gallery?.sessionId || data.gallery?.shootId;
+      const projectId =
+        data.client?.id ||
+        data.shoot?.projectId ||
+        data.shoot?.clientId ||
+        data.gallery?.projectId;
+      if (!sessionId || !projectId) {
+        router.replace("/admin/projects");
         return;
       }
       router.replace(
-        `/admin/clients/${clientId}/shoots/${shootId}?step=delivery`,
+        `/admin/projects/${projectId}/sessions/${sessionId}?step=delivery`,
       );
     })();
   }, [id, router]);

@@ -61,8 +61,23 @@ export async function POST(req: Request) {
       type: "payment_received",
       title: "Payment received",
       body: `$${netAmount.toFixed(2)} net (client paid $${grossAmount.toFixed(2)})`,
-      href: "/admin/payments",
+      href: projectId ? `/admin/projects/${projectId}` : "/admin/payments",
     });
+
+    if (projectId) {
+      const { updateStudioDb } = await import("@/lib/db/store");
+      await updateStudioDb(studioId, (db) => {
+        const p = db.projects.find((x) => x.id === projectId);
+        if (p) {
+          p.stage = "booked";
+          p.workflowStep = "prep";
+          p.updatedAt = new Date().toISOString();
+        }
+        for (const prop of db.proposals.filter((x) => x.projectId === projectId)) {
+          if (prop.depositStatus === "awaited") prop.depositStatus = "received";
+        }
+      });
+    }
 
     const email =
       session.customer_details?.email ||

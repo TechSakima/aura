@@ -9,10 +9,10 @@ import type { WizardStepId } from "@/lib/types";
 import { WIZARD_STEPS } from "@/lib/wizard/steps";
 
 export function ShootWizardShell({
-  clientId,
-  clientName,
-  shootType,
-  shootDate,
+  projectId,
+  projectName,
+  sessionType,
+  sessionDate,
   quoteToken,
   galleryToken,
   step,
@@ -25,10 +25,22 @@ export function ShootWizardShell({
   canSkip,
   nextLabel = "Continue",
   children,
+  /** @deprecated use projectId */
+  clientId,
+  /** @deprecated use projectName */
+  clientName,
+  /** @deprecated use sessionType */
+  shootType,
+  /** @deprecated use sessionDate */
+  shootDate,
 }: {
-  clientId: string;
-  clientName: string;
-  shootType: string;
+  projectId?: string;
+  projectName?: string;
+  sessionType?: string;
+  sessionDate?: string;
+  clientId?: string;
+  clientName?: string;
+  shootType?: string;
   shootDate?: string;
   quoteToken?: string | null;
   galleryToken?: string | null;
@@ -43,46 +55,65 @@ export function ShootWizardShell({
   nextLabel?: string;
   children: ReactNode;
 }) {
+  const pid = projectId || clientId || "";
+  const pname = projectName || clientName || "Project";
+  const stype = sessionType || shootType || "Session";
+  const sdate = sessionDate || shootDate;
   const idx = WIZARD_STEPS.findIndex((s) => s.id === step);
+  const activeStep = WIZARD_STEPS[idx];
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-8">
-        <div className="space-y-2">
+    <div className="space-y-6 sm:space-y-8">
+      <div className="flex flex-col gap-4 border-b border-line pb-6 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:pb-8">
+        <div className="min-w-0 space-y-2">
           <p className="text-xs uppercase tracking-[0.18em] text-muted">
             <Link
-              href={`/admin/clients/${clientId}`}
+              href={`/admin/projects/${pid}`}
               className="text-muted no-underline hover:text-ink"
             >
-              {clientName}
+              {pname}
             </Link>
             <span className="mx-2 text-line">/</span>
             Workflow
           </p>
-          <h1 className="font-display text-4xl tracking-tight text-ink md:text-5xl">
-            {shootType}
+          <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl md:text-5xl">
+            {stype}
           </h1>
-          {shootDate ? (
-            <p className="text-muted">{shootDate}</p>
-          ) : null}
+          {sdate ? <p className="text-muted">{sdate}</p> : null}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ShootPublicLinks
             quoteToken={quoteToken}
             galleryToken={galleryToken}
             showCopy
           />
           <Link
-            href={`/admin/clients/${clientId}`}
-            className="inline-flex min-h-9 items-center text-sm text-muted no-underline hover:text-ink"
+            href={`/admin/projects/${pid}`}
+            className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
           >
-            Back to client
+            Back to project
           </Link>
         </div>
       </div>
 
-      <nav aria-label="Workflow steps" className="overflow-x-auto">
-        <ol className="flex min-w-max gap-1 border-b border-line">
+      {/* Mobile: current step only + progress */}
+      <div className="md:hidden">
+        <p className="text-xs uppercase tracking-[0.16em] text-muted">
+          Step {idx + 1} of {WIZARD_STEPS.length}
+        </p>
+        <p className="mt-1 font-medium text-ink">{activeStep?.label}</p>
+        <div className="mt-3 h-1 overflow-hidden rounded-full bg-line">
+          <div
+            className="h-full bg-ink transition-all"
+            style={{
+              width: `${((idx + 1) / WIZARD_STEPS.length) * 100}%`,
+            }}
+          />
+        </div>
+      </div>
+
+      <nav aria-label="Workflow steps" className="hidden md:block">
+        <ol className="flex flex-wrap gap-1 border-b border-line">
           {WIZARD_STEPS.map((s, i) => {
             const isActive = s.id === step;
             const isDone = completed.includes(s.id);
@@ -117,16 +148,20 @@ export function ShootWizardShell({
       <div className="min-h-[12rem]">{children}</div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6">
-        <Button tone="ghost" disabled={idx <= 0} onClick={onBack}>
+        <Button tone="ghost" disabled={idx <= 0} onClick={onBack} className="min-h-11">
           Back
         </Button>
         <div className="flex flex-wrap gap-2">
           {canSkip && onSkip ? (
-            <Button tone="ghost" onClick={onSkip}>
+            <Button tone="ghost" onClick={onSkip} className="min-h-11">
               Skip for now
             </Button>
           ) : null}
-          {onNext ? <Button onClick={onNext}>{nextLabel}</Button> : null}
+          {onNext ? (
+            <Button onClick={onNext} className="min-h-11">
+              {nextLabel}
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>

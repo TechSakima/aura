@@ -33,8 +33,9 @@ export default function ShootHelperPage() {
   const [mustOnly, setMustOnly] = useState(false);
   const [preview, setPreview] = useState<ShotItem | null>(null);
 
-  const exitHref = shoot?.clientId
-    ? `/admin/clients/${shoot.clientId}/shoots/${id}?step=shoot-day`
+  const projectId = shoot?.projectId || shoot?.clientId;
+  const exitHref = projectId
+    ? `/admin/projects/${projectId}/sessions/${id}?step=shoot-day`
     : `/admin/shoots/${id}`;
 
   async function load() {

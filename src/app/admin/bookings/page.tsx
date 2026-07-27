@@ -5,13 +5,22 @@ import Link from "next/link";
 import {
   Button,
   Card,
+  Dialog,
   Field,
   Input,
   Label,
   PageHeader,
+  Select,
+  Textarea,
   useToast,
 } from "@/components/ui";
-import type { BookingRequest, ProjectSession, SessionType } from "@/lib/types";
+import { SessionsCalendar } from "@/components/admin/SessionsCalendar";
+import type {
+  BookingRequest,
+  ProjectSession,
+  SessionPricingMode,
+  SessionType,
+} from "@/lib/types";
 
 type BookingRow = BookingRequest & {
   sessionTypeName?: string;
@@ -26,16 +35,28 @@ type SessionRow = ProjectSession & {
   projectHref?: string;
 };
 
+type ConflictInfo = {
+  requestId: string;
+  conflicts: { start: string; end: string }[];
+};
+
 export default function BookingsPage() {
   const { push } = useToast();
   const [types, setTypes] = useState<SessionType[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [requests, setRequests] = useState<BookingRow[]>([]);
   const [slug, setSlug] = useState("");
+  const [gcalConnected, setGcalConnected] = useState(false);
   const [name, setName] = useState("Portrait session");
   const [duration, setDuration] = useState("60");
   const [price, setPrice] = useState("250");
+  const [pricingMode, setPricingMode] =
+    useState<SessionPricingMode>("after_intake");
+  const [depositAmount, setDepositAmount] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [declineId, setDeclineId] = useState<string | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [conflict, setConflict] = useState<ConflictInfo | null>(null);
 
   async function load() {
     const res = await fetch("/api/bookings/session-types");
@@ -48,6 +69,7 @@ export default function BookingsPage() {
     setSessions(data.sessions || []);
     setRequests(data.bookingRequests || []);
     setSlug(data.homepageSlug || "");
+    setGcalConnected(Boolean(data.gcalConnected));
   }
 
   useEffect(() => {
@@ -63,6 +85,8 @@ export default function BookingsPage() {
         name,
         durationMinutes: Number(duration),
         basePrice: Number(price),
+        pricingMode,
+        depositAmount: depositAmount ? Number(depositAmount) : undefined,
       }),
     });
     if (!res.ok) {
@@ -70,25 +94,64 @@ export default function BookingsPage() {
       return;
     }
     push("Session type created", "success");
+    setDepositAmount("");
     void load();
   }
 
-  async function setRequestStatus(
-    id: string,
-    status: "confirmed" | "declined",
-  ) {
+  async function confirmRequest(id: string, force = false) {
     setBusyId(id);
     const res = await fetch("/api/bookings/requests", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status }),
+      body: JSON.stringify({ id, status: "confirmed", force }),
     });
+    const data = await res.json().catch(() => ({}));
     setBusyId(null);
-    if (!res.ok) {
-      push("Could not update request", "danger");
+
+    if (res.status === 409 && data.needsForce) {
+      setConflict({
+        requestId: id,
+        conflicts: data.conflicts || [],
+      });
       return;
     }
-    push(status === "confirmed" ? "Booking confirmed" : "Request declined", "success");
+
+    if (!res.ok) {
+      push(data.error || "Could not update request", "danger");
+      return;
+    }
+
+    setConflict(null);
+    push("Booking confirmed", "success");
+    void load();
+  }
+
+  async function submitDecline() {
+    if (!declineId) return;
+    const reason = declineReason.trim();
+    if (!reason) {
+      push("Decline reason required", "danger");
+      return;
+    }
+    setBusyId(declineId);
+    const res = await fetch("/api/bookings/requests", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: declineId,
+        status: "declined",
+        declineReason: reason,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusyId(null);
+    if (!res.ok) {
+      push(data.error || "Could not update request", "danger");
+      return;
+    }
+    setDeclineId(null);
+    setDeclineReason("");
+    push("Request declined", "success");
     void load();
   }
 
@@ -104,7 +167,9 @@ export default function BookingsPage() {
         actions={
           bookUrl ? (
             <a href={bookUrl} target="_blank" rel="noreferrer">
-              <Button tone="neutral">Open booking form</Button>
+              <Button tone="neutral" className="min-h-11">
+                Open booking form
+              </Button>
             </a>
           ) : null
         }
@@ -128,8 +193,8 @@ export default function BookingsPage() {
         {pending.length > 0 ? (
           <ul className="space-y-4">
             {pending.map((r) => (
-              <li key={r.id} className="border border-line bg-surface p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
+              <li key={r.id} className="border border-line bg-surface p-4 sm:p-5">
+                <div className="flex flex-col gap-4">
                   <div className="min-w-0 space-y-1">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted">
                       Pending inquiry
@@ -145,7 +210,7 @@ export default function BookingsPage() {
                         minute: "2-digit",
                       })}
                     </p>
-                    <p className="text-sm">
+                    <p className="break-all text-sm">
                       <a className="text-accent" href={`mailto:${r.email}`}>
                         {r.email}
                       </a>
@@ -162,26 +227,31 @@ export default function BookingsPage() {
                       · stage {r.projectStage || "inquiry"}
                     </p>
                   </div>
-                  <div className="flex flex-col gap-2 sm:items-end">
+                  <div className="flex flex-col gap-2">
                     {r.projectHref ? (
-                      <Link href={r.projectHref}>
-                        <Button>Open inquiry in Projects</Button>
+                      <Link href={r.projectHref} className="w-full sm:w-auto">
+                        <Button className="min-h-11 w-full sm:w-auto">
+                          Open inquiry in Projects
+                        </Button>
                       </Link>
                     ) : null}
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <Button
-                        size="sm"
                         tone="neutral"
+                        className="min-h-11"
                         disabled={busyId === r.id}
-                        onClick={() => void setRequestStatus(r.id, "confirmed")}
+                        onClick={() => void confirmRequest(r.id)}
                       >
                         Confirm
                       </Button>
                       <Button
-                        size="sm"
                         tone="ghost"
+                        className="min-h-11"
                         disabled={busyId === r.id}
-                        onClick={() => void setRequestStatus(r.id, "declined")}
+                        onClick={() => {
+                          setDeclineId(r.id);
+                          setDeclineReason("");
+                        }}
                       >
                         Decline
                       </Button>
@@ -196,13 +266,13 @@ export default function BookingsPage() {
         )}
 
         {others.length > 0 ? (
-          <ul className="divide-y divide-line border-y border-line">
+          <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
             {others.map((r) => (
               <li
                 key={r.id}
-                className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm"
+                className="border border-line bg-surface p-4 text-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:border-0 sm:bg-transparent sm:p-0 sm:py-4"
               >
-                <div>
+                <div className="min-w-0">
                   <p className="font-medium">
                     {r.name} · {r.status}
                   </p>
@@ -210,9 +280,12 @@ export default function BookingsPage() {
                     {r.sessionTypeName} ·{" "}
                     {new Date(r.startsAt).toLocaleString()}
                   </p>
+                  {r.declineReason ? (
+                    <p className="mt-1 text-muted">Reason: {r.declineReason}</p>
+                  ) : null}
                 </div>
                 {r.projectHref ? (
-                  <Link className="text-accent" href={r.projectHref}>
+                  <Link className="mt-2 inline-block text-accent sm:mt-0" href={r.projectHref}>
                     Open project
                   </Link>
                 ) : null}
@@ -221,6 +294,8 @@ export default function BookingsPage() {
           </ul>
         ) : null}
       </section>
+
+      <SessionsCalendar sessions={sessions} gcalConnected={gcalConnected} />
 
       <Card className="max-w-lg p-5">
         <h2 className="mb-4 font-display text-2xl">New session type</h2>
@@ -252,16 +327,51 @@ export default function BookingsPage() {
               onChange={(e) => setPrice(e.target.value)}
             />
           </Field>
-          <Button type="submit">Create</Button>
+          <Field>
+            <Label htmlFor="pricingMode">Pricing</Label>
+            <Select
+              id="pricingMode"
+              value={pricingMode}
+              onChange={(e) =>
+                setPricingMode(e.target.value as SessionPricingMode)
+              }
+            >
+              <option value="after_intake">Quote after intake</option>
+              <option value="upfront">Show price on booking form</option>
+            </Select>
+          </Field>
+          <Field>
+            <Label htmlFor="deposit">Deposit ($)</Label>
+            <Input
+              id="deposit"
+              type="number"
+              min={0}
+              step="1"
+              value={depositAmount}
+              onChange={(e) => setDepositAmount(e.target.value)}
+              placeholder="Optional"
+            />
+          </Field>
+          <Button type="submit" className="min-h-11 w-full sm:w-auto">
+            Create
+          </Button>
         </form>
       </Card>
 
       <section>
         <h2 className="mb-3 font-display text-2xl">Session types</h2>
-        <ul className="divide-y divide-line border-y border-line">
+        <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
           {types.map((t) => (
-            <li key={t.id} className="py-3 text-sm">
-              {t.name} · {t.durationMinutes}m · ${t.basePrice}
+            <li
+              key={t.id}
+              className="border border-line bg-surface p-4 text-sm sm:border-0 sm:bg-transparent sm:p-0 sm:py-3"
+            >
+              <p className="font-medium">{t.name}</p>
+              <p className="text-muted">
+                {t.durationMinutes}m · ${t.basePrice}
+                {t.pricingMode === "upfront" ? " · upfront" : " · after intake"}
+                {t.depositAmount != null ? ` · deposit $${t.depositAmount}` : ""}
+              </p>
             </li>
           ))}
           {types.length === 0 ? (
@@ -270,44 +380,93 @@ export default function BookingsPage() {
         </ul>
       </section>
 
-      <section>
-        <h2 className="mb-3 font-display text-2xl">Sessions calendar</h2>
-        <ul className="divide-y divide-line border-y border-line">
-          {[...sessions]
-            .filter((s) => s.startsAt)
-            .sort((a, b) => (a.startsAt || "").localeCompare(b.startsAt || ""))
-            .map((s) => (
-              <li
-                key={s.id}
-                className="flex flex-wrap justify-between gap-3 py-3 text-sm"
-              >
-                <span>
-                  {s.projectName ? `${s.projectName} · ` : ""}
-                  {s.type} ·{" "}
-                  {s.startsAt
-                    ? new Date(s.startsAt).toLocaleString()
-                    : "TBD"}
-                </span>
-                <span className="flex gap-3">
-                  {s.projectHref ? (
-                    <Link className="text-accent" href={s.projectHref}>
-                      Project
-                    </Link>
-                  ) : null}
-                  <a
-                    className="text-accent"
-                    href={`/admin/shoots/${s.id}/helper`}
-                  >
-                    Shoot day
-                  </a>
-                </span>
-              </li>
-            ))}
-          {sessions.length === 0 ? (
-            <li className="py-4 text-sm text-muted">No sessions scheduled.</li>
+      <Dialog
+        open={Boolean(declineId)}
+        onClose={() => {
+          if (busyId) return;
+          setDeclineId(null);
+          setDeclineReason("");
+        }}
+        title="Decline request"
+      >
+        <div className="space-y-4">
+          <Field>
+            <Label htmlFor="decline-reason">Reason</Label>
+            <Textarea
+              id="decline-reason"
+              value={declineReason}
+              onChange={(e) => setDeclineReason(e.target.value)}
+              rows={4}
+              required
+            />
+          </Field>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              tone="ghost"
+              className="min-h-11"
+              disabled={Boolean(busyId)}
+              onClick={() => {
+                setDeclineId(null);
+                setDeclineReason("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              tone="danger"
+              className="min-h-11"
+              disabled={Boolean(busyId) || !declineReason.trim()}
+              onClick={() => void submitDecline()}
+            >
+              Decline
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(conflict)}
+        onClose={() => {
+          if (busyId) return;
+          setConflict(null);
+        }}
+        title="Schedule conflict"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            This time overlaps another session. Confirm anyway to book it.
+          </p>
+          {conflict?.conflicts?.length ? (
+            <ul className="space-y-2 text-sm">
+              {conflict.conflicts.map((c, i) => (
+                <li key={`${c.start}-${i}`} className="border border-line p-3">
+                  {new Date(c.start).toLocaleString()} –{" "}
+                  {new Date(c.end).toLocaleString()}
+                </li>
+              ))}
+            </ul>
           ) : null}
-        </ul>
-      </section>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              tone="ghost"
+              className="min-h-11"
+              disabled={Boolean(busyId)}
+              onClick={() => setConflict(null)}
+            >
+              Back
+            </Button>
+            <Button
+              className="min-h-11"
+              disabled={Boolean(busyId) || !conflict}
+              onClick={() =>
+                conflict && void confirmRequest(conflict.requestId, true)
+              }
+            >
+              Confirm anyway
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

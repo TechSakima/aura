@@ -59,13 +59,20 @@ export async function POST(
   }
   const endPreview = new Date(startsAt);
   endPreview.setMinutes(endPreview.getMinutes() + stPreview.durationMinutes);
-  const { getBusyIntervals, overlapsBusy } = await import("@/lib/google-calendar");
+  const { getBusyIntervals, overlapsBusy, withBuffer } = await import(
+    "@/lib/google-calendar"
+  );
+  const window = withBuffer(
+    startsAt,
+    endPreview.toISOString(),
+    stPreview.bufferMinutes || 0,
+  );
   const busy = await getBusyIntervals({
     studioId: studio.id,
-    timeMin: startsAt,
-    timeMax: endPreview.toISOString(),
+    timeMin: window.start,
+    timeMax: window.end,
   });
-  if (overlapsBusy(startsAt, endPreview.toISOString(), busy)) {
+  if (overlapsBusy(window.start, window.end, busy)) {
     return NextResponse.json(
       { error: "That time is unavailable. Please choose another slot." },
       { status: 409 },
@@ -83,10 +90,13 @@ export async function POST(
         name,
         email,
         phone: body.phone ? String(body.phone) : undefined,
+        notes: body.notes ? String(body.notes) : undefined,
         type: st.name,
         stage: "inquiry",
+        workflowStep: "inquiry",
         projectDate: startsAt.slice(0, 10),
         paidAmount: 0,
+        cancelToken: nanoid(24),
         createdAt: now,
         updatedAt: now,
       };

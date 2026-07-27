@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { getGalleryBundle, updateStudioDb } from "@/lib/db/store";
 import { markGalleryLive } from "@/lib/gallery-live";
 import { reprocessGalleryWatermarks } from "@/lib/images/rewatermark";
+import { notifyStudio } from "@/lib/notify/send";
 import { hashPin, PinValidationError } from "@/lib/pin";
 
 export async function GET(
@@ -125,6 +126,27 @@ export async function PATCH(
             clientName: project.name,
             galleryTitle: g.title,
             publicToken: g.publicToken,
+          });
+        }
+        await notifyStudio({
+          studioId: admin.studioId,
+          type: "gallery_live",
+          title: "Gallery live",
+          body: g.title,
+          href: project
+            ? `/admin/projects/${project.id}`
+            : `/g/${g.publicToken}`,
+          emailStudio: false,
+        });
+        if (project) {
+          const { updateStudioDb } = await import("@/lib/db/store");
+          await updateStudioDb(admin.studioId, (d) => {
+            const p = d.projects.find((x) => x.id === project.id);
+            if (p) {
+              p.stage = "delivered";
+              p.workflowStep = "delivery";
+              p.updatedAt = new Date().toISOString();
+            }
           });
         }
       }

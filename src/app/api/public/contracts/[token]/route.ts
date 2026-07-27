@@ -61,13 +61,18 @@ export async function POST(
     c.signerName = signerName;
     c.signedAt = signedAt;
     c.updatedAt = signedAt;
+    const p = db.projects.find((x) => x.id === c.projectId);
+    if (p) {
+      p.workflowStep = "deposit";
+      p.updatedAt = signedAt;
+    }
   });
   await notifyStudio({
     studioId: contract.studioId,
     type: "contract_signed",
     title: "Contract signed",
     body: `${contract.title} signed by ${signerName}`,
-    href: "/admin/documents",
+    href: `/admin/projects/${contract.projectId}`,
   });
   return NextResponse.json({ ok: true, signedAt });
 }

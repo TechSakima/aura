@@ -11,7 +11,7 @@ export async function listStudiosWithPaymentLink(linkId: string) {
   const snap = await db.collection(COL.paymentLinks).doc(linkId).get();
   if (!snap.exists) return null;
   const link = { id: snap.id, ...snap.data() } as PaymentLinkTemplate;
-  if (!link.studioId) return null;
+  if (!link.studioId || link.archived || link.active === false) return null;
   const studio = await getStudioDoc(link.studioId);
   if (!studio) return null;
   return {

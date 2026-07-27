@@ -11,7 +11,27 @@ export type ProjectStage =
   | "booked"
   | "in_progress"
   | "delivered"
-  | "completed";
+  | "completed"
+  | "canceled";
+
+/** Project pipeline after booking inquiry. */
+export type ProjectWorkflowStep =
+  | "inquiry"
+  | "questionnaire"
+  | "pricing"
+  | "contract"
+  | "deposit"
+  | "prep"
+  | "delivery";
+
+export type SessionPricingMode = "upfront" | "after_intake";
+
+export type CancelPolicy = {
+  /** Allow cancel until deposit/payment received */
+  untilPayment?: boolean;
+  /** Allow cancel until N days before session (null = no date gate) */
+  daysBeforeSession?: number | null;
+};
 
 export type DepositStatus = "none" | "awaited" | "received" | "waived";
 
@@ -136,6 +156,10 @@ export type Project = {
   projectDate?: string;
   /** Dollars paid toward project (net of Stripe fees). */
   paidAmount: number;
+  /** Current pipeline step for Project-centric workflow. */
+  workflowStep?: ProjectWorkflowStep;
+  /** Public cancel token for inquirer self-serve cancel. */
+  cancelToken?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -472,8 +496,11 @@ export type PaymentLinkTemplate = {
   maxAmount?: number;
   imageUrl?: string;
   active: boolean;
+  archived?: boolean;
   stripePaymentLinkId?: string;
   publicUrl?: string;
+  /** Optional default project when sending from Payments hub */
+  projectId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -514,6 +541,8 @@ export type ContractTemplate = {
   studioId: string;
   name: string;
   body: string;
+  /** Inquirer cancel rules (copied onto contracts / projects). */
+  cancelPolicy?: CancelPolicy;
   createdAt: string;
   updatedAt: string;
 };
@@ -529,6 +558,7 @@ export type Contract = {
   status: ContractStatus;
   signerName?: string;
   signedAt?: string;
+  cancelPolicy?: CancelPolicy;
   createdAt: string;
   updatedAt: string;
 };
@@ -565,6 +595,10 @@ export type SessionType = {
   basePrice: number;
   description?: string;
   questionnaireTemplateId?: string;
+  /** Show price on booking form vs send quote after intake. Default after_intake. */
+  pricingMode?: SessionPricingMode;
+  /** Deposit amount in dollars (project Checkout). Defaults to basePrice when unset. */
+  depositAmount?: number;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -579,7 +613,9 @@ export type BookingRequest = {
   phone?: string;
   startsAt: string;
   notes?: string;
-  status: "pending" | "confirmed" | "declined";
+  status: "pending" | "confirmed" | "declined" | "canceled";
+  declineReason?: string;
+  cancelReason?: string;
   projectId?: string;
   sessionId?: string;
   createdAt: string;

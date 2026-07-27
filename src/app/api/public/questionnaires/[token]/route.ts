@@ -78,6 +78,11 @@ export async function POST(
     r.answers = answers;
     r.submittedAt = now;
     r.updatedAt = now;
+    const p = db.projects.find((x) => x.id === hit.response.projectId);
+    if (p && (p.workflowStep === "questionnaire" || !p.workflowStep)) {
+      p.workflowStep = "pricing";
+      p.updatedAt = now;
+    }
   });
 
   await notifyStudio({
@@ -85,7 +90,7 @@ export async function POST(
     type: "questionnaire_submitted",
     title: "Questionnaire completed",
     body: hit.response.title,
-    href: "/admin/documents",
+    href: `/admin/projects/${hit.response.projectId}`,
   });
 
   return NextResponse.json({ ok: true });

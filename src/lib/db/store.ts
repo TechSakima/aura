@@ -674,6 +674,21 @@ export async function findGalleryByPublicToken(
   return { id: d.id, ...d.data() } as Gallery;
 }
 
+export async function findStudioIdByProjectCancelToken(
+  token: string,
+): Promise<string | null> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db
+    .collection(COL.projects)
+    .where("cancelToken", "==", token)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const data = snap.docs[0]!.data() as { studioId?: string };
+  return data.studioId || null;
+}
+
 export async function findProposalByToken(
   token: string,
 ): Promise<Proposal | null> {

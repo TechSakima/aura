@@ -311,6 +311,38 @@ export async function emailGalleryLive(opts: {
   });
 }
 
+/** Client: payment link to pay */
+export async function emailPaymentLink(opts: {
+  studioId: string;
+  to: string;
+  clientName?: string;
+  title: string;
+  paymentLinkId: string;
+  publicUrl?: string;
+}) {
+  const db = await readStudioDb(opts.studioId);
+  if (!clientEmailAllowed("payment", db.studio.notificationPrefs)) {
+    return { ok: false as const, skipped: true };
+  }
+  const href = opts.publicUrl || absoluteUrl(`/pay/${opts.paymentLinkId}`);
+  const who = opts.clientName || "there";
+  return emailClient({
+    to: opts.to,
+    subject: `Payment link — ${db.studio.name}`,
+    fromDisplayName: db.studio.name,
+    replyTo: db.studio.ownerEmail,
+    html: wrapHtml({
+      studioName: db.studio.name,
+      title: opts.title,
+      bodyHtml: `<p>Hi ${who},</p><p>Please use the link below to complete your payment.</p>`,
+      ctaLabel: "Pay now",
+      ctaHref: href,
+    }),
+    text: `Hi ${who},\n\nPlease complete your payment:\n${href}`,
+    idempotencyKey: `payment-link/${opts.paymentLinkId}/${opts.to}`,
+  });
+}
+
 /** Client: payment receipt */
 export async function emailPaymentReceipt(opts: {
   studioId: string;
@@ -408,6 +440,7 @@ export async function emailBookingConfirmed(opts: {
   clientName: string;
   sessionTypeName: string;
   startsAt: string;
+  cancelHref?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   if (!clientEmailAllowed("booking", db.studio.notificationPrefs)) {
@@ -420,6 +453,9 @@ export async function emailBookingConfirmed(opts: {
     hour: "numeric",
     minute: "2-digit",
   });
+  const cancelBit = opts.cancelHref
+    ? `<p style="margin-top:24px;font-size:13px;opacity:0.75"><a href="${opts.cancelHref}" style="color:inherit">Need to cancel?</a></p>`
+    : "";
   return emailClient({
     to: opts.to,
     subject: `Booking confirmed — ${db.studio.name}`,
@@ -429,8 +465,64 @@ export async function emailBookingConfirmed(opts: {
       studioName: db.studio.name,
       title: "You're booked",
       bodyHtml: `<p>Hi ${opts.clientName},</p>
-<p>Your <strong>${opts.sessionTypeName}</strong> is confirmed for <strong>${when}</strong>.</p>`,
+<p>Your <strong>${opts.sessionTypeName}</strong> is confirmed for <strong>${when}</strong>.</p>${cancelBit}`,
     }),
     idempotencyKey: `booking-confirmed/${opts.studioId}/${opts.to}/${opts.startsAt}`,
   });
 }
+
+/** Client: booking declined with studio reason */
+export async function emailBookingDeclined(opts: {
+  studioId: string;
+  to: string;
+  clientName: string;
+  sessionTypeName: string;
+  reason: string;
+}) {
+  const db = await readStudioDb(opts.studioId);
+  return emailClient({
+    to: opts.to,
+    subject: `Booking update — ${db.studio.name}`,
+    fromDisplayName: db.studio.name,
+    replyTo: db.studio.ownerEmail,
+    html: wrapHtml({
+      studioName: db.studio.name,
+      title: "Request update",
+      bodyHtml: `<p>Hi ${opts.clientName},</p>
+<p>We can’t take your <strong>${opts.sessionTypeName}</strong> request.</p>
+<p>${opts.reason}</p>`,
+    }),
+    text: `Hi ${opts.clientName},\n\nWe can’t take your ${opts.sessionTypeName} request.\n\n${opts.reason}`,
+    idempotencyKey: `booking-declined/${opts.studioId}/${opts.to}/${Date.now()}`,
+  });
+}
+
+/** Studio: inquirer canceled */
+export async function emailStudioBookingCanceled(opts: {
+  studioId: string;
+  clientName: string;
+  sessionTypeName: string;
+  reason: string;
+  projectHref?: string;
+}) {
+  const db = await readStudioDb(opts.studioId);
+  const to = db.studio.ownerEmail;
+  if (!to) return { ok: false as const, skipped: true };
+  return emailClient({
+    to,
+    subject: `Canceled: ${opts.clientName} — ${db.studio.name}`,
+    fromDisplayName: "Aura",
+    replyTo: undefined,
+    html: wrapHtml({
+      studioName: db.studio.name,
+      title: "Request canceled",
+      bodyHtml: `<p><strong>${opts.clientName}</strong> canceled their <strong>${opts.sessionTypeName}</strong> request.</p>
+<p>Reason: ${opts.reason}</p>`,
+      ...(opts.projectHref
+        ? { ctaLabel: "Open project", ctaHref: absoluteUrl(opts.projectHref) }
+        : {}),
+    }),
+    idempotencyKey: `booking-canceled-studio/${opts.studioId}/${opts.clientName}/${Date.now()}`,
+  });
+}
+

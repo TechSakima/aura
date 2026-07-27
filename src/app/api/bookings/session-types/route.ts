@@ -40,6 +40,7 @@ export async function GET() {
     sessions,
     bookingRequests,
     homepageSlug: db.studio.homepage?.slug,
+    gcalConnected: Boolean(db.studio.googleCalendarConnected),
   });
 }
 
@@ -52,6 +53,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Name required" }, { status: 400 });
   }
   const now = new Date().toISOString();
+  const pricingMode =
+    body.pricingMode === "upfront" ? "upfront" : "after_intake";
+  const depositRaw =
+    body.depositAmount !== undefined && body.depositAmount !== null && body.depositAmount !== ""
+      ? Number(body.depositAmount)
+      : undefined;
   const sessionType: SessionType = {
     id: nanoid(),
     studioId: admin.studioId,
@@ -60,6 +67,14 @@ export async function POST(req: Request) {
     bufferMinutes: Number(body.bufferMinutes) || 15,
     basePrice: Number(body.basePrice) || 0,
     description: body.description ? String(body.description) : undefined,
+    pricingMode,
+    depositAmount:
+      depositRaw !== undefined && Number.isFinite(depositRaw)
+        ? depositRaw
+        : undefined,
+    questionnaireTemplateId: body.questionnaireTemplateId
+      ? String(body.questionnaireTemplateId)
+      : undefined,
     active: true,
     createdAt: now,
     updatedAt: now,
