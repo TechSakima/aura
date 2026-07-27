@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { COL } from "@/lib/db/collections";
 import { assertFirebaseReady } from "@/lib/db/require-firebase";
 import { getStudioDoc, updateStudioDb } from "@/lib/db/store";
-import { notifyStudio, emailClient } from "@/lib/notify/send";
+import { notifyStudio, emailClient, wrapHtml, absoluteUrl } from "@/lib/notify/send";
 import type { BookingRequest, Project, ProjectSession, Studio } from "@/lib/types";
 
 async function findStudioBySlug(slug: string): Promise<Studio | null> {
@@ -127,7 +127,7 @@ export async function POST(
     return NextResponse.json({ error: "Could not create booking" }, { status: 500 });
   }
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const origin = absoluteUrl("/").replace(/\/$/, "");
   const projectHref = `/admin/projects/${createdProjectId}`;
 
   await notifyStudio({
@@ -140,10 +140,14 @@ export async function POST(
   await emailClient({
     to: email,
     subject: `Booking received — ${studio.name}`,
-    html: `<p>Thanks ${name}. We received your booking request and will confirm shortly.</p>`,
-    text: `Thanks ${name}. We received your booking request and will confirm shortly.`,
-    replyTo: studio.ownerEmail,
     fromDisplayName: studio.name,
+    replyTo: studio.ownerEmail,
+    html: wrapHtml({
+      studioName: studio.name,
+      title: "Request received",
+      bodyHtml: `<p>Hi ${name},</p><p>Thanks — we received your booking request and will confirm shortly.</p>`,
+    }),
+    text: `Hi ${name},\n\nThanks — we received your booking request and will confirm shortly.`,
     idempotencyKey: `booking-received/${createdProjectId}`,
   });
 

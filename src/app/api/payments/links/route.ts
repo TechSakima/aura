@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { grossUpAmount } from "@/lib/stripe";
+import { absoluteUrl } from "@/lib/notify/send";
 import type { PaymentLinkMode, PaymentLinkTemplate } from "@/lib/types";
 
 export async function GET() {
@@ -10,7 +11,10 @@ export async function GET() {
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = await readStudioDb(admin.studioId);
   return NextResponse.json({
-    paymentLinks: db.paymentLinks,
+    paymentLinks: db.paymentLinks.map((l) => ({
+      ...l,
+      publicUrl: absoluteUrl(`/pay/${l.id}`),
+    })),
     invoices: db.invoices,
     transactions: db.paymentTransactions,
   });
@@ -28,7 +32,6 @@ export async function POST(req: Request) {
   const amount = typeof body.amount === "number" ? body.amount : Number(body.amount) || 0;
   const now = new Date().toISOString();
   const id = nanoid();
-  const origin = new URL(req.url).origin;
   const breakdown = mode === "fixed" ? grossUpAmount(amount) : null;
   const link: PaymentLinkTemplate = {
     id,
@@ -40,7 +43,7 @@ export async function POST(req: Request) {
     minAmount: mode === "customer_chooses" ? Number(body.minAmount) || 1 : undefined,
     maxAmount: mode === "customer_chooses" ? Number(body.maxAmount) || 500 : undefined,
     active: true,
-    publicUrl: `${origin}/pay/${id}`,
+    publicUrl: absoluteUrl(`/pay/${id}`),
     createdAt: now,
     updatedAt: now,
   };

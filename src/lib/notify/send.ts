@@ -12,31 +12,62 @@ function resendClient() {
 function fromAddress(studioName?: string) {
   const raw =
     process.env.RESEND_FROM_EMAIL || "Aura <notify@aura.stroburm.app>";
-  // When From is bare email, wrap with studio display name for client mail
-  if (studioName && !raw.includes("<")) {
-    return `${studioName} <${raw}>`;
-  }
-  if (studioName && raw.includes("<")) {
-    const email = raw.match(/<([^>]+)>/)?.[1];
-    if (email) return `${studioName} <${email}>`;
+  // Prefer studio display name; always keep the verified notify@ address.
+  if (studioName && studioName.trim()) {
+    const email = raw.includes("<")
+      ? raw.match(/<([^>]+)>/)?.[1]
+      : raw.trim();
+    if (email) return `${studioName.trim()} <${email}>`;
   }
   return raw;
 }
 
-export function appOrigin() {
+function isPublicHost(hostname: string) {
   return (
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.APP_URL ||
-    "http://localhost:3000"
-  ).replace(/\/$/, "");
+    hostname !== "0.0.0.0" &&
+    hostname !== "127.0.0.1" &&
+    hostname !== "localhost" &&
+    !hostname.endsWith(".internal")
+  );
+}
+
+/** Public site origin — never use Cloud Run / App Hosting internal req.url. */
+export function appOrigin() {
+  const candidates = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.APP_URL,
+  ].filter(Boolean) as string[];
+
+  for (const raw of candidates) {
+    try {
+      const cleaned = raw.replace(/\/$/, "");
+      const host = new URL(cleaned).hostname;
+      if (isPublicHost(host)) return cleaned;
+    } catch {
+      /* try next */
+    }
+  }
+
+  return process.env.NODE_ENV === "production"
+    ? "https://aura.stroburm.app"
+    : "http://localhost:3000";
 }
 
 export function absoluteUrl(path: string) {
-  if (path.startsWith("http")) return path;
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    try {
+      const u = new URL(path);
+      if (isPublicHost(u.hostname)) return path;
+      // Rebuild with public origin if someone baked in 0.0.0.0
+      return `${appOrigin()}${u.pathname}${u.search}${u.hash}`;
+    } catch {
+      /* fall through */
+    }
+  }
   return `${appOrigin()}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-function wrapHtml(opts: {
+export function wrapHtml(opts: {
   studioName: string;
   title: string;
   bodyHtml: string;
@@ -45,14 +76,36 @@ function wrapHtml(opts: {
 }) {
   const cta =
     opts.ctaHref && opts.ctaLabel
-      ? `<p style="margin:24px 0"><a href="${opts.ctaHref}" style="display:inline-block;padding:12px 18px;background:#1d1d1d;color:#fff;text-decoration:none;border-radius:4px">${opts.ctaLabel}</a></p>`
+      ? `<p style="margin:28px 0 8px"><a href="${opts.ctaHref}" style="display:inline-block;padding:12px 20px;background:#1c1915;color:#f7f5f1;text-decoration:none;font-size:14px;letter-spacing:0.04em">${opts.ctaLabel}</a></p>`
       : "";
-  return `<!DOCTYPE html><html><body style="font-family:Georgia,serif;color:#1d1d1d;line-height:1.5;max-width:560px;margin:0 auto;padding:24px">
-<p style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#666">${opts.studioName}</p>
-<h1 style="font-size:24px;font-weight:normal;margin:8px 0 16px">${opts.title}</h1>
-${opts.bodyHtml}
-${cta}
-</body></html>`;
+  const footerLink =
+    opts.ctaHref && !opts.ctaLabel
+      ? `<p style="margin-top:16px;font-size:13px;word-break:break-all"><a href="${opts.ctaHref}" style="color:#1c1915">${opts.ctaHref}</a></p>`
+      : opts.ctaHref
+        ? `<p style="margin-top:20px;font-size:12px;color:#6b6560;word-break:break-all">${opts.ctaHref}</p>`
+        : "";
+  return `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f3f1ed">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f1ed;padding:32px 16px">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;padding:36px 32px;border:1px solid #e8e4de">
+          <tr>
+            <td style="font-family:Georgia,'Iowan Old Style',serif;color:#1c1915;line-height:1.55">
+              <p style="margin:0 0 20px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#6b6560">${opts.studioName}</p>
+              <h1 style="margin:0 0 16px;font-size:26px;font-weight:normal;line-height:1.25">${opts.title}</h1>
+              <div style="font-size:16px;color:#2a2622">${opts.bodyHtml}</div>
+              ${cta}
+              ${footerLink}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
 
 export async function emailClient(opts: {
@@ -101,10 +154,12 @@ export async function notifyStudio(opts: {
   const id = nanoid();
   const createdAt = new Date().toISOString();
   let ownerEmail: string | undefined;
+  let studioName = "Aura";
   let prefs: Studio["notificationPrefs"];
 
   await updateStudioDb(opts.studioId, (db) => {
     ownerEmail = db.studio.ownerEmail;
+    studioName = db.studio.name || "Aura";
     prefs = db.studio.notificationPrefs;
     db.notifications.unshift({
       id,
@@ -128,11 +183,12 @@ export async function notifyStudio(opts: {
     await emailClient({
       to: ownerEmail,
       subject: opts.title,
+      fromDisplayName: studioName,
       html: wrapHtml({
-        studioName: "Aura",
+        studioName,
         title: opts.title,
         bodyHtml: `<p>${opts.body}</p>`,
-        ctaLabel: href ? "Open in Aura" : undefined,
+        ctaLabel: href ? "Open" : undefined,
         ctaHref: href,
       }),
       text: `${opts.body}${href ? `\n${href}` : ""}`,
@@ -287,6 +343,61 @@ export async function emailPaymentReceipt(opts: {
 </ul>`,
     }),
     idempotencyKey: `payment-receipt/${opts.studioId}/${opts.to}/${opts.netAmount}/${Date.now()}`,
+  });
+}
+
+/** Client: contract ready to sign */
+export async function emailContractToSign(opts: {
+  studioId: string;
+  to: string;
+  clientName?: string;
+  title: string;
+  token: string;
+}) {
+  const db = await readStudioDb(opts.studioId);
+  const href = absoluteUrl(`/c/${opts.token}`);
+  const who = opts.clientName || "there";
+  return emailClient({
+    to: opts.to,
+    subject: `Please sign: ${opts.title}`,
+    fromDisplayName: db.studio.name,
+    replyTo: db.studio.ownerEmail,
+    html: wrapHtml({
+      studioName: db.studio.name,
+      title: opts.title,
+      bodyHtml: `<p>Hi ${who},</p><p>Please review and sign your agreement.</p>`,
+      ctaLabel: "Sign now",
+      ctaHref: href,
+    }),
+    text: `Hi ${who},\n\nPlease review and sign your agreement:\n${href}`,
+    idempotencyKey: `contract-sign/${opts.token}`,
+  });
+}
+
+/** Client: questionnaire invite */
+export async function emailQuestionnaireInvite(opts: {
+  studioId: string;
+  to: string;
+  clientName: string;
+  title: string;
+  token: string;
+}) {
+  const db = await readStudioDb(opts.studioId);
+  const href = absoluteUrl(`/q/${opts.token}`);
+  return emailClient({
+    to: opts.to,
+    subject: `${opts.title} — ${db.studio.name}`,
+    fromDisplayName: db.studio.name,
+    replyTo: db.studio.ownerEmail,
+    html: wrapHtml({
+      studioName: db.studio.name,
+      title: opts.title,
+      bodyHtml: `<p>Hi ${opts.clientName},</p><p>Please complete this questionnaire when you have a moment.</p>`,
+      ctaLabel: "Open questionnaire",
+      ctaHref: href,
+    }),
+    text: `Hi ${opts.clientName},\n\nPlease complete this questionnaire:\n${href}`,
+    idempotencyKey: `questionnaire/${opts.token}`,
   });
 }
 

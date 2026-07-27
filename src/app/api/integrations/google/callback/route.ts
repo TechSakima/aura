@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { updateStudioDb } from "@/lib/db/store";
+import { appOrigin } from "@/lib/notify/send";
 
 /** OAuth callback — stores refresh token when Google credentials are configured. */
 export async function GET(req: Request) {
   const admin = await requireAdmin();
-  const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const origin = appOrigin();
   const settingsUrl = `${origin}/admin/settings`;
 
   if (!admin) {

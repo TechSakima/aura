@@ -5,11 +5,33 @@ export const STRIPE_PERCENT = 0.029;
 export const STRIPE_FIXED = 0.3;
 
 function appOrigin() {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.APP_URL ||
-    "http://localhost:3000"
-  ).replace(/\/$/, "");
+  // Re-export path — stripe helpers use notify appOrigin semantics via local copy
+  // to avoid circular imports in edge cases; keep in sync with notify/send.ts
+  const candidates = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.APP_URL,
+  ].filter(Boolean) as string[];
+
+  for (const raw of candidates) {
+    try {
+      const cleaned = raw.replace(/\/$/, "");
+      const host = new URL(cleaned).hostname;
+      if (
+        host !== "0.0.0.0" &&
+        host !== "127.0.0.1" &&
+        host !== "localhost" &&
+        !host.endsWith(".internal")
+      ) {
+        return cleaned;
+      }
+    } catch {
+      /* try next */
+    }
+  }
+
+  return process.env.NODE_ENV === "production"
+    ? "https://aura.stroburm.app"
+    : "http://localhost:3000";
 }
 
 function stripeSecretKey() {

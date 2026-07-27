@@ -8,6 +8,7 @@ import {
   stripeConfigured,
   stripeErrorMessage,
 } from "@/lib/stripe";
+import { appOrigin } from "@/lib/notify/send";
 
 export const runtime = "nodejs";
 
@@ -42,10 +43,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || "onboard");
     const stripe = getStripe();
-    const origin = (
-      process.env.NEXT_PUBLIC_APP_URL ||
-      "http://localhost:3000"
-    ).replace(/\/$/, "");
+    const origin = appOrigin();
 
     if (action === "disconnect") {
       await updateStudioDb(admin.studioId, (db) => {

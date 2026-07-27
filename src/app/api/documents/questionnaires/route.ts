@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
-import { emailClient, notifyStudio } from "@/lib/notify/send";
+import {
+  absoluteUrl,
+  emailQuestionnaireInvite,
+  notifyStudio,
+} from "@/lib/notify/send";
 import { publicToken } from "@/lib/tokens";
 import type {
   IntakeQuestion,
@@ -118,16 +122,14 @@ export async function POST(req: Request) {
     d.questionnaireResponses.unshift(response);
   });
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const url = `${origin}/q/${response.token}`;
+  const url = absoluteUrl(`/q/${response.token}`);
 
-  await emailClient({
+  await emailQuestionnaireInvite({
+    studioId: admin.studioId,
     to: project.email,
-    subject: `${response.title} — ${db.studio.name}`,
-    html: `<p>Hi ${project.name},</p><p>Please complete this questionnaire:</p><p><a href="${url}">${url}</a></p>`,
-    text: `Hi ${project.name}, please complete this questionnaire: ${url}`,
-    replyTo: db.studio.ownerEmail,
-    fromDisplayName: db.studio.name,
+    clientName: project.name,
+    title: response.title,
+    token: response.token,
   });
   await notifyStudio({
     studioId: admin.studioId,

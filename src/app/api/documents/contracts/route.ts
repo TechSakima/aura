@@ -4,7 +4,11 @@ import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { publicToken } from "@/lib/tokens";
 import type { Contract } from "@/lib/types";
-import { notifyStudio, emailClient } from "@/lib/notify/send";
+import {
+  absoluteUrl,
+  emailContractToSign,
+  notifyStudio,
+} from "@/lib/notify/send";
 
 export async function GET() {
   const admin = await requireAdmin();
@@ -32,7 +36,6 @@ export async function POST(req: Request) {
     );
   }
   const now = new Date().toISOString();
-  const origin = new URL(req.url).origin;
   const contract: Contract = {
     id: nanoid(),
     studioId: admin.studioId,
@@ -45,18 +48,21 @@ export async function POST(req: Request) {
     updatedAt: now,
   };
   let projectEmail = "";
+  let projectName = "";
   await updateStudioDb(admin.studioId, (db) => {
     db.contracts.unshift(contract);
-    projectEmail = db.projects.find((p) => p.id === projectId)?.email || "";
+    const project = db.projects.find((p) => p.id === projectId);
+    projectEmail = project?.email || "";
+    projectName = project?.name || "";
   });
-  const url = `${origin}/c/${contract.token}`;
+  const url = absoluteUrl(`/c/${contract.token}`);
   if (projectEmail) {
-    await emailClient({
+    await emailContractToSign({
+      studioId: admin.studioId,
       to: projectEmail,
-      subject: `Please sign: ${title}`,
-      html: `<p>Please review and sign your contract.</p><p><a href="${url}">Sign now</a></p>`,
-      text: `Please review and sign your contract: ${url}`,
-      replyTo: admin.email,
+      clientName: projectName,
+      title,
+      token: contract.token,
     });
   }
   await notifyStudio({

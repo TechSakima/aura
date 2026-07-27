@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { updateStudioDb } from "@/lib/db/store";
+import { appOrigin } from "@/lib/notify/send";
 
 /** Google Calendar connect stub — real OAuth when GOOGLE_CLIENT_ID is set. */
 export async function GET() {
@@ -14,7 +15,7 @@ export async function GET() {
         "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable OAuth. Sessions can still be managed in Aura; sync will push when connected.",
     });
   }
-  const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const origin = appOrigin();
   const redirect = `${origin}/api/integrations/google/callback`;
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", clientId);
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (clientId) {
-    const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const origin = appOrigin();
     const redirect = `${origin}/api/integrations/google/callback`;
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     url.searchParams.set("client_id", clientId);
