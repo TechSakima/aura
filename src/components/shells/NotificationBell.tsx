@@ -40,11 +40,23 @@ export function NotificationBell() {
     void load();
   }
 
+  async function markRead(id: string) {
+    setItems((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
+    setUnread((u) => Math.max(0, u - 1));
+    await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+  }
+
   return (
     <div className="relative">
       <button
         type="button"
-        className="relative inline-flex h-10 w-10 items-center justify-center rounded-md text-muted hover:bg-line/50 hover:text-ink"
+        className="relative inline-flex h-11 w-11 items-center justify-center rounded-md text-muted hover:bg-line/50 hover:text-ink"
         aria-label="Notifications"
         onClick={() => {
           setOpen((v) => !v);
@@ -68,12 +80,12 @@ export function NotificationBell() {
         ) : null}
       </button>
       {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-80 border border-line bg-canvas shadow-lg">
+        <div className="absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] border border-line bg-canvas shadow-lg">
           <div className="flex items-center justify-between border-b border-line px-3 py-2">
             <p className="text-sm font-medium">Notifications</p>
             <button
               type="button"
-              className="text-xs text-accent"
+              className="min-h-11 px-2 text-xs text-accent"
               onClick={() => void markAll()}
             >
               Mark all read
@@ -81,7 +93,9 @@ export function NotificationBell() {
           </div>
           <ul className="max-h-80 overflow-y-auto">
             {items.length === 0 ? (
-              <li className="px-3 py-4 text-sm text-muted">No notifications yet.</li>
+              <li className="px-3 py-4 text-sm text-muted">
+                No notifications yet.
+              </li>
             ) : (
               items.map((n) => (
                 <li
@@ -92,23 +106,32 @@ export function NotificationBell() {
                     <Link
                       href={n.href}
                       className="block no-underline text-ink"
-                      onClick={() => setOpen(false)}
+                      onClick={() => {
+                        setOpen(false);
+                        if (!n.read) void markRead(n.id);
+                      }}
                     >
                       <p className="font-medium">{n.title}</p>
                       <p className="mt-0.5 text-muted">{n.body}</p>
                       <p className="mt-2 text-xs font-medium text-accent">
                         {n.href.includes("/admin/projects/")
-                          ? "Open project inquiry →"
+                          ? "Open project →"
                           : n.href.includes("/admin/bookings")
                             ? "Open Bookings →"
                             : "View →"}
                       </p>
                     </Link>
                   ) : (
-                    <>
+                    <button
+                      type="button"
+                      className="w-full text-left"
+                      onClick={() => {
+                        if (!n.read) void markRead(n.id);
+                      }}
+                    >
                       <p className="font-medium">{n.title}</p>
                       <p className="mt-0.5 text-muted">{n.body}</p>
-                    </>
+                    </button>
                   )}
                 </li>
               ))

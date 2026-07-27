@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { IntakeListEditor } from "@/components/admin/ListEditor";
 import {
   Button,
   Card,
@@ -16,10 +17,53 @@ import {
 import type {
   Contract,
   ContractTemplate,
+  IntakeQuestion,
   Project,
   QuestionnaireResponse,
   QuestionnaireTemplate,
 } from "@/lib/types";
+
+function defaultQuestions(): IntakeQuestion[] {
+  return [
+    {
+      id: crypto.randomUUID(),
+      label: "Tell us about your session goals",
+      type: "textarea",
+      required: true,
+    },
+    {
+      id: crypto.randomUUID(),
+      label: "Preferred location",
+      type: "text",
+    },
+  ];
+}
+
+function AnswersList({
+  questions,
+  answers,
+}: {
+  questions: IntakeQuestion[];
+  answers: Record<string, string>;
+}) {
+  if (!questions.length) {
+    return <p className="text-sm text-muted">No questions.</p>;
+  }
+  return (
+    <dl className="mt-3 space-y-3">
+      {questions.map((q) => (
+        <div key={q.id}>
+          <dt className="text-xs uppercase tracking-[0.14em] text-muted">
+            {q.label}
+          </dt>
+          <dd className="mt-1 whitespace-pre-wrap text-sm">
+            {answers[q.id]?.trim() || "—"}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 export default function DocumentsPage() {
   const { push } = useToast();
@@ -50,6 +94,12 @@ export default function DocumentsPage() {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [qTemplateId, setQTemplateId] = useState("");
   const [qName, setQName] = useState("Session questionnaire");
+  const [qQuestions, setQQuestions] = useState<IntakeQuestion[]>(defaultQuestions);
+  const [editingQId, setEditingQId] = useState<string | null>(null);
+  const [qBusy, setQBusy] = useState(false);
+  const [expandedResponseId, setExpandedResponseId] = useState<string | null>(
+    null,
+  );
 
   function cancelPolicyPayload(until: boolean, days: string) {
     return {
@@ -175,19 +225,53 @@ export default function DocumentsPage() {
     );
   }
 
-  async function createQTemplate(e: FormEvent) {
+  async function saveQTemplate(e: FormEvent) {
     e.preventDefault();
+    setQBusy(true);
     const res = await fetch("/api/documents/questionnaires", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "create_template", name: qName }),
+      body: JSON.stringify(
+        editingQId
+          ? {
+              action: "update_template",
+              templateId: editingQId,
+              name: qName,
+              questions: qQuestions,
+            }
+          : {
+              action: "create_template",
+              name: qName,
+              questions: qQuestions,
+            },
+      ),
     });
+    setQBusy(false);
     if (!res.ok) {
-      push("Could not create template", "danger");
+      push("Could not save template", "danger");
       return;
     }
-    push("Questionnaire template created", "success");
+    push(editingQId ? "Template updated" : "Questionnaire template created", "success");
+    setEditingQId(null);
+    setQName("Session questionnaire");
+    setQQuestions(defaultQuestions());
     void load();
+  }
+
+  function startEditQTemplate(t: QuestionnaireTemplate) {
+    setEditingQId(t.id);
+    setQName(t.name);
+    setQQuestions(
+      t.questions.length
+        ? t.questions.map((q) => ({ ...q }))
+        : defaultQuestions(),
+    );
+  }
+
+  function cancelEditQTemplate() {
+    setEditingQId(null);
+    setQName("Session questionnaire");
+    setQQuestions(defaultQuestions());
   }
 
   async function sendQuestionnaire(e: FormEvent) {
@@ -305,19 +389,70 @@ export default function DocumentsPage() {
 
         <Card className="p-5">
           <h2 className="mb-4 font-display text-2xl">Questionnaire</h2>
-          <form onSubmit={createQTemplate} className="mb-6 space-y-3">
+          <form onSubmit={saveQTemplate} className="mb-6 space-y-3">
             <Field>
-              <Label htmlFor="qname">New template name</Label>
+              <Label htmlFor="qname">
+                {editingQId ? "Edit template" : "New template"}
+              </Label>
               <Input
                 id="qname"
                 value={qName}
                 onChange={(e) => setQName(e.target.value)}
               />
             </Field>
-            <Button type="submit" tone="neutral" className="min-h-11">
-              Create template
-            </Button>
+            <IntakeListEditor
+              label="Questions"
+              questions={qQuestions}
+              onChange={setQQuestions}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="submit"
+                tone="neutral"
+                className="min-h-11"
+                pending={qBusy}
+                pendingLabel="Saving…"
+              >
+                {editingQId ? "Save template" : "Create template"}
+              </Button>
+              {editingQId ? (
+                <Button
+                  type="button"
+                  tone="ghost"
+                  className="min-h-11"
+                  onClick={cancelEditQTemplate}
+                >
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
           </form>
+          {templates.length > 0 ? (
+            <ul className="mb-6 space-y-2 border-y border-line py-3 text-sm">
+              {templates.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex flex-wrap items-center justify-between gap-2"
+                >
+                  <span>
+                    {t.name}
+                    <span className="text-muted">
+                      {" "}
+                      · {t.questions.length} questions
+                    </span>
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    tone="ghost"
+                    onClick={() => startEditQTemplate(t)}
+                  >
+                    Edit
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <form onSubmit={sendQuestionnaire} className="space-y-3">
             <Field>
               <Label htmlFor="qproj">Send to project</Label>
@@ -465,10 +600,20 @@ export default function DocumentsPage() {
           {templates.map((t) => (
             <li
               key={t.id}
-              className="flex flex-col gap-1 border border-line p-4 sm:flex-row sm:justify-between sm:gap-3 sm:border-0 sm:p-0 sm:py-3"
+              className="flex flex-col gap-1 border border-line p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:border-0 sm:p-0 sm:py-3"
             >
-              <span>Questionnaire · {t.name}</span>
-              <span className="text-muted">{t.questions.length} questions</span>
+              <span>
+                Questionnaire · {t.name}
+                <span className="text-muted"> · {t.questions.length} questions</span>
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                tone="ghost"
+                onClick={() => startEditQTemplate(t)}
+              >
+                Edit
+              </Button>
             </li>
           ))}
           {packageNames.map((p) => (
@@ -533,29 +678,54 @@ export default function DocumentsPage() {
           {responses.length === 0 ? (
             <li className="py-4 text-sm text-muted">None yet.</li>
           ) : (
-            responses.map((r) => (
-              <li
-                key={r.id}
-                className="flex flex-col gap-3 border border-line p-4 sm:flex-row sm:flex-wrap sm:justify-between sm:border-0 sm:p-0 sm:py-4"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium">{r.title}</p>
-                  <p className="text-sm text-muted">
-                    {r.submittedAt
-                      ? `Submitted ${new Date(r.submittedAt).toLocaleString()}`
-                      : "Awaiting answers"}
-                  </p>
-                </div>
-                <a
-                  className="inline-flex min-h-11 items-center text-sm text-accent"
-                  href={`/q/${r.token}`}
-                  target="_blank"
-                  rel="noreferrer"
+            responses.map((r) => {
+              const open = expandedResponseId === r.id;
+              return (
+                <li
+                  key={r.id}
+                  className="border border-line p-4 sm:border-0 sm:p-0 sm:py-4"
                 >
-                  Open
-                </a>
-              </li>
-            ))
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-medium">{r.title}</p>
+                      <p className="text-sm text-muted">
+                        {r.submittedAt
+                          ? `Submitted ${new Date(r.submittedAt).toLocaleString()}`
+                          : "Awaiting answers"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {r.submittedAt ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          tone="neutral"
+                          onClick={() =>
+                            setExpandedResponseId(open ? null : r.id)
+                          }
+                        >
+                          {open ? "Hide answers" : "View answers"}
+                        </Button>
+                      ) : null}
+                      <a
+                        className="inline-flex min-h-11 items-center text-sm text-accent"
+                        href={`/q/${r.token}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Client link
+                      </a>
+                    </div>
+                  </div>
+                  {open && r.submittedAt ? (
+                    <AnswersList
+                      questions={r.questions}
+                      answers={r.answers || {}}
+                    />
+                  ) : null}
+                </li>
+              );
+            })
           )}
         </ul>
       </section>

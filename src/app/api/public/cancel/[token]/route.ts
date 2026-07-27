@@ -147,6 +147,8 @@ export async function POST(
       : undefined;
     if (s) {
       s.status = "archived";
+      s.startsAt = undefined;
+      s.endsAt = undefined;
       s.updatedAt = now;
     }
   });

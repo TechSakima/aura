@@ -13,12 +13,12 @@ export default function PrepPage() {
       <PageHeader
         eyebrow="Library"
         title="Prep"
-        description="Shot lists and package templates reused across shoots."
+        description="Shot lists and quote packages for projects. Bookable offerings live under Bookings → Session types."
       />
       <Tabs
         tabs={[
           { id: "shots", label: "Shot lists" },
-          { id: "packages", label: "Packages" },
+          { id: "packages", label: "Quote packages" },
         ]}
         value={tab}
         onChange={setTab}

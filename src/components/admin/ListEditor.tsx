@@ -141,13 +141,15 @@ export type IntakeRow = {
 export function IntakeListEditor({
   questions,
   onChange,
+  label = "Questions",
 }: {
   questions: IntakeRow[];
   onChange: (next: IntakeRow[]) => void;
+  label?: string;
 }) {
   return (
     <Field>
-      <Label>Intake questions</Label>
+      <Label>{label}</Label>
       <div className="space-y-3">
         {questions.map((q, i) => (
           <div key={q.id} className="space-y-2 rounded-md border border-line p-3">

@@ -128,6 +128,10 @@ export type StudioHomepageSettings = {
   showEmail: boolean;
   showPhone: boolean;
   showAddress: boolean;
+  /** Show Book CTA linking to /book/{slug} */
+  showBooking?: boolean;
+  /** Homepage portfolio layout */
+  layout?: "masonry" | "grid" | "list";
   sortOrder: "created_desc" | "created_asc" | "title_asc";
 };
 
@@ -586,11 +590,16 @@ export type QuestionnaireResponse = {
   updatedAt: string;
 };
 
+export type SessionDurationUnit = "minutes" | "hours" | "days";
+
 export type SessionType = {
   id: string;
   studioId: string;
   name: string;
+  /** Always stored as minutes; UI may edit in hours/days via durationUnit. */
   durationMinutes: number;
+  /** How the studio prefers to enter duration. Default minutes. */
+  durationUnit?: SessionDurationUnit;
   bufferMinutes: number;
   basePrice: number;
   description?: string;

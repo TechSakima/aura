@@ -254,7 +254,7 @@ export function DeliveryStep({
             tone={tab === "design" ? "accent" : "ghost"}
             onClick={() => setTab("design")}
           >
-            Design
+            Layout
           </Button>
           <FileUploadButton
             label="Upload gallery"

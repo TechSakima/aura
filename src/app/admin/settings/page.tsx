@@ -58,6 +58,23 @@ export default function SettingsPage() {
   const [showEmail, setShowEmail] = useState(true);
   const [showPhone, setShowPhone] = useState(true);
   const [showAddress, setShowAddress] = useState(true);
+  const [showBooking, setShowBooking] = useState(true);
+  const [homepageLayout, setHomepageLayout] = useState<
+    "masonry" | "grid" | "list"
+  >("masonry");
+  const [socialLinks, setSocialLinks] = useState<
+    { label: string; url: string }[]
+  >([]);
+  const [homepageGalleries, setHomepageGalleries] = useState<
+    {
+      id: string;
+      title: string;
+      status: string;
+      showOnHomepage?: boolean;
+      publicToken?: string;
+    }[]
+  >([]);
+  const [savingStudio, setSavingStudio] = useState(false);
   const [homepageSort, setHomepageSort] = useState<
     "created_desc" | "created_asc" | "title_asc"
   >("created_desc");
@@ -120,6 +137,9 @@ export default function SettingsPage() {
     setShowEmail(data.studio.homepage?.showEmail !== false);
     setShowPhone(data.studio.homepage?.showPhone !== false);
     setShowAddress(data.studio.homepage?.showAddress !== false);
+    setShowBooking(data.studio.homepage?.showBooking !== false);
+    setHomepageLayout(data.studio.homepage?.layout || "masonry");
+    setSocialLinks(data.studio.socialLinks || []);
     setHomepageSort(data.studio.homepage?.sortOrder || "created_desc");
     setGcalConnected(Boolean(data.studio.googleCalendarConnected));
     setPrefs({
@@ -139,6 +159,12 @@ export default function SettingsPage() {
     setDefaultWatermarkPresetId(data.studio.defaultWatermarkPresetId || "");
     setPrintPartners(data.studio.printPartners || []);
     setPresets(data.watermarkPresets || []);
+
+    const gRes = await fetch("/api/galleries");
+    if (gRes.ok) {
+      const gData = await gRes.json();
+      setHomepageGalleries(gData.galleries || []);
+    }
   }
 
   useEffect(() => {
@@ -167,6 +193,7 @@ export default function SettingsPage() {
 
   async function saveStudio(e?: FormEvent) {
     e?.preventDefault();
+    setSavingStudio(true);
     const res = await fetch("/api/studio", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -184,6 +211,7 @@ export default function SettingsPage() {
         region,
         postalCode,
         coverLogoUrl,
+        socialLinks,
         theme: { background, accent, fontPreset },
         homepage: {
           enabled: homepageEnabled,
@@ -195,6 +223,8 @@ export default function SettingsPage() {
           showEmail,
           showPhone,
           showAddress,
+          showBooking,
+          layout: homepageLayout,
           sortOrder: homepageSort,
           ...(homepagePassword.trim()
             ? { password: homepagePassword.trim() }
@@ -204,6 +234,7 @@ export default function SettingsPage() {
         notificationPrefs: prefs,
       }),
     });
+    setSavingStudio(false);
     if (!res.ok) {
       push("Save failed", "danger");
       return;
@@ -216,6 +247,23 @@ export default function SettingsPage() {
       );
     }
     push("Settings saved", "success");
+  }
+
+  async function toggleHomepageGallery(id: string, show: boolean) {
+    setHomepageGalleries((prev) =>
+      prev.map((g) => (g.id === id ? { ...g, showOnHomepage: show } : g)),
+    );
+    const res = await fetch(`/api/galleries/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ showOnHomepage: show }),
+    });
+    if (!res.ok) {
+      push("Could not update collection", "danger");
+      void load();
+      return;
+    }
+    push(show ? "Shown on homepage" : "Hidden from homepage", "success");
   }
 
   async function connectGoogle() {
@@ -427,8 +475,61 @@ export default function SettingsPage() {
                 id="web"
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
+                placeholder="https://yourstudio.com"
               />
             </Field>
+            <div className="space-y-3">
+              <Label>Social links</Label>
+              {socialLinks.map((row, idx) => (
+                <div
+                  key={idx}
+                  className="grid gap-2 sm:grid-cols-[1fr_1.4fr_auto]"
+                >
+                  <Input
+                    value={row.label}
+                    onChange={(e) =>
+                      setSocialLinks((prev) =>
+                        prev.map((r, i) =>
+                          i === idx ? { ...r, label: e.target.value } : r,
+                        ),
+                      )
+                    }
+                    placeholder="Instagram"
+                  />
+                  <Input
+                    value={row.url}
+                    onChange={(e) =>
+                      setSocialLinks((prev) =>
+                        prev.map((r, i) =>
+                          i === idx ? { ...r, url: e.target.value } : r,
+                        ),
+                      )
+                    }
+                    placeholder="https://instagram.com/…"
+                  />
+                  <Button
+                    type="button"
+                    tone="ghost"
+                    className="min-h-11"
+                    onClick={() =>
+                      setSocialLinks((prev) => prev.filter((_, i) => i !== idx))
+                    }
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                tone="neutral"
+                className="min-h-11"
+                onClick={() =>
+                  setSocialLinks((prev) => [...prev, { label: "", url: "" }])
+                }
+              >
+                Add social link
+              </Button>
+            </div>
             <Field>
               <Label htmlFor="phone">Phone</Label>
               <Input
@@ -494,7 +595,9 @@ export default function SettingsPage() {
               />
             </Field>
             <PartnerListEditor partners={printPartners} onChange={setPrintPartners} />
-            <Button type="submit">Save studio</Button>
+            <Button type="submit" pending={savingStudio} pendingLabel="Saving…">
+              Save studio
+            </Button>
           </form>
         </Card>
 
@@ -625,6 +728,12 @@ export default function SettingsPage() {
                         showAddress,
                         setShowAddress,
                       ],
+                      [
+                        "showBooking",
+                        "Book a session button",
+                        showBooking,
+                        setShowBooking,
+                      ],
                     ] as const
                   ).map(([key, label, checked, setter]) => (
                     <li key={key}>
@@ -640,6 +749,23 @@ export default function SettingsPage() {
                   ))}
                 </ul>
               </div>
+
+              <Field>
+                <Label htmlFor="hp-layout">Portfolio layout</Label>
+                <Select
+                  id="hp-layout"
+                  value={homepageLayout}
+                  onChange={(e) =>
+                    setHomepageLayout(
+                      e.target.value as "masonry" | "grid" | "list",
+                    )
+                  }
+                >
+                  <option value="masonry">Masonry</option>
+                  <option value="grid">Grid</option>
+                  <option value="list">List</option>
+                </Select>
+              </Field>
 
               <Field>
                 <Label htmlFor="sort">Collection sort order</Label>
@@ -661,7 +787,60 @@ export default function SettingsPage() {
                 </Select>
               </Field>
 
-              <Button type="button" onClick={() => void saveStudio()}>
+              <div className="space-y-3">
+                <Label>Collections on homepage</Label>
+                <p className="text-xs text-muted">
+                  Live galleries only. Turn on to include in the portfolio.
+                </p>
+                {homepageGalleries.length === 0 ? (
+                  <p className="text-sm text-muted">
+                    No galleries yet. Create one from a project Delivery step.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {homepageGalleries.map((g) => (
+                      <li
+                        key={g.id}
+                        className="flex flex-wrap items-center justify-between gap-2 border border-line px-3 py-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium">{g.title}</p>
+                          <p className="text-xs text-muted">{g.status}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <a
+                            href={`/admin/galleries/${g.id}`}
+                            className="text-xs text-accent"
+                          >
+                            Design
+                          </a>
+                          <label className="inline-flex min-h-11 items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(g.showOnHomepage)}
+                              disabled={g.status !== "live"}
+                              onChange={(e) =>
+                                void toggleHomepageGallery(
+                                  g.id,
+                                  e.target.checked,
+                                )
+                              }
+                            />
+                            Show
+                          </label>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <Button
+                type="button"
+                pending={savingStudio}
+                pendingLabel="Saving…"
+                onClick={() => void saveStudio()}
+              >
                 Save homepage
               </Button>
             </div>

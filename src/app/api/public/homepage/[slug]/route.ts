@@ -4,6 +4,7 @@ import { assertFirebaseReady } from "@/lib/db/require-firebase";
 import { getStudioDoc, readStudioDb } from "@/lib/db/store";
 import { resolveMediaUrl } from "@/lib/media-url";
 import type { Studio } from "@/lib/types";
+import { absoluteExternalUrl } from "@/lib/urls";
 
 async function findStudioBySlug(slug: string): Promise<Studio | null> {
   const { db } = assertFirebaseReady();
@@ -53,7 +54,9 @@ export async function GET(
       name: studio.name,
       logoUrl: resolveMediaUrl(studio.logoUrl),
       biography: hp.showBiography ? hp.biography || studio.brandTagline : undefined,
-      website: hp.showWebsite ? studio.website : undefined,
+      website: hp.showWebsite
+        ? absoluteExternalUrl(studio.website) || studio.website
+        : undefined,
       email: hp.showEmail ? studio.ownerEmail : undefined,
       phone: hp.showPhone ? studio.phone : undefined,
       address: hp.showAddress
@@ -61,8 +64,17 @@ export async function GET(
             .filter(Boolean)
             .join(", ")
         : undefined,
-      socialLinks: hp.showSocialLinks ? studio.socialLinks : [],
+      socialLinks: hp.showSocialLinks
+        ? (studio.socialLinks || []).map((s) => ({
+            label: s.label,
+            url: absoluteExternalUrl(s.url) || s.url,
+          }))
+        : [],
       theme: studio.theme,
+      showBooking: hp.showBooking !== false,
+      layout: hp.layout || "masonry",
+      bookingHref:
+        hp.showBooking !== false && hp.slug ? `/book/${hp.slug}` : undefined,
     },
     galleries: galleries.map((g) => ({
       title: g.title,

@@ -281,8 +281,13 @@ export function GalleryDesignPanel({
           Show on homepage
         </label>
 
-        <Button type="button" disabled={saving} onClick={() => void save()}>
-          {saving ? "Saving…" : "Save design"}
+        <Button
+          type="button"
+          pending={saving}
+          pendingLabel="Saving…"
+          onClick={() => void save()}
+        >
+          Save design
         </Button>
       </div>
 

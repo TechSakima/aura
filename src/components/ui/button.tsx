@@ -20,6 +20,9 @@ const sizeClass: Record<Size, string> = {
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   tone?: Tone;
   size?: Size;
+  /** Shows busy state so the control feels responsive while work runs. */
+  pending?: boolean;
+  pendingLabel?: string;
 };
 
 export function Button({
@@ -27,18 +30,27 @@ export function Button({
   tone = "accent",
   size = "md",
   type = "button",
+  pending = false,
+  pendingLabel,
+  disabled,
+  children,
   ...props
 }: ButtonProps) {
   return (
     <button
       type={type}
+      disabled={disabled || pending}
+      aria-busy={pending || undefined}
       className={cn(
         "inline-flex touch-target items-center justify-center gap-2 rounded-md font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50",
         toneClass[tone],
         sizeClass[size],
+        pending && "opacity-70",
         className,
       )}
       {...props}
-    />
+    >
+      {pending ? pendingLabel || "Working…" : children}
+    </button>
   );
 }

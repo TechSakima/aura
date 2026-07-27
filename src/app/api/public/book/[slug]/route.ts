@@ -4,6 +4,7 @@ import { COL } from "@/lib/db/collections";
 import { assertFirebaseReady } from "@/lib/db/require-firebase";
 import { getStudioDoc, updateStudioDb } from "@/lib/db/store";
 import { notifyStudio, emailClient, wrapHtml, absoluteUrl } from "@/lib/notify/send";
+import { nextStepHtml, offeringLabel } from "@/lib/copy/offering";
 import type { BookingRequest, Project, ProjectSession, Studio } from "@/lib/types";
 
 async function findStudioBySlug(slug: string): Promise<Studio | null> {
@@ -155,9 +156,11 @@ export async function POST(
     html: wrapHtml({
       studioName: studio.name,
       title: "Request received",
-      bodyHtml: `<p>Hi ${name},</p><p>Thanks — we received your booking request and will confirm shortly.</p>`,
+      bodyHtml: `<p>Hi ${name},</p>
+<p>Thanks — we received your booking request for ${offeringLabel(stPreview?.name)} and will confirm shortly.</p>
+${nextStepHtml("No action needed yet. We'll email you when your booking is confirmed.")}`,
     }),
-    text: `Hi ${name},\n\nThanks — we received your booking request and will confirm shortly.`,
+    text: `Hi ${name},\n\nThanks — we received your booking request for ${offeringLabel(stPreview?.name)} and will confirm shortly.\n\nNext: No action needed yet. We'll email you when your booking is confirmed.`,
     idempotencyKey: `booking-received/${createdProjectId}`,
   });
 

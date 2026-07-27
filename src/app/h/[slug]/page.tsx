@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { Button, Field, Input, Label } from "@/components/ui";
+import { cn } from "@/lib/cn";
+import { displayHost } from "@/lib/urls";
 
 type HomePayload = {
   studio: {
@@ -15,6 +17,10 @@ type HomePayload = {
     phone?: string;
     address?: string;
     socialLinks?: { label: string; url: string }[];
+    theme?: { background?: string; accent?: string; fontPreset?: string };
+    showBooking?: boolean;
+    layout?: "masonry" | "grid" | "list";
+    bookingHref?: string;
   };
   galleries: { title: string; token: string; coverPhotoUrl?: string }[];
 };
@@ -71,7 +77,9 @@ export default function GalleryHomepagePage() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </Field>
-        <Button type="submit">Continue</Button>
+        <Button type="submit" className="min-h-11 w-full">
+          Continue
+        </Button>
       </form>
     );
   }
@@ -85,10 +93,15 @@ export default function GalleryHomepagePage() {
     data.studio.address,
     data.studio.phone,
   ].filter(Boolean);
+  const layout = data.studio.layout || "masonry";
+  const themeStyle = {
+    background: data.studio.theme?.background || undefined,
+    ["--color-accent" as string]: data.studio.theme?.accent || undefined,
+  } as CSSProperties;
 
   return (
-    <div className="min-h-full bg-canvas text-ink">
-      <header className="shell-pad mx-auto max-w-5xl py-16 text-center sm:py-20">
+    <div className="min-h-full bg-canvas text-ink" style={themeStyle}>
+      <header className="shell-pad mx-auto max-w-5xl py-14 text-center sm:py-20">
         {data.studio.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -114,50 +127,106 @@ export default function GalleryHomepagePage() {
         ) : null}
         {data.studio.website ? (
           <p className="mt-3 text-sm">
-            <a href={data.studio.website} className="text-accent">
-              {data.studio.website.replace(/^https?:\/\//, "")}
+            <a
+              href={data.studio.website}
+              className="text-accent"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {displayHost(data.studio.website)}
             </a>
           </p>
         ) : null}
         {data.studio.socialLinks && data.studio.socialLinks.length > 0 ? (
           <ul className="mt-4 flex flex-wrap justify-center gap-4 text-sm">
             {data.studio.socialLinks.map((s) => (
-              <li key={s.url}>
-                <a href={s.url} className="text-accent">
+              <li key={`${s.label}-${s.url}`}>
+                <a
+                  href={s.url}
+                  className="text-accent"
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   {s.label}
                 </a>
               </li>
             ))}
           </ul>
         ) : null}
+        {data.studio.showBooking && data.studio.bookingHref ? (
+          <div className="mt-8">
+            <Link href={data.studio.bookingHref}>
+              <Button className="min-h-11">Book a session</Button>
+            </Link>
+          </div>
+        ) : null}
       </header>
 
       <main className="shell-pad mx-auto max-w-5xl pb-20">
-        <div className="columns-1 gap-4 sm:columns-2 sm:gap-5 lg:columns-3">
-          {data.galleries.map((g) => (
-            <Link
-              key={g.token}
-              href={`/g/${g.token}`}
-              className="mb-4 block break-inside-avoid no-underline sm:mb-5"
-            >
-              <div className="overflow-hidden bg-line">
-                {g.coverPhotoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={g.coverPhotoUrl}
-                    alt=""
-                    className="h-auto w-full object-cover transition duration-500 hover:scale-[1.02]"
-                  />
-                ) : (
-                  <div className="aspect-[4/5] bg-line" />
+        {layout === "list" ? (
+          <ul className="divide-y divide-line border-y border-line">
+            {data.galleries.map((g) => (
+              <li key={g.token}>
+                <Link
+                  href={`/g/${g.token}`}
+                  className="flex items-center gap-4 py-4 no-underline"
+                >
+                  <div className="h-16 w-16 shrink-0 overflow-hidden bg-line sm:h-20 sm:w-20">
+                    {g.coverPhotoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={g.coverPhotoUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : null}
+                  </div>
+                  <p className="font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
+                    {g.title}
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div
+            className={cn(
+              layout === "grid"
+                ? "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3"
+                : "columns-1 gap-4 sm:columns-2 sm:gap-5 lg:columns-3",
+            )}
+          >
+            {data.galleries.map((g) => (
+              <Link
+                key={g.token}
+                href={`/g/${g.token}`}
+                className={cn(
+                  "block break-inside-avoid no-underline",
+                  layout === "masonry" ? "mb-4 sm:mb-5" : "",
                 )}
-              </div>
-              <p className="mt-3 font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
-                {g.title}
-              </p>
-            </Link>
-          ))}
-        </div>
+              >
+                <div className="overflow-hidden bg-line">
+                  {g.coverPhotoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={g.coverPhotoUrl}
+                      alt=""
+                      className={cn(
+                        "w-full object-cover transition duration-500 hover:scale-[1.02]",
+                        layout === "grid" ? "aspect-[4/5]" : "h-auto",
+                      )}
+                    />
+                  ) : (
+                    <div className="aspect-[4/5] bg-line" />
+                  )}
+                </div>
+                <p className="mt-3 font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
+                  {g.title}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
         {data.galleries.length === 0 ? (
           <p className="text-center text-muted">No collections yet.</p>
         ) : null}

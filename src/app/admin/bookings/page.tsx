@@ -18,9 +18,11 @@ import { SessionsCalendar } from "@/components/admin/SessionsCalendar";
 import type {
   BookingRequest,
   ProjectSession,
+  SessionDurationUnit,
   SessionPricingMode,
   SessionType,
 } from "@/lib/types";
+import { formatSessionDuration, toDurationMinutes } from "@/lib/session-duration";
 
 type BookingRow = BookingRequest & {
   sessionTypeName?: string;
@@ -49,10 +51,18 @@ export default function BookingsPage() {
   const [gcalConnected, setGcalConnected] = useState(false);
   const [name, setName] = useState("Portrait session");
   const [duration, setDuration] = useState("60");
+  const [durationUnit, setDurationUnit] =
+    useState<SessionDurationUnit>("minutes");
   const [price, setPrice] = useState("250");
   const [pricingMode, setPricingMode] =
     useState<SessionPricingMode>("after_intake");
   const [depositAmount, setDepositAmount] = useState("");
+  const [questionnaireTemplateId, setQuestionnaireTemplateId] = useState("");
+  const [qTemplates, setQTemplates] = useState<{ id: string; name: string }[]>(
+    [],
+  );
+  const [creatingType, setCreatingType] = useState(false);
+  const [savingTypeId, setSavingTypeId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [declineId, setDeclineId] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState("");
@@ -70,6 +80,7 @@ export default function BookingsPage() {
     setRequests(data.bookingRequests || []);
     setSlug(data.homepageSlug || "");
     setGcalConnected(Boolean(data.gcalConnected));
+    setQTemplates(data.questionnaireTemplates || []);
   }
 
   useEffect(() => {
@@ -78,17 +89,21 @@ export default function BookingsPage() {
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
+    setCreatingType(true);
     const res = await fetch("/api/bookings/session-types", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
-        durationMinutes: Number(duration),
+        durationValue: Number(duration),
+        durationUnit,
         basePrice: Number(price),
         pricingMode,
         depositAmount: depositAmount ? Number(depositAmount) : undefined,
+        questionnaireTemplateId: questionnaireTemplateId || undefined,
       }),
     });
+    setCreatingType(false);
     if (!res.ok) {
       push("Failed", "danger");
       return;
@@ -96,6 +111,35 @@ export default function BookingsPage() {
     push("Session type created", "success");
     setDepositAmount("");
     void load();
+  }
+
+  async function updateTypeQuestionnaire(
+    id: string,
+    nextTemplateId: string,
+  ) {
+    setTypes((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? { ...t, questionnaireTemplateId: nextTemplateId || undefined }
+          : t,
+      ),
+    );
+    setSavingTypeId(id);
+    const res = await fetch("/api/bookings/session-types", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id,
+        questionnaireTemplateId: nextTemplateId,
+      }),
+    });
+    setSavingTypeId(null);
+    if (!res.ok) {
+      push("Could not update session type", "danger");
+      void load();
+      return;
+    }
+    push("Session type updated", "success");
   }
 
   async function confirmRequest(id: string, force = false) {
@@ -239,7 +283,8 @@ export default function BookingsPage() {
                       <Button
                         tone="neutral"
                         className="min-h-11"
-                        disabled={busyId === r.id}
+                        pending={busyId === r.id}
+                        pendingLabel="Confirming…"
                         onClick={() => void confirmRequest(r.id)}
                       >
                         Confirm
@@ -298,7 +343,11 @@ export default function BookingsPage() {
       <SessionsCalendar sessions={sessions} gcalConnected={gcalConnected} />
 
       <Card className="max-w-lg p-5">
-        <h2 className="mb-4 font-display text-2xl">New session type</h2>
+        <h2 className="mb-1 font-display text-2xl">New session type</h2>
+        <p className="mb-4 text-sm text-muted">
+          Bookable offerings on your public form. Quote packages for project
+          pricing stay under Prep.
+        </p>
         <form onSubmit={onCreate} className="space-y-4">
           <Field>
             <Label htmlFor="name">Name</Label>
@@ -310,13 +359,39 @@ export default function BookingsPage() {
             />
           </Field>
           <Field>
-            <Label htmlFor="duration">Duration (minutes)</Label>
-            <Input
-              id="duration"
-              type="number"
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-            />
+            <Label htmlFor="duration">Duration</Label>
+            <div className="flex gap-2">
+              <Input
+                id="duration"
+                type="number"
+                min={1}
+                step={durationUnit === "minutes" ? 15 : 1}
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                className="flex-1"
+              />
+              <Select
+                aria-label="Duration unit"
+                value={durationUnit}
+                onChange={(e) => {
+                  const next = e.target.value as SessionDurationUnit;
+                  const mins = toDurationMinutes(Number(duration), durationUnit);
+                  setDurationUnit(next);
+                  if (next === "minutes") setDuration(String(mins));
+                  else if (next === "hours")
+                    setDuration(String(Math.max(1, Math.round(mins / 60))));
+                  else
+                    setDuration(
+                      String(Math.max(1, Math.round(mins / (60 * 24)))),
+                    );
+                }}
+                className="w-32"
+              >
+                <option value="minutes">Minutes</option>
+                <option value="hours">Hours</option>
+                <option value="days">Days</option>
+              </Select>
+            </div>
           </Field>
           <Field>
             <Label htmlFor="price">Base price ($)</Label>
@@ -352,7 +427,36 @@ export default function BookingsPage() {
               placeholder="Optional"
             />
           </Field>
-          <Button type="submit" className="min-h-11 w-full sm:w-auto">
+          <Field>
+            <Label htmlFor="q-tmpl">Questionnaire</Label>
+            <Select
+              id="q-tmpl"
+              value={questionnaireTemplateId}
+              onChange={(e) => setQuestionnaireTemplateId(e.target.value)}
+            >
+              <option value="">None</option>
+              {qTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+            {qTemplates.length === 0 ? (
+              <p className="mt-1 text-xs text-muted">
+                Create templates under Documents.
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-muted">
+                Sent automatically when you confirm a booking.
+              </p>
+            )}
+          </Field>
+          <Button
+            type="submit"
+            className="min-h-11 w-full sm:w-auto"
+            pending={creatingType}
+            pendingLabel="Creating…"
+          >
             Create
           </Button>
         </form>
@@ -368,10 +472,28 @@ export default function BookingsPage() {
             >
               <p className="font-medium">{t.name}</p>
               <p className="text-muted">
-                {t.durationMinutes}m · ${t.basePrice}
+                {formatSessionDuration(t.durationMinutes)} · ${t.basePrice}
                 {t.pricingMode === "upfront" ? " · upfront" : " · after intake"}
                 {t.depositAmount != null ? ` · deposit $${t.depositAmount}` : ""}
               </p>
+              <div className="mt-3 flex flex-col gap-2 sm:max-w-sm">
+                <Label htmlFor={`st-q-${t.id}`}>Questionnaire</Label>
+                <Select
+                  id={`st-q-${t.id}`}
+                  value={t.questionnaireTemplateId || ""}
+                  disabled={savingTypeId === t.id}
+                  onChange={(e) =>
+                    void updateTypeQuestionnaire(t.id, e.target.value)
+                  }
+                >
+                  <option value="">None</option>
+                  {qTemplates.map((q) => (
+                    <option key={q.id} value={q.id}>
+                      {q.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </li>
           ))}
           {types.length === 0 ? (

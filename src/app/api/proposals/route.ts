@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { publicToken } from "@/lib/tokens";
+import { defaultQuoteTitle } from "@/lib/copy/offering";
 
 export async function GET() {
   const admin = await requireAdmin();
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
     shootId: session.id,
     packageTemplateId: pkg?.id,
     status: "draft" as const,
-    title: String(body.title || `${pkg?.name || session.type} Quote`),
+    title: String(body.title || defaultQuoteTitle(pkg?.name || session.type)),
     moodBoard: body.moodBoard || [],
     tiers: body.tiers || pkg?.defaultPricing || [],
     inclusions: body.inclusions || pkg?.inclusions || [],

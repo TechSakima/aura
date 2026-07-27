@@ -24,6 +24,7 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
   const { confirm } = useConfirm();
   const [packages, setPackages] = useState<PackageTemplate[]>([]);
   const [editing, setEditing] = useState<PackageTemplate | null>(null);
+  const [saving, setSaving] = useState(false);
 
   async function load() {
     const res = await fetch("/api/packages");
@@ -41,11 +42,13 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
 
   async function save() {
     if (!editing) return;
+    setSaving(true);
     const res = await fetch(`/api/packages/${editing.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(editing),
     });
+    setSaving(false);
     if (!res.ok) {
       push("Save failed", "danger");
       return;
@@ -113,11 +116,17 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
               New package
             </Button>
           }
-          description="Defaults for pricing, terms, inclusions, and intake questions."
+          description="Quote tiers for projects (after-intake pricing). Bookable session types are under Bookings."
         />
       ) : (
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="font-display text-2xl">Packages</h2>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-2xl">Quote packages</h2>
+            <p className="mt-1 text-sm text-muted">
+              Pricing tiers and terms for project quotes. Session length and
+              online booking use Bookings → Session types.
+            </p>
+          </div>
           <Button
             size="sm"
             onClick={async () => {
@@ -214,13 +223,20 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
               }
             />
             <IntakeListEditor
+              label="Intake questions"
               questions={editing.intakeQuestions}
               onChange={(intakeQuestions) =>
                 setEditing({ ...editing, intakeQuestions })
               }
             />
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => void save()}>Save</Button>
+              <Button
+                pending={saving}
+                pendingLabel="Saving…"
+                onClick={() => void save()}
+              >
+                Save
+              </Button>
               <Button tone="ghost" onClick={() => setEditing(null)}>
                 Cancel
               </Button>

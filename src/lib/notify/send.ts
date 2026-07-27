@@ -1,5 +1,13 @@
 import { nanoid } from "nanoid";
 import { Resend } from "resend";
+import {
+  bookingCanceledStudioSentence,
+  bookingConfirmedSentence,
+  bookingDeclinedSentence,
+  nextStepAfterBookingConfirm,
+  nextStepHtml,
+  offeringLabel,
+} from "@/lib/copy/offering";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import type { Studio } from "@/lib/types";
 
@@ -245,18 +253,28 @@ export async function emailQuoteShared(opts: {
     return { ok: false as const, skipped: true };
   }
   const href = absoluteUrl(`/p/${opts.token}`);
+  const rawLabel = offeringLabel(
+    opts.quoteTitle.replace(/\s*quote$/i, "").trim() || opts.quoteTitle,
+  );
+  const showLabel =
+    rawLabel &&
+    rawLabel.toLowerCase() !== "quote" &&
+    rawLabel.toLowerCase() !== "session";
   return emailClient({
     to: opts.to,
-    subject: `Your quote from ${db.studio.name}`,
+    subject: `Your quote — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
     replyTo: db.studio.ownerEmail,
     html: wrapHtml({
       studioName: db.studio.name,
-      title: opts.quoteTitle,
-      bodyHtml: `<p>Hi ${opts.clientName},</p><p>Your quote is ready to review.</p>`,
+      title: "Your quote",
+      bodyHtml: `<p>Hi ${opts.clientName},</p>
+<p>Your quote is ready to review${showLabel ? ` · ${rawLabel}` : ""}.</p>
+${nextStepHtml("Open the link, choose a package if shown, and accept when you're ready.")}`,
       ctaLabel: "View quote",
       ctaHref: href,
     }),
+    text: `Hi ${opts.clientName},\n\nYour quote is ready to review${showLabel ? ` · ${rawLabel}` : ""}.\n\nNext: Open the link, choose a package if shown, and accept when you're ready.\n${href}`,
     idempotencyKey: `quote-shared/${opts.token}`,
   });
 }
@@ -297,16 +315,19 @@ export async function emailGalleryLive(opts: {
   const href = absoluteUrl(`/g/${opts.publicToken}`);
   return emailClient({
     to: opts.to,
-    subject: `Your gallery from ${db.studio.name}`,
+    subject: `Your gallery — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
     replyTo: db.studio.ownerEmail,
     html: wrapHtml({
       studioName: db.studio.name,
-      title: opts.galleryTitle,
-      bodyHtml: `<p>Hi ${opts.clientName},</p><p>Your gallery is ready to view.</p>`,
+      title: "Your gallery",
+      bodyHtml: `<p>Hi ${opts.clientName},</p>
+<p>Your gallery is ready to view${opts.galleryTitle ? ` (${offeringLabel(opts.galleryTitle)})` : ""}.</p>
+${nextStepHtml("Open the gallery to view, favorite, and download your photos.")}`,
       ctaLabel: "Open gallery",
       ctaHref: href,
     }),
+    text: `Hi ${opts.clientName},\n\nYour gallery is ready.\n\nNext: Open the gallery to view, favorite, and download your photos.\n${href}`,
     idempotencyKey: `gallery-live/${opts.publicToken}`,
   });
 }
@@ -328,17 +349,19 @@ export async function emailPaymentLink(opts: {
   const who = opts.clientName || "there";
   return emailClient({
     to: opts.to,
-    subject: `Payment link — ${db.studio.name}`,
+    subject: `Payment — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
     replyTo: db.studio.ownerEmail,
     html: wrapHtml({
       studioName: db.studio.name,
-      title: opts.title,
-      bodyHtml: `<p>Hi ${who},</p><p>Please use the link below to complete your payment.</p>`,
+      title: "Payment",
+      bodyHtml: `<p>Hi ${who},</p>
+<p>Please complete your payment${opts.title ? ` · ${offeringLabel(opts.title)}` : ""}.</p>
+${nextStepHtml("Use the button below to pay securely. This secures your date.")}`,
       ctaLabel: "Pay now",
       ctaHref: href,
     }),
-    text: `Hi ${who},\n\nPlease complete your payment:\n${href}`,
+    text: `Hi ${who},\n\nPlease complete your payment.\n\nNext: Use the link to pay securely — this secures your date.\n${href}`,
     idempotencyKey: `payment-link/${opts.paymentLinkId}/${opts.to}`,
   });
 }
@@ -360,20 +383,22 @@ export async function emailPaymentReceipt(opts: {
   const who = opts.clientName || "there";
   return emailClient({
     to: opts.to,
-    subject: `Payment receipt — ${db.studio.name}`,
+    subject: `Payment received — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
     replyTo: db.studio.ownerEmail,
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Payment received",
       bodyHtml: `<p>Hi ${who},</p>
-<p>Thanks for your payment for <strong>${opts.title}</strong>.</p>
+<p>Thanks — we received your payment${opts.title ? ` · ${offeringLabel(opts.title)}` : ""}.</p>
 <ul>
 <li>Amount to studio: $${opts.netAmount.toFixed(2)}</li>
 <li>Processing fee: $${opts.processingFee.toFixed(2)}</li>
 <li>You paid: $${opts.grossAmount.toFixed(2)}</li>
-</ul>`,
+</ul>
+${nextStepHtml("You're all set on payment. We'll be in touch with prep details closer to your date.")}`,
     }),
+    text: `Hi ${who},\n\nThanks — we received your payment.\nYou paid: $${opts.grossAmount.toFixed(2)}\n\nNext: You're all set on payment. We'll be in touch with prep details closer to your date.`,
     idempotencyKey: `payment-receipt/${opts.studioId}/${opts.to}/${opts.netAmount}/${Date.now()}`,
   });
 }
@@ -391,17 +416,19 @@ export async function emailContractToSign(opts: {
   const who = opts.clientName || "there";
   return emailClient({
     to: opts.to,
-    subject: `Please sign: ${opts.title}`,
+    subject: `Please sign — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
     replyTo: db.studio.ownerEmail,
     html: wrapHtml({
       studioName: db.studio.name,
-      title: opts.title,
-      bodyHtml: `<p>Hi ${who},</p><p>Please review and sign your agreement.</p>`,
+      title: "Agreement to sign",
+      bodyHtml: `<p>Hi ${who},</p>
+<p>Please review and sign your agreement${opts.title ? ` (${offeringLabel(opts.title)})` : ""}.</p>
+${nextStepHtml("Open the link, read the terms, and sign when ready. Reply to this email with questions.")}`,
       ctaLabel: "Sign now",
       ctaHref: href,
     }),
-    text: `Hi ${who},\n\nPlease review and sign your agreement:\n${href}`,
+    text: `Hi ${who},\n\nPlease review and sign your agreement.\n\nNext: Open the link, read the terms, and sign when ready.\n${href}`,
     idempotencyKey: `contract-sign/${opts.token}`,
   });
 }
@@ -418,17 +445,19 @@ export async function emailQuestionnaireInvite(opts: {
   const href = absoluteUrl(`/q/${opts.token}`);
   return emailClient({
     to: opts.to,
-    subject: `${opts.title} — ${db.studio.name}`,
+    subject: `Questionnaire — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
     replyTo: db.studio.ownerEmail,
     html: wrapHtml({
       studioName: db.studio.name,
-      title: opts.title,
-      bodyHtml: `<p>Hi ${opts.clientName},</p><p>Please complete this questionnaire when you have a moment.</p>`,
+      title: "Questionnaire",
+      bodyHtml: `<p>Hi ${opts.clientName},</p>
+<p>Please complete this short questionnaire${opts.title ? ` (${offeringLabel(opts.title)})` : ""} when you have a moment.</p>
+${nextStepHtml("Answer the questions in the link. We'll use your answers to prepare the next step.")}`,
       ctaLabel: "Open questionnaire",
       ctaHref: href,
     }),
-    text: `Hi ${opts.clientName},\n\nPlease complete this questionnaire:\n${href}`,
+    text: `Hi ${opts.clientName},\n\nPlease complete this questionnaire.\n\nNext: Answer the questions in the link. We'll use your answers to prepare the next step.\n${href}`,
     idempotencyKey: `questionnaire/${opts.token}`,
   });
 }
@@ -441,6 +470,8 @@ export async function emailBookingConfirmed(opts: {
   sessionTypeName: string;
   startsAt: string;
   cancelHref?: string;
+  /** Project workflow step after confirm — drives “Next” copy */
+  nextWorkflowStep?: string | null;
 }) {
   const db = await readStudioDb(opts.studioId);
   if (!clientEmailAllowed("booking", db.studio.notificationPrefs)) {
@@ -453,6 +484,8 @@ export async function emailBookingConfirmed(opts: {
     hour: "numeric",
     minute: "2-digit",
   });
+  const confirmed = bookingConfirmedSentence(when, opts.sessionTypeName);
+  const next = nextStepAfterBookingConfirm(opts.nextWorkflowStep);
   const cancelBit = opts.cancelHref
     ? `<p style="margin-top:24px;font-size:13px;opacity:0.75"><a href="${opts.cancelHref}" style="color:inherit">Need to cancel?</a></p>`
     : "";
@@ -465,8 +498,10 @@ export async function emailBookingConfirmed(opts: {
       studioName: db.studio.name,
       title: "You're booked",
       bodyHtml: `<p>Hi ${opts.clientName},</p>
-<p>Your <strong>${opts.sessionTypeName}</strong> is confirmed for <strong>${when}</strong>.</p>${cancelBit}`,
+<p>${confirmed}</p>
+${nextStepHtml(next)}${cancelBit}`,
     }),
+    text: `Hi ${opts.clientName},\n\n${confirmed}\n\nNext: ${next}${opts.cancelHref ? `\n\nNeed to cancel? ${opts.cancelHref}` : ""}`,
     idempotencyKey: `booking-confirmed/${opts.studioId}/${opts.to}/${opts.startsAt}`,
   });
 }
@@ -480,6 +515,7 @@ export async function emailBookingDeclined(opts: {
   reason: string;
 }) {
   const db = await readStudioDb(opts.studioId);
+  const declined = bookingDeclinedSentence(opts.sessionTypeName);
   return emailClient({
     to: opts.to,
     subject: `Booking update — ${db.studio.name}`,
@@ -489,10 +525,11 @@ export async function emailBookingDeclined(opts: {
       studioName: db.studio.name,
       title: "Request update",
       bodyHtml: `<p>Hi ${opts.clientName},</p>
-<p>We can’t take your <strong>${opts.sessionTypeName}</strong> request.</p>
-<p>${opts.reason}</p>`,
+<p>${declined}</p>
+<p>${opts.reason}</p>
+${nextStepHtml("No further action is needed. Reply to this email if you'd like to find another date.")}`,
     }),
-    text: `Hi ${opts.clientName},\n\nWe can’t take your ${opts.sessionTypeName} request.\n\n${opts.reason}`,
+    text: `Hi ${opts.clientName},\n\n${declined}\n\n${opts.reason}\n\nNext: No further action is needed. Reply if you'd like to find another date.`,
     idempotencyKey: `booking-declined/${opts.studioId}/${opts.to}/${Date.now()}`,
   });
 }
@@ -508,6 +545,10 @@ export async function emailStudioBookingCanceled(opts: {
   const db = await readStudioDb(opts.studioId);
   const to = db.studio.ownerEmail;
   if (!to) return { ok: false as const, skipped: true };
+  const line = bookingCanceledStudioSentence(
+    opts.clientName,
+    opts.sessionTypeName,
+  );
   return emailClient({
     to,
     subject: `Canceled: ${opts.clientName} — ${db.studio.name}`,
@@ -516,7 +557,7 @@ export async function emailStudioBookingCanceled(opts: {
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Request canceled",
-      bodyHtml: `<p><strong>${opts.clientName}</strong> canceled their <strong>${opts.sessionTypeName}</strong> request.</p>
+      bodyHtml: `<p>${line}</p>
 <p>Reason: ${opts.reason}</p>`,
       ...(opts.projectHref
         ? { ctaLabel: "Open project", ctaHref: absoluteUrl(opts.projectHref) }

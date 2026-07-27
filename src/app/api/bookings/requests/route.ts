@@ -113,8 +113,8 @@ export async function PATCH(req: Request) {
               ? "questionnaire"
               : pricingMode === "upfront"
                 ? "contract"
-                : "pricing";
-            project.stage = "inquiry";
+                : "questionnaire";
+            project.stage = "booked";
             project.workflowStep = nextStep;
             if (!project.cancelToken) project.cancelToken = nanoid(24);
             cancelToken = project.cancelToken;
@@ -128,7 +128,13 @@ export async function PATCH(req: Request) {
       if (reqRow.sessionId) {
         const session = db.sessions.find((s) => s.id === reqRow.sessionId);
         if (session) {
-          session.status = status === "confirmed" ? "booked" : "inquiry";
+          if (status === "confirmed") {
+            session.status = "booked";
+          } else {
+            session.status = "archived";
+            session.startsAt = undefined;
+            session.endsAt = undefined;
+          }
           session.updatedAt = now;
         }
       }
@@ -148,6 +154,7 @@ export async function PATCH(req: Request) {
       sessionTypeName,
       startsAt,
       cancelHref,
+      nextWorkflowStep: nextStep,
     });
     await notifyStudio({
       studioId: admin.studioId,

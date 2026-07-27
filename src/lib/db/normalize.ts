@@ -110,7 +110,7 @@ function normalizeStudio(studio: Studio): Studio {
     timeZone: studio.timeZone || "America/Denver",
     dateFormat: studio.dateFormat || "mm/dd/yyyy",
     theme: studio.theme || { ...DEFAULT_STUDIO_THEME },
-    homepage: studio.homepage || {
+    homepage: {
       enabled: false,
       slug: `${slugBase}-${studio.id.slice(0, 6)}`,
       showBiography: true,
@@ -119,7 +119,10 @@ function normalizeStudio(studio: Studio): Studio {
       showEmail: true,
       showPhone: true,
       showAddress: false,
+      showBooking: true,
+      layout: "masonry",
       sortOrder: "created_desc",
+      ...(studio.homepage || {}),
     },
     notificationPrefs: {
       emailQuoteAccepted: true,

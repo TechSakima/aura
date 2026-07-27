@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import type { DateFormat, FontPresetId, StudioHomepageSettings } from "@/lib/types";
+import { absoluteExternalUrl } from "@/lib/urls";
 
 function studioForClient(studio: Awaited<ReturnType<typeof readStudioDb>>["studio"]) {
   const homepage = studio.homepage
@@ -54,7 +55,17 @@ export async function PATCH(req: Request) {
     if (Array.isArray(body.printPartners)) s.printPartners = body.printPartners;
     if (typeof body.ownerFirstName === "string") s.ownerFirstName = body.ownerFirstName;
     if (typeof body.ownerLastName === "string") s.ownerLastName = body.ownerLastName;
-    if (typeof body.website === "string") s.website = body.website;
+    if (typeof body.website === "string") {
+      s.website = absoluteExternalUrl(body.website) || body.website.trim();
+    }
+    if (Array.isArray(body.socialLinks)) {
+      s.socialLinks = body.socialLinks
+        .map((row: { label?: string; url?: string }) => ({
+          label: String(row?.label || "").trim(),
+          url: absoluteExternalUrl(String(row?.url || "")) || "",
+        }))
+        .filter((row: { label: string; url: string }) => row.label && row.url);
+    }
     if (typeof body.phone === "string") s.phone = body.phone;
     if (typeof body.addressLine1 === "string") s.addressLine1 = body.addressLine1;
     if (typeof body.city === "string") s.city = body.city;

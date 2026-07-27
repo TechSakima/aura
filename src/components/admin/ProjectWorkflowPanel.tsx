@@ -65,10 +65,15 @@ export function ProjectWorkflowPanel({
   );
   const [busy, setBusy] = useState<string | null>(null);
   const [sendTemplateId, setSendTemplateId] = useState("");
+  const [showAnswers, setShowAnswers] = useState(false);
 
   const primarySession = sessions[0];
   const current = project.workflowStep || "inquiry";
   const currentIdx = stepIndex(current);
+  const latestSubmitted = useMemo(
+    () => questionnaires.find((r) => Boolean(r.submittedAt)),
+    [questionnaires],
+  );
 
   async function loadRelated() {
     const [qs, docs, pay] = await Promise.all([
@@ -306,11 +311,27 @@ export function ProjectWorkflowPanel({
                   </Badge>
                 </div>
                 {step.id === "questionnaire" && qSent ? (
-                  <p className="text-sm text-muted">
-                    {qDone
-                      ? "Answers received"
-                      : `${questionnaires.length} sent · awaiting answers`}
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted">
+                      {qDone
+                        ? "Answers received"
+                        : `${questionnaires.length} sent · awaiting answers`}
+                    </p>
+                    {qDone && latestSubmitted && showAnswers ? (
+                      <dl className="space-y-3 rounded-md border border-line bg-surface p-3">
+                        {latestSubmitted.questions.map((q) => (
+                          <div key={q.id}>
+                            <dt className="text-xs uppercase tracking-[0.14em] text-muted">
+                              {q.label}
+                            </dt>
+                            <dd className="mt-1 whitespace-pre-wrap text-sm">
+                              {latestSubmitted.answers?.[q.id]?.trim() || "—"}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : null}
+                  </div>
                 ) : null}
                 {step.id === "contract" && contractSent ? (
                   <p className="text-sm text-muted">
@@ -350,11 +371,22 @@ export function ProjectWorkflowPanel({
                     ) : null}
                     <Button
                       className="min-h-11 w-full sm:w-auto"
-                      disabled={busy === "questionnaire"}
+                      pending={busy === "questionnaire"}
+                      pendingLabel="Sending…"
                       onClick={() => void sendQuestionnaire()}
                     >
-                      Send questionnaire
+                      {qSent ? "Send again" : "Send questionnaire"}
                     </Button>
+                    {qDone && latestSubmitted ? (
+                      <Button
+                        type="button"
+                        tone="neutral"
+                        className="min-h-11 w-full sm:w-auto"
+                        onClick={() => setShowAnswers((v) => !v)}
+                      >
+                        {showAnswers ? "Hide answers" : "View answers"}
+                      </Button>
+                    ) : null}
                     {questionnaires[0] ? (
                       <a
                         className="text-sm text-accent"
@@ -362,7 +394,7 @@ export function ProjectWorkflowPanel({
                         target="_blank"
                         rel="noreferrer"
                       >
-                        Open latest
+                        Client link
                       </a>
                     ) : null}
                   </>

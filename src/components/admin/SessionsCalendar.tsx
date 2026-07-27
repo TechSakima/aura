@@ -17,7 +17,7 @@ import {
   startOfWeek,
   startOfDay,
 } from "date-fns";
-import { Button } from "@/components/ui";
+import { Button, Select } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { ProjectSession } from "@/lib/types";
 
@@ -26,7 +26,7 @@ export type CalendarSession = ProjectSession & {
   projectHref?: string;
 };
 
-type ViewMode = "month" | "week" | "day";
+type ViewMode = "month" | "months" | "week" | "day";
 
 function sessionTimeLabel(iso?: string) {
   if (!iso) return "";
@@ -36,6 +36,91 @@ function sessionTimeLabel(iso?: string) {
 function sessionsOnDay(sessions: CalendarSession[], day: Date) {
   return sessions.filter(
     (s) => s.startsAt && isSameDay(new Date(s.startsAt), day),
+  );
+}
+
+function MonthGrid({
+  month,
+  sessions,
+  onSelectDay,
+}: {
+  month: Date;
+  sessions: CalendarSession[];
+  onSelectDay: (day: Date) => void;
+}) {
+  const days = useMemo(() => {
+    const start = startOfWeek(startOfMonth(month));
+    const end = endOfWeek(endOfMonth(month));
+    return eachDayOfInterval({ start, end });
+  }, [month]);
+
+  return (
+    <div className="overflow-hidden rounded-md border border-line">
+      <div className="border-b border-line bg-surface px-3 py-2 text-center text-sm font-medium">
+        {format(month, "MMMM yyyy")}
+      </div>
+      <div className="grid grid-cols-7 border-b border-line bg-surface text-center text-[10px] uppercase tracking-[0.14em] text-muted sm:text-xs">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+          <div key={d} className="px-1 py-2">
+            <span className="sm:hidden">{d.slice(0, 1)}</span>
+            <span className="hidden sm:inline">{d}</span>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {days.map((day) => {
+          const items = sessionsOnDay(sessions, day);
+          const inMonth = isSameMonth(day, month);
+          return (
+            <button
+              key={day.toISOString()}
+              type="button"
+              onClick={() => onSelectDay(day)}
+              className={cn(
+                "min-h-[4.5rem] border-b border-r border-line p-1 text-left align-top sm:min-h-[6.5rem] sm:p-2",
+                !inMonth && "bg-canvas/60 text-muted",
+                isToday(day) && "bg-accent/5",
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs",
+                  isToday(day) && "bg-accent text-accent-ink",
+                )}
+              >
+                {format(day, "d")}
+              </span>
+              <div className="mt-1 space-y-0.5">
+                {items.slice(0, 2).map((s) => (
+                  <EventChip key={s.id} s={s} />
+                ))}
+                {items.length > 2 ? (
+                  <p className="text-[10px] text-muted">+{items.length - 2}</p>
+                ) : null}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EventChip({ s }: { s: CalendarSession }) {
+  const href =
+    s.projectHref ||
+    (s.projectId ? `/admin/projects/${s.projectId}` : undefined);
+  const label = `${s.projectName || s.type} · ${sessionTimeLabel(s.startsAt)}`;
+  const inner = (
+    <span className="block truncate rounded-sm bg-ink px-1.5 py-0.5 text-[10px] leading-tight text-surface sm:text-[11px]">
+      {label}
+    </span>
+  );
+  if (!href) return inner;
+  return (
+    <Link href={href} className="block no-underline hover:opacity-90">
+      {inner}
+    </Link>
   );
 }
 
@@ -50,15 +135,12 @@ export function SessionsCalendar({
   const [view, setView] = useState<ViewMode>("month");
 
   const dated = useMemo(
-    () => sessions.filter((s) => Boolean(s.startsAt)),
+    () =>
+      sessions.filter(
+        (s) => Boolean(s.startsAt) && s.status !== "archived",
+      ),
     [sessions],
   );
-
-  const monthDays = useMemo(() => {
-    const start = startOfWeek(startOfMonth(cursor));
-    const end = endOfWeek(endOfMonth(cursor));
-    return eachDayOfInterval({ start, end });
-  }, [cursor]);
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(cursor);
@@ -66,41 +148,49 @@ export function SessionsCalendar({
     return eachDayOfInterval({ start, end });
   }, [cursor]);
 
+  const multiMonths = useMemo(
+    () => [0, 1, 2].map((i) => startOfMonth(addMonths(cursor, i))),
+    [cursor],
+  );
+
+  const monthJumpOptions = useMemo(() => {
+    const base = startOfMonth(cursor);
+    return Array.from({ length: 24 }, (_, i) => {
+      const d = addMonths(base, i - 6);
+      return {
+        value: format(d, "yyyy-MM"),
+        label: format(d, "MMMM yyyy"),
+        date: d,
+      };
+    });
+  }, [cursor]);
+
   const title =
     view === "day"
       ? format(cursor, "EEEE, MMM d, yyyy")
       : view === "week"
         ? `${format(startOfWeek(cursor), "MMM d")} – ${format(endOfWeek(cursor), "MMM d, yyyy")}`
-        : format(cursor, "MMMM yyyy");
+        : view === "months"
+          ? `${format(multiMonths[0], "MMM yyyy")} – ${format(multiMonths[2], "MMM yyyy")}`
+          : format(cursor, "MMMM yyyy");
 
   function goPrev() {
-    if (view === "month") setCursor((d) => addMonths(d, -1));
+    if (view === "months") setCursor((d) => addMonths(d, -3));
+    else if (view === "month") setCursor((d) => addMonths(d, -1));
     else if (view === "week") setCursor((d) => addWeeks(d, -1));
     else setCursor((d) => addDays(d, -1));
   }
 
   function goNext() {
-    if (view === "month") setCursor((d) => addMonths(d, 1));
+    if (view === "months") setCursor((d) => addMonths(d, 3));
+    else if (view === "month") setCursor((d) => addMonths(d, 1));
     else if (view === "week") setCursor((d) => addWeeks(d, 1));
     else setCursor((d) => addDays(d, 1));
   }
 
-  function EventChip({ s }: { s: CalendarSession }) {
-    const href =
-      s.projectHref ||
-      (s.projectId ? `/admin/projects/${s.projectId}` : undefined);
-    const label = `${s.projectName || s.type} · ${sessionTimeLabel(s.startsAt)}`;
-    const inner = (
-      <span className="block truncate rounded-sm bg-ink px-1.5 py-0.5 text-[10px] leading-tight text-surface sm:text-[11px]">
-        {label}
-      </span>
-    );
-    if (!href) return inner;
-    return (
-      <Link href={href} className="block no-underline hover:opacity-90">
-        {inner}
-      </Link>
-    );
+  function selectDay(day: Date) {
+    setCursor(day);
+    setView("day");
   }
 
   return (
@@ -120,7 +210,7 @@ export function SessionsCalendar({
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button tone="ghost" className="min-h-11" onClick={goPrev}>
             Prev
           </Button>
@@ -134,9 +224,26 @@ export function SessionsCalendar({
           <Button tone="ghost" className="min-h-11" onClick={goNext}>
             Next
           </Button>
+          <Select
+            aria-label="Jump to month"
+            className="min-h-11 w-[10.5rem]"
+            value={format(startOfMonth(cursor), "yyyy-MM")}
+            onChange={(e) => {
+              const match = monthJumpOptions.find(
+                (o) => o.value === e.target.value,
+              );
+              if (match) setCursor(match.date);
+            }}
+          >
+            {monthJumpOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
         </div>
-        <div className="grid grid-cols-3 gap-1 rounded-md border border-line p-1 sm:inline-flex sm:w-auto">
-          {(["day", "week", "month"] as ViewMode[]).map((mode) => (
+        <div className="grid grid-cols-2 gap-1 rounded-md border border-line p-1 sm:inline-flex sm:w-auto sm:grid-cols-none">
+          {(["day", "week", "month", "months"] as ViewMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
@@ -148,62 +255,30 @@ export function SessionsCalendar({
                   : "text-muted hover:text-ink",
               )}
             >
-              {mode}
+              {mode === "months" ? "3 months" : mode}
             </button>
           ))}
         </div>
       </div>
 
       {view === "month" ? (
-        <div className="overflow-hidden rounded-md border border-line">
-          <div className="grid grid-cols-7 border-b border-line bg-surface text-center text-[10px] uppercase tracking-[0.14em] text-muted sm:text-xs">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-              <div key={d} className="px-1 py-2">
-                <span className="sm:hidden">{d.slice(0, 1)}</span>
-                <span className="hidden sm:inline">{d}</span>
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7">
-            {monthDays.map((day) => {
-              const items = sessionsOnDay(dated, day);
-              const inMonth = isSameMonth(day, cursor);
-              return (
-                <button
-                  key={day.toISOString()}
-                  type="button"
-                  onClick={() => {
-                    setCursor(day);
-                    setView("day");
-                  }}
-                  className={cn(
-                    "min-h-[4.5rem] border-b border-r border-line p-1 text-left align-top sm:min-h-[6.5rem] sm:p-2",
-                    !inMonth && "bg-canvas/60 text-muted",
-                    isToday(day) && "bg-accent/5",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs",
-                      isToday(day) && "bg-accent text-accent-ink",
-                    )}
-                  >
-                    {format(day, "d")}
-                  </span>
-                  <div className="mt-1 space-y-0.5">
-                    {items.slice(0, 2).map((s) => (
-                      <EventChip key={s.id} s={s} />
-                    ))}
-                    {items.length > 2 ? (
-                      <p className="text-[10px] text-muted">
-                        +{items.length - 2}
-                      </p>
-                    ) : null}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+        <MonthGrid
+          month={startOfMonth(cursor)}
+          sessions={dated}
+          onSelectDay={selectDay}
+        />
+      ) : null}
+
+      {view === "months" ? (
+        <div className="grid gap-4 lg:grid-cols-3">
+          {multiMonths.map((month) => (
+            <MonthGrid
+              key={month.toISOString()}
+              month={month}
+              sessions={dated}
+              onSelectDay={selectDay}
+            />
+          ))}
         </div>
       ) : null}
 

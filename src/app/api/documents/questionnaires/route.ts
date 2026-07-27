@@ -68,6 +68,44 @@ export async function POST(req: Request) {
     return NextResponse.json({ template });
   }
 
+  if (action === "update_template") {
+    const templateId = String(body.templateId || body.id || "");
+    if (!templateId) {
+      return NextResponse.json({ error: "templateId required" }, { status: 400 });
+    }
+    const template = await updateStudioDb(admin.studioId, (d) => {
+      const t = d.questionnaireTemplates.find((x) => x.id === templateId);
+      if (!t) return null;
+      if (body.name != null) {
+        t.name = String(body.name).trim() || t.name;
+      }
+      if (Array.isArray(body.questions)) {
+        t.questions = body.questions.map(
+          (q: Partial<IntakeQuestion> & { label?: string }) => ({
+            id: String(q.id || nanoid(8)),
+            label: String(q.label || "").trim() || "Question",
+            type:
+              q.type === "textarea" ||
+              q.type === "select" ||
+              q.type === "date"
+                ? q.type
+                : "text",
+            required: Boolean(q.required),
+            options: Array.isArray(q.options)
+              ? q.options.map(String).filter(Boolean)
+              : undefined,
+          }),
+        );
+      }
+      t.updatedAt = now;
+      return t;
+    });
+    if (!template) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json({ template });
+  }
+
   const projectId = String(body.projectId || "");
   const templateId = String(body.templateId || "");
   const project = db.projects.find((p) => p.id === projectId);
