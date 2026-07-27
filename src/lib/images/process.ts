@@ -8,7 +8,7 @@ import {
 } from "@/lib/storage/upload";
 import type { WatermarkPreset } from "@/lib/types";
 
-type SharpFn = typeof import("sharp").default;
+type SharpFn = typeof import("sharp");
 
 let sharpLoadAttempted = false;
 let sharpCached: SharpFn | null = null;
@@ -18,13 +18,15 @@ async function tryLoadSharp(): Promise<SharpFn | null> {
   sharpLoadAttempted = true;
   try {
     const mod = await import("sharp");
+    const sharp = (("default" in mod ? mod.default : mod) ||
+      mod) as SharpFn;
     // Force native load now so we fail early in this helper, not mid-pipeline.
-    await mod.default({
+    await sharp({
       create: { width: 1, height: 1, channels: 3, background: "#000" },
     })
       .png()
       .toBuffer();
-    sharpCached = mod.default;
+    sharpCached = sharp;
     return sharpCached;
   } catch (e) {
     console.error(
