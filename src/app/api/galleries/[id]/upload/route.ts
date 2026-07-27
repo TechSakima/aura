@@ -19,9 +19,12 @@ export async function POST(
   try {
     const form = await req.formData();
     const kind = String(form.get("kind") || "main") === "peek" ? "peek" : "main";
-    const files = form
-      .getAll("files")
-      .filter((f): f is Blob => typeof Blob !== "undefined" && f instanceof Blob);
+    const files = form.getAll("files").flatMap((entry) => {
+      if (typeof entry === "string") return [];
+      // App Hosting/Node may surface uploads as File or Blob.
+      if (typeof Blob !== "undefined" && entry instanceof Blob) return [entry];
+      return [];
+    });
     if (!files.length) {
       return NextResponse.json({ error: "No files" }, { status: 400 });
     }

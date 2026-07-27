@@ -19,14 +19,36 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
 function loadServiceAccount(): ServiceAccount | null {
+  if (
+    process.env.FIREBASE_PROJECT_ID &&
+    process.env.FIREBASE_CLIENT_EMAIL &&
+    process.env.FIREBASE_PRIVATE_KEY
+  ) {
+    return {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    };
+  }
+
+  // App Hosting / Cloud Run use ADC — skip local key-file probing.
+  if (
+    process.env.K_SERVICE ||
+    process.env.FIREBASE_APP_HOSTING ||
+    (process.env.FIREBASE_CONFIG && !process.env.FIREBASE_SERVICE_ACCOUNT_PATH)
+  ) {
+    return null;
+  }
+
   const explicit = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-  const root = /* turbopackIgnore: true */ process.cwd();
   const candidates = [explicit, "serviceAccountKey.json"].filter(
     Boolean,
   ) as string[];
 
   for (const file of candidates) {
-    const resolved = path.isAbsolute(file) ? file : path.join(root, file);
+    const resolved = path.isAbsolute(file)
+      ? file
+      : path.join(/* turbopackIgnore: true */ process.cwd(), file);
     if (existsSync(resolved)) {
       const json = JSON.parse(readFileSync(resolved, "utf8")) as {
         project_id?: string;
@@ -39,18 +61,6 @@ function loadServiceAccount(): ServiceAccount | null {
         privateKey: json.private_key,
       };
     }
-  }
-
-  if (
-    process.env.FIREBASE_PROJECT_ID &&
-    process.env.FIREBASE_CLIENT_EMAIL &&
-    process.env.FIREBASE_PRIVATE_KEY
-  ) {
-    return {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-    };
   }
 
   return null;
