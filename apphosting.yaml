@@ -67,3 +67,10 @@ env:
     secret: RESEND_API_KEY
     availability:
       - RUNTIME
+  # Stripe — set secrets in App Hosting / Secret Manager when enabling live Checkout
+  # - variable: STRIPE_SECRET_KEY
+  #   secret: STRIPE_SECRET_KEY
+  #   availability: [RUNTIME]
+  # - variable: STRIPE_WEBHOOK_SECRET
+  #   secret: STRIPE_WEBHOOK_SECRET
+  #   availability: [RUNTIME]

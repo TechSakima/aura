@@ -70,3 +70,26 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ url: link.url, accountId });
 }
+
+/** Refresh onboarding status after return from Stripe. */
+export async function PUT() {
+  const admin = await requireAdmin();
+  if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const stripe = getStripe();
+  const db = await readStudioDb(admin.studioId);
+  if (!stripe || !db.studio.stripeAccountId) {
+    return NextResponse.json({
+      onboardingComplete: Boolean(db.studio.stripeOnboardingComplete),
+    });
+  }
+  const account = await stripe.accounts.retrieve(db.studio.stripeAccountId);
+  const complete = Boolean(account.charges_enabled);
+  await updateStudioDb(admin.studioId, (d) => {
+    d.studio.stripeOnboardingComplete = complete;
+  });
+  return NextResponse.json({
+    onboardingComplete: complete,
+    chargesEnabled: account.charges_enabled,
+    detailsSubmitted: account.details_submitted,
+  });
+}

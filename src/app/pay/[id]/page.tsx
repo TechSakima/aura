@@ -13,7 +13,11 @@ export default function PublicPayPage() {
     amount?: number;
     minAmount?: number;
     maxAmount?: number;
-    feePreview?: { grossAmount: number; processingFee: number; netAmount: number };
+    feePreview?: {
+      grossAmount: number;
+      processingFee: number;
+      netAmount: number;
+    };
   } | null>(null);
   const [amount, setAmount] = useState("");
   const [email, setEmail] = useState("");
@@ -22,13 +26,18 @@ export default function PublicPayPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("paid") === "1") setDone(true);
+
     fetch(`/api/public/pay/${params.id}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.error) setError(d.error);
         else {
-          setLink(d.paymentLink);
-          if (d.feePreview) setLink((l) => (l ? { ...l, feePreview: d.feePreview } : l));
+          setLink({
+            ...d.paymentLink,
+            feePreview: d.feePreview,
+          });
           if (d.paymentLink?.amount) setAmount(String(d.paymentLink.amount));
         }
       })
@@ -37,6 +46,7 @@ export default function PublicPayPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    setError("");
     const res = await fetch(`/api/public/pay/${params.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -49,6 +59,10 @@ export default function PublicPayPage() {
     const data = await res.json();
     if (!res.ok) {
       setError(data.error || "Payment failed");
+      return;
+    }
+    if (data.checkoutUrl) {
+      window.location.href = data.checkoutUrl as string;
       return;
     }
     setDone(true);
@@ -64,7 +78,7 @@ export default function PublicPayPage() {
     return (
       <div className="shell-pad mx-auto max-w-md py-20 text-center">
         <h1 className="font-display text-3xl">Thank you</h1>
-        <p className="mt-2 text-muted">Payment recorded.</p>
+        <p className="mt-2 text-muted">Payment received.</p>
       </div>
     );
   }

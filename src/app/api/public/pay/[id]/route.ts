@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
-import { nanoid } from "nanoid";
 import { listStudiosWithPaymentLink, recordPaymentLinkCharge } from "@/lib/db/payments";
-import { grossUpAmount } from "@/lib/stripe";
+import {
+  createPaymentLinkCheckout,
+  getStripe,
+  grossUpAmount,
+} from "@/lib/stripe";
 import { emailPaymentReceipt, notifyStudio } from "@/lib/notify/send";
 
 export async function GET(
@@ -15,7 +18,13 @@ export async function GET(
     hit.link.mode === "fixed" && hit.link.amount
       ? grossUpAmount(hit.link.amount)
       : undefined;
-  return NextResponse.json({ paymentLink: hit.link, feePreview });
+  return NextResponse.json({
+    paymentLink: hit.link,
+    feePreview,
+    checkoutReady: Boolean(
+      getStripe() && hit.stripeAccountId && hit.stripeOnboardingComplete,
+    ),
+  });
 }
 
 export async function POST(
@@ -33,9 +42,50 @@ export async function POST(
   if (net <= 0) {
     return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
   }
+  if (
+    hit.link.mode === "customer_chooses" &&
+    hit.link.minAmount != null &&
+    net < hit.link.minAmount
+  ) {
+    return NextResponse.json({ error: "Below minimum" }, { status: 400 });
+  }
+  if (
+    hit.link.mode === "customer_chooses" &&
+    hit.link.maxAmount != null &&
+    net > hit.link.maxAmount
+  ) {
+    return NextResponse.json({ error: "Above maximum" }, { status: 400 });
+  }
+
   const breakdown = grossUpAmount(net);
   const payerEmail = String(body.email || "").trim().toLowerCase();
   const payerName = String(body.name || "").trim();
+
+  if (
+    getStripe() &&
+    hit.stripeAccountId &&
+    hit.stripeOnboardingComplete
+  ) {
+    const checkout = await createPaymentLinkCheckout({
+      stripeAccountId: hit.stripeAccountId,
+      paymentLinkId: id,
+      studioId: hit.studioId,
+      title: hit.link.title,
+      description: hit.link.description,
+      netAmount: net,
+      customerEmail: payerEmail || undefined,
+      customerName: payerName || undefined,
+    });
+    if (checkout?.session.url) {
+      return NextResponse.json({
+        checkoutUrl: checkout.session.url,
+        sessionId: checkout.session.id,
+        ...checkout.breakdown,
+      });
+    }
+  }
+
+  // Fallback when Stripe not configured: record locally
   await recordPaymentLinkCharge({
     studioId: hit.studioId,
     linkId: id,
@@ -59,7 +109,7 @@ export async function POST(
   }
   return NextResponse.json({
     ok: true,
-    transactionId: nanoid(),
+    recordedLocally: true,
     ...breakdown,
   });
 }

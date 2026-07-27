@@ -46,6 +46,10 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     void load();
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("connect") === "return") {
+      void fetch("/api/payments/connect", { method: "PUT" }).then(() => load());
+    }
   }, []);
 
   async function startConnect() {
