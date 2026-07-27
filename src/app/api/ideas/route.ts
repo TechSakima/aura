@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { formDataFile } from "@/lib/form-data";
 import { processUpload } from "@/lib/images/process";
 
 export async function GET() {
@@ -21,8 +22,8 @@ export async function POST(req: Request) {
   if (contentType.includes("multipart/form-data")) {
     const form = await req.formData();
     let referenceImageUrl: string | undefined;
-    const file = form.get("file");
-    if (file instanceof File && file.size > 0) {
+    const file = formDataFile(form, "file");
+    if (file && file.size > 0) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const processed = await processUpload({
         buffer,

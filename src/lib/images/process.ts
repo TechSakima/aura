@@ -1,6 +1,5 @@
 import { promises as fs } from "fs";
 import path from "path";
-import sharp from "sharp";
 import { TMP_DIR, TMP_WATERMARKS_DIR } from "@/lib/db/path";
 import {
   downloadStorageBuffer,
@@ -8,6 +7,18 @@ import {
   uploadBuffer,
 } from "@/lib/storage/upload";
 import type { WatermarkPreset } from "@/lib/types";
+
+type SharpFn = typeof import("sharp").default;
+
+async function loadSharp(): Promise<SharpFn> {
+  try {
+    const mod = await import("sharp");
+    return mod.default;
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new Error(`Image engine unavailable (${detail})`);
+  }
+}
 
 export type ProcessedImage = {
   storagePath: string;
@@ -44,6 +55,7 @@ function svgTextMark(text: string, imageMinSide: number, opacity: number) {
 }
 
 async function padMarkForInset(mark: Buffer, inset = 20): Promise<Buffer> {
+  const sharp = await loadSharp();
   return sharp(mark)
     .ensureAlpha()
     .extend({
@@ -60,6 +72,7 @@ async function applyWatermarkComposite(
   webBuf: Buffer,
   watermark: WatermarkPreset,
 ): Promise<Buffer> {
+  const sharp = await loadSharp();
   const meta = await sharp(webBuf).metadata();
   const w = meta.width ?? 1;
   const h = meta.height ?? 1;
@@ -119,6 +132,7 @@ async function loadWatermarkMark(
       : path.join(TMP_WATERMARKS_DIR, path.basename(watermark.imagePath));
     markBuf = await fs.readFile(local);
   }
+  const sharp = await loadSharp();
   return sharp(markBuf)
     .resize({ width: Math.round(w * scale) })
     .ensureAlpha(watermark.opacity)
@@ -137,30 +151,42 @@ export async function processUpload(opts: {
   const gallerySegment = opts.galleryId ?? "shared";
   const studioId = opts.studioId || "shared";
   const id = opts.baseName;
+  const sharp = await loadSharp();
 
-  const image = sharp(opts.buffer).rotate();
-  const meta = await image.metadata();
-  const width = meta.width ?? 1;
-  const height = meta.height ?? 1;
+  let width = 1;
+  let height = 1;
+  let originalBuf: Buffer;
+  let thumbBuf: Buffer;
+  let webBuf: Buffer;
+  let wmBuf: Buffer;
 
-  const originalBuf = await sharp(opts.buffer)
-    .rotate()
-    .jpeg({ quality: 92 })
-    .toBuffer();
-  const thumbBuf = await sharp(opts.buffer)
-    .rotate()
-    .resize({ width: 480, withoutEnlargement: true })
-    .webp({ quality: 75 })
-    .toBuffer();
-  const webBuf = await sharp(opts.buffer)
-    .rotate()
-    .resize({ width: 1800, withoutEnlargement: true })
-    .webp({ quality: 82 })
-    .toBuffer();
+  try {
+    const meta = await sharp(opts.buffer).rotate().metadata();
+    width = meta.width ?? 1;
+    height = meta.height ?? 1;
 
-  const wmBuf = opts.watermark
-    ? await applyWatermarkComposite(webBuf, opts.watermark)
-    : await sharp(webBuf).webp({ quality: 82 }).toBuffer();
+    originalBuf = await sharp(opts.buffer)
+      .rotate()
+      .jpeg({ quality: 92 })
+      .toBuffer();
+    thumbBuf = await sharp(opts.buffer)
+      .rotate()
+      .resize({ width: 480, withoutEnlargement: true })
+      .webp({ quality: 75 })
+      .toBuffer();
+    webBuf = await sharp(opts.buffer)
+      .rotate()
+      .resize({ width: 1800, withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+
+    wmBuf = opts.watermark
+      ? await applyWatermarkComposite(webBuf, opts.watermark)
+      : await sharp(webBuf).webp({ quality: 82 }).toBuffer();
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new Error(`Could not process image: ${detail}`);
+  }
 
   const base =
     folder === "galleries"
@@ -172,6 +198,7 @@ export async function processUpload(opts: {
   const webPath = `${base}/derivatives/${id}-web.webp`;
   const wmPath = `${base}/derivatives/${id}-wm.webp`;
 
+  // Private objects served via /api/media — avoids public ACL / token issues.
   const [original, thumb, web, wm] = await Promise.all([
     uploadBuffer({
       buffer: originalBuf,
@@ -183,19 +210,19 @@ export async function processUpload(opts: {
       buffer: thumbBuf,
       objectPath: thumbPath,
       contentType: "image/webp",
-      makePublic: true,
+      makePublic: false,
     }),
     uploadBuffer({
       buffer: webBuf,
       objectPath: webPath,
       contentType: "image/webp",
-      makePublic: true,
+      makePublic: false,
     }),
     uploadBuffer({
       buffer: wmBuf,
       objectPath: wmPath,
       contentType: "image/webp",
-      makePublic: true,
+      makePublic: false,
     }),
   ]);
 
@@ -206,7 +233,7 @@ export async function processUpload(opts: {
     watermarkedUrl: wm.url,
     width,
     height,
-    aspect: width / height,
+    aspect: width / Math.max(height, 1),
   };
 }
 
@@ -218,6 +245,7 @@ export async function reprocessWatermarkedDerivative(opts: {
   storagePath: string;
   watermark: WatermarkPreset | null;
 }): Promise<{ watermarkedUrl: string }> {
+  const sharp = await loadSharp();
   const webPath = opts.storagePath
     .replace("/originals/", "/derivatives/")
     .replace(/\.jpe?g$/i, "-web.webp");
@@ -245,7 +273,7 @@ export async function reprocessWatermarkedDerivative(opts: {
     buffer: wmBuf,
     objectPath: wmPath,
     contentType: "image/webp",
-    makePublic: true,
+    makePublic: false,
   });
 
   return { watermarkedUrl: uploaded.url };
@@ -262,7 +290,7 @@ export async function saveWatermarkAsset(
     buffer,
     objectPath,
     contentType: "image/png",
-    makePublic: true,
+    makePublic: false,
   });
   return objectPath;
 }
@@ -275,6 +303,7 @@ export async function saveBrandLogo(
   let contentType = "image/webp";
   let ext = "webp";
   try {
+    const sharp = await loadSharp();
     out = await sharp(buffer)
       .rotate()
       .resize({ width: 800, withoutEnlargement: true })
@@ -291,7 +320,6 @@ export async function saveBrandLogo(
     "brand",
     `logo-${Date.now()}.${ext}`,
   );
-  // Serve via /api/media — Firebase “public” object ACLs are often blocked.
   const uploaded = await uploadBuffer({
     buffer: out,
     objectPath,

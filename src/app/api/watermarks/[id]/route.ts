@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { formDataFile } from "@/lib/form-data";
 import { saveWatermarkAsset } from "@/lib/images/process";
 import {
   galleriesUsingWatermarkPreset,
@@ -47,10 +48,14 @@ export async function PATCH(
       const s = form.get("scale");
       scale = s != null && String(s) !== "" ? Number(s) : scale;
     }
-    const file = form.get("file");
-    if (file instanceof File && file.size > 0) {
+    const file = formDataFile(form, "file");
+    if (file && file.size > 0) {
       const buf = Buffer.from(await file.arrayBuffer());
-      nextImagePath = await saveWatermarkAsset(buf, file.name, admin.studioId);
+      nextImagePath = await saveWatermarkAsset(
+        buf,
+        file.name || "mark.png",
+        admin.studioId,
+      );
       replaceImage = true;
     }
   } else {

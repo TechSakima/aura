@@ -1,7 +1,7 @@
 # Firebase App Hosting — Cloud Run defaults for Next.js + image work
 runConfig:
   cpu: 1
-  memoryMiB: 1024
+  memoryMiB: 2048
   maxInstances: 10
   minInstances: 0
   concurrency: 80

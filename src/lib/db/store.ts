@@ -490,6 +490,53 @@ export async function updateStudioDb<T>(
   return result;
 }
 
+/**
+ * Append photos without rewriting the entire studio workspace.
+ * Full persist on every upload was heavy and brittle under App Hosting.
+ */
+export async function appendStudioPhotos(
+  studioId: string,
+  photos: Photo[],
+  opts?: { galleryId?: string; coverPhotoUrl?: string },
+): Promise<void> {
+  if (!photos.length) return;
+  writeQueue = writeQueue.then(async () => {
+    await ensureMigrated();
+    const { db } = assertFirebaseReady();
+    const batchSize = 400;
+    let batch = db.batch();
+    let ops = 0;
+    const commit = async () => {
+      if (!ops) return;
+      await batch.commit();
+      batch = db.batch();
+      ops = 0;
+    };
+
+    for (const photo of photos) {
+      const { id, ...rest } = { ...photo, studioId };
+      batch.set(db.collection(COL.photos).doc(id), stripUndefined(rest));
+      ops++;
+      if (ops >= batchSize) await commit();
+    }
+
+    if (opts?.galleryId && opts.coverPhotoUrl) {
+      batch.set(
+        db.collection(COL.galleries).doc(opts.galleryId),
+        {
+          coverPhotoUrl: opts.coverPhotoUrl,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+      ops++;
+    }
+
+    await commit();
+  });
+  await writeQueue;
+}
+
 /** Compatibility: session-less callers must not use these. Prefer updateStudioDb. */
 export async function readDb(): Promise<AuraDatabase> {
   throw new Error("readDb() removed — use readStudioDb(studioId)");

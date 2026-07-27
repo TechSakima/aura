@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { formDataFile } from "@/lib/form-data";
 import { saveWatermarkAsset } from "@/lib/images/process";
 import type { WatermarkMode, WatermarkPosition } from "@/lib/types";
 
@@ -28,10 +29,14 @@ export async function POST(req: Request) {
     const opacity = Number(form.get("opacity") || 0.35);
     const scale = form.get("scale") ? Number(form.get("scale")) : 0.14;
     let imagePath: string | undefined;
-    const file = form.get("file");
-    if (file instanceof File) {
+    const file = formDataFile(form, "file");
+    if (file && file.size > 0) {
       const buf = Buffer.from(await file.arrayBuffer());
-      imagePath = await saveWatermarkAsset(buf, file.name, admin.studioId);
+      imagePath = await saveWatermarkAsset(
+        buf,
+        file.name || "mark.png",
+        admin.studioId,
+      );
     }
     const preset = {
       id: nanoid(),
