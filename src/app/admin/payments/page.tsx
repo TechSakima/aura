@@ -21,6 +21,7 @@ export default function PaymentsPage() {
   const [title, setTitle] = useState("Deposit");
   const [amount, setAmount] = useState("200");
   const [mode, setMode] = useState<"fixed" | "customer_chooses">("fixed");
+  const [stripeConfigured, setStripeConfigured] = useState(true);
   const [stripeReady, setStripeReady] = useState(false);
   const [stripeAccount, setStripeAccount] = useState<string | null>(null);
 
@@ -38,7 +39,8 @@ export default function PaymentsPage() {
     setInvoices(data.invoices || []);
     setTx(data.transactions || []);
     if (connect.ok) {
-      const c = await connect.json();
+      const c = await connect.json().catch(() => ({}));
+      setStripeConfigured(c.stripeConfigured !== false);
       setStripeReady(Boolean(c.onboardingComplete));
       setStripeAccount(c.accountId || null);
     }
@@ -58,9 +60,9 @@ export default function PaymentsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "onboard" }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      push(data.error || "Connect failed", "danger");
+      push(String(data.error || "Connect failed"), "danger");
       return;
     }
     if (data.url) {
@@ -103,11 +105,18 @@ export default function PaymentsPage() {
       <Card className="max-w-lg p-5">
         <h2 className="mb-2 font-display text-2xl">Stripe Connect</h2>
         <p className="mb-4 text-sm text-muted">
-          {stripeReady
-            ? `Connected${stripeAccount ? ` (${stripeAccount})` : ""}. No Aura platform fee.`
-            : "Connect Stripe to accept card payments. Aura does not take an application fee."}
+          {!stripeConfigured
+            ? "Stripe keys are not available on the server."
+            : stripeReady
+              ? `Connected${stripeAccount ? ` (${stripeAccount})` : ""}. No Aura platform fee.`
+              : "Connect Stripe to accept card payments. Aura does not take an application fee."}
         </p>
-        <Button type="button" tone="neutral" onClick={() => void startConnect()}>
+        <Button
+          type="button"
+          tone="neutral"
+          disabled={!stripeConfigured}
+          onClick={() => void startConnect()}
+        >
           {stripeReady ? "Manage / refresh Connect" : "Connect Stripe"}
         </Button>
       </Card>

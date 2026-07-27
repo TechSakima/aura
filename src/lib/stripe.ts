@@ -12,6 +12,11 @@ function appOrigin() {
   ).replace(/\/$/, "");
 }
 
+function stripeSecretKey() {
+  const key = process.env.STRIPE_SECRET_KEY?.trim();
+  return key || null;
+}
+
 /** Client pays processing fee: charge so studio receives `netDollars`. */
 export function grossUpAmount(netDollars: number) {
   const net = Math.max(0, netDollars);
@@ -27,10 +32,97 @@ export function grossUpAmount(netDollars: number) {
   };
 }
 
-export function getStripe() {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) return null;
-  return new Stripe(key);
+let stripeClient: Stripe | null | undefined;
+
+/** Lazy Stripe client — avoid constructing during build when env is missing. */
+export function getStripe(): Stripe | null {
+  if (stripeClient !== undefined) return stripeClient;
+  const key = stripeSecretKey();
+  if (!key) {
+    stripeClient = null;
+    return null;
+  }
+  stripeClient = new Stripe(key, {
+    typescript: true,
+  });
+  return stripeClient;
+}
+
+export function stripeConfigured() {
+  return Boolean(stripeSecretKey());
+}
+
+/** Map Stripe errors to a safe client message. */
+export function stripeErrorMessage(e: unknown): string {
+  if (e && typeof e === "object") {
+    const err = e as {
+      message?: string;
+      type?: string;
+      raw?: { message?: string };
+    };
+    const msg = err.raw?.message || err.message;
+    if (msg) return msg;
+  }
+  return "Stripe request failed";
+}
+
+/**
+ * Create a connected account shaped like Express (Stripe-hosted onboarding +
+ * Express Dashboard). Prefer controller properties; fall back to legacy type.
+ */
+export async function createConnectAccount(opts: {
+  email?: string;
+  studioId: string;
+}) {
+  const stripe = getStripe();
+  if (!stripe) throw new Error("Stripe is not configured");
+
+  const shared = {
+    email: opts.email || undefined,
+    capabilities: {
+      card_payments: { requested: true as const },
+      transfers: { requested: true as const },
+    },
+    metadata: { studioId: opts.studioId },
+  };
+
+  try {
+    return await stripe.accounts.create({
+      ...shared,
+      controller: {
+        stripe_dashboard: { type: "express" },
+        fees: { payer: "application" },
+        losses: { payments: "application" },
+        requirement_collection: "stripe",
+      },
+    });
+  } catch (e) {
+    // Platforms already on legacy Express keep working.
+    console.warn(
+      "[stripe] controller account create failed, trying type=express:",
+      stripeErrorMessage(e),
+    );
+    return stripe.accounts.create({
+      ...shared,
+      type: "express",
+    });
+  }
+}
+
+export async function createConnectOnboardingLink(opts: {
+  accountId: string;
+  refreshUrl: string;
+  returnUrl: string;
+}) {
+  const stripe = getStripe();
+  if (!stripe) throw new Error("Stripe is not configured");
+
+  return stripe.accountLinks.create({
+    account: opts.accountId,
+    refresh_url: opts.refreshUrl,
+    return_url: opts.returnUrl,
+    type: "account_onboarding",
+  });
 }
 
 export async function createPaymentLinkCheckout(opts: {
@@ -105,7 +197,7 @@ export function constructStripeEvent(
   signature: string,
 ) {
   const stripe = getStripe();
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (!stripe || !secret) return null;
   return stripe.webhooks.constructEvent(rawBody, signature, secret);
 }
