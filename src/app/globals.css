@@ -107,3 +107,18 @@
     opacity: 1;
   }
 }
+
+@keyframes gallery-tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gallery-grid-enter > * {
+  animation: gallery-tile-in 520ms var(--ease-out) both;
+}

@@ -99,6 +99,8 @@ export type StudioHomepageSettings = {
   enabled: boolean;
   slug: string;
   passwordHash?: string;
+  /** Client-only flag from GET /api/studio — never persist. */
+  hasPassword?: boolean;
   biography?: string;
   showBiography: boolean;
   showSocialLinks: boolean;

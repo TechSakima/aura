@@ -1,40 +1,76 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { StudioMark } from "@/components/brand/StudioMark";
 import { cn } from "@/lib/cn";
+import type { GalleryThemeId } from "@/lib/types";
 
 export function GalleryHero({
   images,
-  studioName,
-  studioLogoUrl,
-  clientName,
   title,
+  dateLabel,
   daysLeft,
   compact = false,
+  themeId = "echo",
+  coverFocalX,
+  coverFocalY,
+  onViewGallery,
 }: {
   images: string[];
-  studioName: string;
-  studioLogoUrl?: string;
-  clientName?: string | null;
   title: string;
+  dateLabel?: string | null;
   daysLeft?: number | null;
-  /** Third-height cover (Pixieset-style) */
   compact?: boolean;
+  themeId?: GalleryThemeId;
+  coverFocalX?: number;
+  coverFocalY?: number;
+  onViewGallery?: () => void;
 }) {
   const slides = images.length ? images : [];
   const [index, setIndex] = useState(0);
+  const [entered, setEntered] = useState(false);
   const minH = compact
-    ? "min-h-[32vh] sm:min-h-[36vh]"
-    : "min-h-[78vh] sm:min-h-[88vh]";
+    ? "min-h-[42vh] sm:min-h-[48vh]"
+    : "min-h-[72vh] sm:min-h-[85vh]";
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setEntered(true), 40);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (slides.length < 2) return;
     const id = window.setInterval(() => {
       setIndex((i) => (i + 1) % slides.length);
-    }, 5200);
+    }, 5600);
     return () => window.clearInterval(id);
   }, [slides.length]);
+
+  const objectPosition =
+    coverFocalX != null && coverFocalY != null
+      ? `${coverFocalX}% ${coverFocalY}%`
+      : "center";
+
+  /** Echo / Lark: split title + CTA on large screens (collection sleek). */
+  const splitLayout = themeId === "echo" || themeId === "lark";
+
+  const titleClass =
+    themeId === "sage"
+      ? "font-display text-4xl font-light tracking-[0.08em] sm:text-6xl md:text-7xl"
+      : themeId === "spring"
+        ? "font-display text-4xl uppercase tracking-[0.2em] [writing-mode:vertical-rl] rotate-180 sm:text-5xl"
+        : themeId === "lark"
+          ? "font-sans text-3xl font-semibold uppercase tracking-[0.12em] sm:text-5xl md:text-6xl"
+          : "font-sans text-3xl font-semibold uppercase tracking-[0.16em] sm:text-5xl md:text-6xl";
+
+  const cta = onViewGallery ? (
+    <button
+      type="button"
+      onClick={onViewGallery}
+      className="mt-8 border border-surface/90 px-6 py-2.5 text-[11px] font-medium uppercase tracking-[0.22em] text-surface transition hover:bg-surface hover:text-ink sm:mt-0"
+    >
+      View gallery
+    </button>
+  ) : null;
 
   return (
     <section
@@ -51,60 +87,81 @@ export function GalleryHero({
             src={src}
             alt=""
             className={cn(
-              "absolute inset-0 h-full w-full object-cover transition-opacity duration-[1400ms] ease-out",
+              "absolute inset-0 h-full w-full object-cover transition-opacity duration-[1600ms] ease-out",
               i === index ? "opacity-100" : "opacity-0",
             )}
+            style={{ objectPosition }}
           />
         ))
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink to-accent/30" />
+        <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink to-ink/80" />
       )}
 
-      <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/35 to-ink/25" />
+      <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/25 to-ink/20" />
 
       <div
         className={cn(
-          "relative z-10 flex flex-col justify-end px-5 pb-10 pt-8 sm:px-10 sm:pb-12",
+          "relative z-10 flex px-5 pt-16 sm:px-10",
           minH,
+          themeId === "spring"
+            ? "items-start justify-center pl-6 sm:pl-12"
+            : themeId === "sage"
+              ? "items-center justify-center text-center"
+              : splitLayout
+                ? "items-end justify-center pb-14 sm:items-end sm:pb-16"
+                : "items-center justify-center text-center",
+          entered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
+          "transition-all duration-700 ease-out",
         )}
       >
-        <div className="mx-auto w-full max-w-[var(--shell-max)] animate-enter">
-          <StudioMark logoUrl={studioLogoUrl} name={studioName} tone="light" />
+        {splitLayout ? (
+          <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center gap-8 text-center sm:flex-row sm:items-end sm:justify-between sm:text-left">
+            <div>
+              <h1 className={titleClass}>{title}</h1>
+              {dateLabel ? (
+                <p className="mt-3 text-[11px] uppercase tracking-[0.28em] text-surface/85">
+                  {dateLabel}
+                </p>
+              ) : null}
+              {daysLeft != null && daysLeft >= 0 ? (
+                <p className="mt-2 text-xs uppercase tracking-[0.16em] text-surface/70">
+                  {daysLeft === 0
+                    ? "Last day to download"
+                    : `${daysLeft} days left`}
+                </p>
+              ) : null}
+              <div className="sm:hidden">{cta}</div>
+            </div>
+            <div className="hidden sm:block">{cta}</div>
+          </div>
+        ) : (
+          <div
+            className={cn(
+              "mx-auto w-full max-w-[var(--shell-max)]",
+              themeId === "sage" ? "flex flex-col items-center" : "",
+              themeId === "spring" ? "" : "",
+            )}
+          >
+            {dateLabel && themeId !== "spring" ? (
+              <p className="mb-3 text-[11px] uppercase tracking-[0.28em] text-surface/85">
+                {dateLabel}
+              </p>
+            ) : null}
 
-          {clientName ? (
-            <p className="mb-2 text-sm text-surface/80">For {clientName}</p>
-          ) : null}
+            <h1 className={titleClass}>{title}</h1>
 
-          <h1 className="font-display text-4xl tracking-tight sm:text-6xl md:text-7xl">
-            {title}
-          </h1>
+            {daysLeft != null && daysLeft >= 0 && themeId !== "spring" ? (
+              <p className="mt-4 text-xs uppercase tracking-[0.16em] text-surface/70">
+                {daysLeft === 0
+                  ? "Last day to download"
+                  : `${daysLeft} days left`}
+              </p>
+            ) : null}
 
-          {daysLeft != null && daysLeft >= 0 ? (
-            <p className="mt-4 text-sm text-surface/75">
-              {daysLeft === 0
-                ? "Last day to download"
-                : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left to download`}
-            </p>
-          ) : null}
-        </div>
+            {cta}
+          </div>
+        )}
       </div>
-
-      {slides.length > 1 ? (
-        <div className="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
-          {slides.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              aria-label={`Show image ${i + 1}`}
-              className={cn(
-                "h-1.5 rounded-full transition-all",
-                i === index ? "w-6 bg-surface" : "w-1.5 bg-surface/40",
-              )}
-              onClick={() => setIndex(i)}
-            />
-          ))}
-        </div>
-      ) : null}
     </section>
   );
 }

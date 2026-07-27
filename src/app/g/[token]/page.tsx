@@ -1,16 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { differenceInCalendarDays } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 import {
   AlbumShareButton,
   AlbumView,
 } from "@/components/gallery/AlbumView";
-import { AlbumTile, AlbumTileGrid } from "@/components/gallery/AlbumTile";
 import { GalleryHero } from "@/components/gallery/GalleryHero";
-import type { MasonryPhoto } from "@/components/gallery/MasonryGrid";
+import { MasonryGrid, type MasonryPhoto } from "@/components/gallery/MasonryGrid";
 import { PhotoLightbox } from "@/components/gallery/PhotoLightbox";
 import { PinModal } from "@/components/gallery/PinModal";
 import {
@@ -23,7 +22,7 @@ import {
   useConfirm,
   useToast,
 } from "@/components/ui";
-import type { Comment, Gallery, PrintPartner } from "@/lib/types";
+import type { Comment, Gallery } from "@/lib/types";
 
 type PublicPhoto = MasonryPhoto & {
   kind: string;
@@ -48,13 +47,34 @@ type GalleryPayload = {
     name: string;
     logoUrl?: string;
     brandTagline?: string;
-    printPartners: PrintPartner[];
   };
   comments: Comment[];
 };
 
 type DownloadMode = "all" | "single" | "favorites";
-type ViewMode = "hub" | "gallery" | "favorites" | "peek";
+type ViewMode = "hub" | "favorites" | "peek";
+
+function IconButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="inline-flex h-9 w-9 items-center justify-center text-ink/80 transition hover:text-ink"
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function PublicGalleryPage() {
   const params = useParams<{ token: string }>();
@@ -112,18 +132,25 @@ export default function PublicGalleryPage() {
   }, [view, favoritePhotos, peekPhotos, mainPhotos]);
 
   const heroImages = useMemo(() => {
+    const designCover = data?.gallery.design?.coverPhotoId;
+    const byId = designCover
+      ? data?.photos.find((p) => p.id === designCover)
+      : null;
+    const cover = data?.gallery.coverPhotoUrl;
     const pool = [
+      ...(byId ? [byId.url] : []),
+      ...(cover ? [cover] : []),
       ...peekPhotos.map((p) => p.url),
       ...mainPhotos.map((p) => p.url),
     ];
-    return pool.slice(0, 8);
-  }, [peekPhotos, mainPhotos]);
+    return [...new Set(pool)].slice(0, 8);
+  }, [data, peekPhotos, mainPhotos]);
 
   const selected =
     lightboxIndex != null ? albumPhotos[lightboxIndex] || null : null;
 
-  async function openPhoto(photo: MasonryPhoto) {
-    const idx = albumPhotos.findIndex((p) => p.id === photo.id);
+  async function openPhoto(photo: MasonryPhoto, fromList: PublicPhoto[] = mainPhotos) {
+    const idx = fromList.findIndex((p) => p.id === photo.id);
     if (idx < 0) return;
     setLightboxIndex(idx);
     await fetch(`/api/public/galleries/${token}/photo-view`, {
@@ -230,21 +257,19 @@ export default function PublicGalleryPage() {
   }
 
   async function shareAlbum() {
-    const path = view === "peek" ? `/g/${token}/peek` : `/g/${token}`;
-    const absolute = `${window.location.origin}${path}`;
-    if (navigator.share && view === "peek") {
+    const absolute = `${window.location.origin}/g/${token}`;
+    if (navigator.share) {
       try {
         await navigator.share({
           title: data?.gallery.title || "Gallery",
           text: data?.clientName
-            ? `A sneak peek for ${data.clientName}`
-            : "A sneak peek from our session",
+            ? `Photos for ${data.clientName}`
+            : "Gallery",
           url: absolute,
         });
         push("Shared", "success");
         return;
       } catch {
-        // cancelled — do not copy
         return;
       }
     }
@@ -254,6 +279,13 @@ export default function PublicGalleryPage() {
     } catch {
       push("Could not copy link", "danger");
     }
+  }
+
+  function scrollToPhotos() {
+    document.getElementById("photos")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   }
 
   if (error) {
@@ -283,33 +315,96 @@ export default function PublicGalleryPage() {
     ? comments.filter((c) => c.photoId === selected.id)
     : [];
 
-  const albumTitle =
-    view === "favorites"
-      ? "Favorites"
-      : view === "peek"
-        ? "Sneak peek"
-        : "Full gallery";
+  const design = gallery.design;
+  const coverStyle = design?.coverStyle || "full";
+  const themeId = design?.themeId || "echo";
+  const gridMode = design?.gridMode || "masonry";
+  const pageBg = design?.background || "#f7f5f1";
+  const pageAccent = design?.accent || "#1c1915";
 
-  if (view !== "hub") {
+  const dateLabel = gallery.liveAt
+    ? format(new Date(gallery.liveAt), "MMMM do, yyyy").toUpperCase()
+    : gallery.createdAt
+      ? format(new Date(gallery.createdAt), "MMMM do, yyyy").toUpperCase()
+      : null;
+
+  const chrome = (
+    <header className="sticky top-0 z-30 border-b border-ink/5 bg-[color:var(--gallery-page-bg)]/92 backdrop-blur-md">
+      <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3 sm:px-8">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold tracking-wide text-ink">
+            {gallery.title}
+          </p>
+          <p className="truncate text-[10px] uppercase tracking-[0.2em] text-muted">
+            {studio.name}
+          </p>
+        </div>
+        {!expired ? (
+          <div className="flex shrink-0 items-center gap-0.5">
+            {favorites.length > 0 ? (
+              <IconButton
+                label="Favorites"
+                onClick={() => setView("favorites")}
+              >
+                ♥
+              </IconButton>
+            ) : (
+              <IconButton
+                label="Favorites"
+                onClick={() => setView("favorites")}
+              >
+                ♡
+              </IconButton>
+            )}
+            <IconButton
+              label="Download"
+              onClick={() => startDownload("all")}
+            >
+              ↓
+            </IconButton>
+            <IconButton label="Share" onClick={() => void shareAlbum()}>
+              ↗
+            </IconButton>
+            {peekPhotos.length > 0 ? (
+              <IconButton
+                label="Sneak peek"
+                onClick={() => setView("peek")}
+              >
+                ◌
+              </IconButton>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </header>
+  );
+
+  if (view === "favorites" || view === "peek") {
     return (
-      <>
+      <div
+        className="min-h-full text-ink"
+        style={
+          {
+            ["--gallery-page-bg" as string]: pageBg,
+            background: pageBg,
+            ["--color-accent" as string]: pageAccent,
+        } as CSSProperties
+      }
+    >
+      {chrome}
         <AlbumView
-          title={albumTitle}
-          subtitle={`${albumPhotos.length} photo${
-            albumPhotos.length === 1 ? "" : "s"
-          }${clientName ? ` · ${clientName}` : ""}`}
+          title={view === "favorites" ? "Favorites" : "Sneak peek"}
+          subtitle={`${albumPhotos.length} photos`}
           photos={albumPhotos}
           onBack={() => {
             setLightboxIndex(null);
             setView("hub");
           }}
-          onPhotoClick={(p) => void openPhoto(p)}
+          onPhotoClick={(p) => void openPhoto(p, albumPhotos)}
           emptyMessage={
             view === "favorites"
               ? "Heart photos to save favorites."
-              : view === "peek"
-                ? "No sneak peek photos yet."
-                : "No photos in this album yet."
+              : "No sneak peek photos yet."
           }
           renderOverlay={
             view === "peek"
@@ -318,7 +413,7 @@ export default function PublicGalleryPage() {
                   <button
                     type="button"
                     aria-label="Toggle favorite"
-                    className="rounded-full bg-surface/90 px-2.5 py-1 text-sm shadow-sm"
+                    className="bg-surface/90 px-2 py-1 text-sm"
                     onClick={(e) => {
                       e.stopPropagation();
                       void toggleFavorite(photo.id);
@@ -332,160 +427,146 @@ export default function PublicGalleryPage() {
             !expired ? (
               <>
                 <AlbumShareButton onShare={() => void shareAlbum()} />
-                {view !== "peek" ? (
-                  <>
-                    <Button
-                      size="sm"
-                      tone="neutral"
-                      onClick={() =>
-                        startDownload(
-                          view === "favorites" ? "favorites" : "all",
-                        )
-                      }
-                      disabled={view === "favorites" && !favorites.length}
-                    >
-                      Download
-                    </Button>
-                    <Button
-                      size="sm"
-                      tone="ghost"
-                      onClick={() => setSubOpen(true)}
-                    >
-                      Share selection
-                    </Button>
-                  </>
+                {view === "favorites" ? (
+                  <Button
+                    size="sm"
+                    tone="neutral"
+                    onClick={() => startDownload("favorites")}
+                    disabled={!favorites.length}
+                  >
+                    Download
+                  </Button>
                 ) : null}
               </>
             ) : null
           }
         />
         {galleryDialogs()}
-      </>
+      </div>
     );
   }
 
-  const design = gallery.design;
-  const coverStyle = design?.coverStyle || "full";
-  const themeVars = {
-    ["--gallery-bg" as string]: design?.background || undefined,
-    ["--gallery-accent" as string]: design?.accent || undefined,
-  };
-
   return (
     <div
-      className="min-h-full bg-canvas text-ink"
-      style={{
-        ...(themeVars["--gallery-bg"]
-          ? { background: themeVars["--gallery-bg"] }
-          : {}),
-        ...(themeVars["--gallery-accent"]
-          ? ({ ["--color-accent" as string]: themeVars["--gallery-accent"] } as object)
-          : {}),
-      }}
+      className="min-h-full text-ink"
+      style={
+        {
+          ["--gallery-page-bg" as string]: pageBg,
+          background: pageBg,
+          ["--color-accent" as string]: pageAccent,
+        } as CSSProperties
+      }
     >
+      {chrome}
+
       {coverStyle !== "none" ? (
         <GalleryHero
           images={
             coverStyle === "third" ? heroImages.slice(0, 1) : heroImages
           }
-          studioName={studio.name}
-          studioLogoUrl={studio.logoUrl}
-          clientName={clientName}
           title={gallery.title}
+          dateLabel={dateLabel}
           daysLeft={daysLeft}
           compact={coverStyle === "third"}
+          themeId={themeId}
+          coverFocalX={design?.coverFocalX}
+          coverFocalY={design?.coverFocalY}
+          onViewGallery={expired ? undefined : scrollToPhotos}
         />
       ) : (
-        <header className="shell-pad mx-auto max-w-[var(--shell-max)] py-10">
-          <p className="text-sm text-muted">{studio.name}</p>
-          <h1 className="mt-1 font-display text-4xl tracking-tight">
+        <div className="mx-auto max-w-[1400px] px-4 py-16 text-center sm:px-8">
+          <p className="text-[11px] uppercase tracking-[0.28em] text-muted">
+            {dateLabel}
+          </p>
+          <h1 className="mt-3 font-display text-4xl uppercase tracking-[0.14em] sm:text-6xl">
             {gallery.title}
           </h1>
-          {clientName ? (
-            <p className="mt-2 text-muted">For {clientName}</p>
+          {!expired ? (
+            <button
+              type="button"
+              onClick={scrollToPhotos}
+              className="mt-8 border border-ink px-6 py-2.5 text-[11px] uppercase tracking-[0.22em] transition hover:bg-ink hover:text-surface"
+            >
+              View gallery
+            </button>
           ) : null}
-        </header>
+        </div>
       )}
 
-      <main className="shell-pad mx-auto max-w-[var(--shell-max)] space-y-10 py-10 sm:py-14">
+      <main id="photos" className="mx-auto max-w-[1600px] scroll-mt-16 px-0 py-0 sm:px-0">
         {expired ? (
-          <p className="text-center text-muted">
+          <p className="py-16 text-center text-muted">
             This gallery is no longer available.
           </p>
         ) : (
           <>
-            <section className="space-y-6">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-3xl tracking-tight">
-                    Collection
-                  </h2>
-                  <p className="mt-1 text-sm text-muted">
-                    {mainPhotos.length} photos
-                    {peekPhotos.length ? ` · ${peekPhotos.length} sneak peek` : ""}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => setView("gallery")}>
-                    View gallery
-                  </Button>
-                  {peekPhotos.length > 0 ? (
-                    <Button
-                      size="sm"
-                      tone="neutral"
-                      onClick={() => setView("peek")}
-                    >
-                      Sneak peek
-                    </Button>
-                  ) : null}
-                  <Button
-                    size="sm"
-                    tone="ghost"
-                    onClick={() => startDownload("all")}
+            <div className="px-0 pt-0">
+            <MasonryGrid
+              photos={mainPhotos}
+              gridMode={gridMode}
+              onPhotoClick={(p) => void openPhoto(p, mainPhotos)}
+              hoverActions={(photo) => (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Favorite"
+                    className="inline-flex h-8 w-8 items-center justify-center text-sm text-ink/80 hover:text-ink"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void toggleFavorite(photo.id);
+                    }}
                   >
-                    Download
-                  </Button>
-                </div>
-              </div>
+                    {favorites.includes(photo.id) ? "♥" : "♡"}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Download"
+                    className="inline-flex h-8 w-8 items-center justify-center text-sm text-ink/80 hover:text-ink"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startDownload("single", photo.id);
+                    }}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Share selection"
+                    className="inline-flex h-8 w-8 items-center justify-center text-sm text-ink/80 hover:text-ink"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSubSelected([photo.id]);
+                      setSubOpen(true);
+                    }}
+                  >
+                    ↗
+                  </button>
+                </>
+              )}
+            />
+            </div>
 
-              <AlbumView
-                title=""
-                photos={mainPhotos.slice(0, 24)}
-                onPhotoClick={(p) => {
-                  const idx = mainPhotos.findIndex((x) => x.id === p.id);
-                  setView("gallery");
-                  if (idx >= 0) setLightboxIndex(idx);
-                }}
-                emptyMessage="Photos coming soon."
-              />
+            {subAlbums.length > 0 ? (
+              <ul className="mx-auto mt-12 flex max-w-[1400px] flex-wrap gap-6 border-t border-ink/10 px-4 pt-10 text-sm sm:px-8">
+                {subAlbums.map((album) => (
+                  <li key={album.id}>
+                    <Link href={`/s/${album.token}`} className="text-accent">
+                      {album.label}
+                      <span className="text-muted"> · {album.count}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
 
-              {favorites.length > 0 || subAlbums.length > 0 ? (
-                <AlbumTileGrid>
-                  {favorites.length > 0 ? (
-                    <AlbumTile
-                      onClick={() => setView("favorites")}
-                      coverUrl={
-                        favoritePhotos[0]?.thumbUrl || favoritePhotos[0]?.url
-                      }
-                      label="Favorites"
-                      meta={`${favorites.length} saved`}
-                    />
-                  ) : null}
-                  {subAlbums.map((album) => (
-                    <AlbumTile
-                      key={album.id}
-                      href={`/s/${album.token}`}
-                      coverUrl={album.coverUrl}
-                      label={album.label}
-                      meta={`${album.count} photos`}
-                    />
-                  ))}
-                </AlbumTileGrid>
-              ) : null}
-            </section>
+            {clientName ? (
+              <p className="mt-10 px-4 pb-6 text-center text-xs uppercase tracking-[0.18em] text-muted sm:px-8">
+                For {clientName}
+              </p>
+            ) : null}
 
             {subUrl ? (
-              <div className="border border-line px-4 py-3 text-sm">
+              <div className="mt-6 px-4 pb-6 text-center text-sm sm:px-8">
                 Shared album ready:{" "}
                 <Link href={subUrl} className="text-accent">
                   Open link
@@ -496,13 +577,11 @@ export default function PublicGalleryPage() {
         )}
       </main>
 
-      <footer className="border-t border-line">
-        <div className="shell-pad mx-auto max-w-[var(--shell-max)] py-8 text-sm text-muted">
-          <p className="font-medium text-ink">{studio.name}</p>
-          {studio.brandTagline ? (
-            <p className="mt-1">{studio.brandTagline}</p>
-          ) : null}
-        </div>
+      <footer className="border-t border-ink/10 py-10 text-center text-sm text-muted">
+        <p className="font-medium text-ink">{studio.name}</p>
+        {studio.brandTagline ? (
+          <p className="mt-1">{studio.brandTagline}</p>
+        ) : null}
       </footer>
 
       {galleryDialogs()}
@@ -510,11 +589,12 @@ export default function PublicGalleryPage() {
   );
 
   function galleryDialogs() {
+    const lightboxPhotos = view === "hub" ? mainPhotos : albumPhotos;
     return (
       <>
         {lightboxIndex != null ? (
           <PhotoLightbox
-            photos={albumPhotos}
+            photos={lightboxPhotos}
             index={lightboxIndex}
             onIndexChange={setLightboxIndex}
             onClose={() => setLightboxIndex(null)}
@@ -536,24 +616,23 @@ export default function PublicGalleryPage() {
                           onClick={() => void toggleFavorite(selected.id)}
                         >
                           {favorites.includes(selected.id)
-                            ? "Remove favorite"
+                            ? "Unfavorite"
                             : "Favorite"}
                         </Button>
                       </>
                     ) : null}
                   </div>
                   {gallery.commentsEnabled && view !== "peek" ? (
-                    <div className="space-y-3 border-t border-surface/15 pt-3">
-                      <h3 className="text-sm font-medium">Comments</h3>
+                    <div className="space-y-2">
                       {photoComments.map((c) => (
-                        <div key={c.id} className="text-sm">
-                          <p className="font-medium">{c.authorName}</p>
-                          <p className="text-surface/70">{c.body}</p>
-                        </div>
+                        <p key={c.id} className="text-sm text-surface/80">
+                          <span className="font-medium">{c.authorName}</span>:{" "}
+                          {c.body}
+                        </p>
                       ))}
-                      <div className="grid gap-2 sm:grid-cols-[8rem_1fr_auto]">
+                      <div className="flex flex-col gap-2 sm:flex-row">
                         <Input
-                          placeholder="Your name"
+                          placeholder="Name"
                           value={commentName}
                           onChange={(e) => setCommentName(e.target.value)}
                         />
@@ -569,7 +648,7 @@ export default function PublicGalleryPage() {
                     </div>
                   ) : null}
                 </div>
-              ) : undefined
+              ) : null
             }
           />
         ) : null}
@@ -577,14 +656,7 @@ export default function PublicGalleryPage() {
         <PinModal
           open={pinOpen}
           onClose={() => setPinOpen(false)}
-          onSubmit={handleDownload}
-          title={
-            downloadMode === "favorites"
-              ? "Download favorites"
-              : downloadMode === "single"
-                ? "Download photo"
-                : "Download gallery"
-          }
+          onSubmit={(pin) => void handleDownload(pin)}
         />
 
         <Dialog
@@ -594,51 +666,22 @@ export default function PublicGalleryPage() {
         >
           <div className="space-y-4">
             <Field>
-              <Label htmlFor="sublabel">Album name</Label>
+              <Label>Album label</Label>
               <Input
-                id="sublabel"
                 value={subLabel}
                 onChange={(e) => setSubLabel(e.target.value)}
-                placeholder="Family favorites"
+                placeholder="Shared album"
               />
             </Field>
-            <p className="text-sm text-muted">
-              Select photos to include ({subSelected.length} selected).
-            </p>
-            <div className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto">
-              {mainPhotos.map((p) => {
-                const on = subSelected.includes(p.id);
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() =>
-                      setSubSelected((prev) =>
-                        on
-                          ? prev.filter((id) => id !== p.id)
-                          : [...prev, p.id],
-                      )
-                    }
-                    className={`overflow-hidden rounded-md border-2 ${
-                      on ? "border-accent" : "border-line"
-                    }`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={p.thumbUrl || p.url}
-                      alt=""
-                      className="aspect-square object-cover"
-                    />
-                  </button>
-                );
-              })}
-            </div>
-            <Button
-              disabled={!subSelected.length}
-              onClick={() => void createSubAlbum()}
-            >
-              Create share link
-            </Button>
+            <Field>
+              <Label>Note</Label>
+              <Textarea
+                value={`${subSelected.length} photo${subSelected.length === 1 ? "" : "s"} selected`}
+                readOnly
+                rows={2}
+              />
+            </Field>
+            <Button onClick={() => void createSubAlbum()}>Create link</Button>
           </div>
         </Dialog>
       </>

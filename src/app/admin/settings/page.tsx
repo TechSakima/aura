@@ -12,6 +12,7 @@ import {
   Label,
   PageHeader,
   Select,
+  Textarea,
   useConfirm,
   useToast,
   useUploadSession,
@@ -47,6 +48,19 @@ export default function SettingsPage() {
   const [background, setBackground] = useState("#F3F3F3");
   const [homepageEnabled, setHomepageEnabled] = useState(false);
   const [homepageSlug, setHomepageSlug] = useState("");
+  const [homepageBio, setHomepageBio] = useState("");
+  const [homepagePassword, setHomepagePassword] = useState("");
+  const [homepageHasPassword, setHomepageHasPassword] = useState(false);
+  const [homepageClearPassword, setHomepageClearPassword] = useState(false);
+  const [showBiography, setShowBiography] = useState(true);
+  const [showSocialLinks, setShowSocialLinks] = useState(true);
+  const [showWebsite, setShowWebsite] = useState(false);
+  const [showEmail, setShowEmail] = useState(true);
+  const [showPhone, setShowPhone] = useState(true);
+  const [showAddress, setShowAddress] = useState(true);
+  const [homepageSort, setHomepageSort] = useState<
+    "created_desc" | "created_asc" | "title_asc"
+  >("created_desc");
   const [gcalConnected, setGcalConnected] = useState(false);
   const [prefs, setPrefs] = useState({
     emailQuoteAccepted: true,
@@ -96,6 +110,17 @@ export default function SettingsPage() {
     setBackground(data.studio.theme?.background || "#F3F3F3");
     setHomepageEnabled(Boolean(data.studio.homepage?.enabled));
     setHomepageSlug(data.studio.homepage?.slug || "");
+    setHomepageBio(data.studio.homepage?.biography || "");
+    setHomepageHasPassword(Boolean(data.studio.homepage?.hasPassword));
+    setHomepagePassword("");
+    setHomepageClearPassword(false);
+    setShowBiography(data.studio.homepage?.showBiography !== false);
+    setShowSocialLinks(data.studio.homepage?.showSocialLinks !== false);
+    setShowWebsite(Boolean(data.studio.homepage?.showWebsite));
+    setShowEmail(data.studio.homepage?.showEmail !== false);
+    setShowPhone(data.studio.homepage?.showPhone !== false);
+    setShowAddress(data.studio.homepage?.showAddress !== false);
+    setHomepageSort(data.studio.homepage?.sortOrder || "created_desc");
     setGcalConnected(Boolean(data.studio.googleCalendarConnected));
     setPrefs({
       emailQuoteAccepted: data.studio.notificationPrefs?.emailQuoteAccepted !== false,
@@ -140,8 +165,8 @@ export default function SettingsPage() {
     setWmFile(null);
   }
 
-  async function saveStudio(e: FormEvent) {
-    e.preventDefault();
+  async function saveStudio(e?: FormEvent) {
+    e?.preventDefault();
     const res = await fetch("/api/studio", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -163,6 +188,18 @@ export default function SettingsPage() {
         homepage: {
           enabled: homepageEnabled,
           slug: homepageSlug,
+          biography: homepageBio,
+          showBiography,
+          showSocialLinks,
+          showWebsite,
+          showEmail,
+          showPhone,
+          showAddress,
+          sortOrder: homepageSort,
+          ...(homepagePassword.trim()
+            ? { password: homepagePassword.trim() }
+            : {}),
+          ...(homepageClearPassword ? { clearPassword: true } : {}),
         },
         notificationPrefs: prefs,
       }),
@@ -170,6 +207,13 @@ export default function SettingsPage() {
     if (!res.ok) {
       push("Save failed", "danger");
       return;
+    }
+    setHomepagePassword("");
+    setHomepageClearPassword(false);
+    if (homepagePassword.trim() || homepageClearPassword) {
+      setHomepageHasPassword(
+        homepageClearPassword ? false : Boolean(homepagePassword.trim()) || homepageHasPassword,
+      );
     }
     push("Settings saved", "success");
   }
@@ -449,25 +493,204 @@ export default function SettingsPage() {
                 onChange={(e) => setBackground(e.target.value)}
               />
             </Field>
-            <Field>
-              <Label htmlFor="slug">Gallery homepage slug</Label>
-              <Input
-                id="slug"
-                value={homepageSlug}
-                onChange={(e) => setHomepageSlug(e.target.value)}
-              />
-              <label className="mt-2 flex items-center gap-2 text-sm">
+            <PartnerListEditor partners={printPartners} onChange={setPrintPartners} />
+            <Button type="submit">Save studio</Button>
+          </form>
+        </Card>
+
+        <Card className="p-5 lg:col-span-2">
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl">Homepage</h2>
+              <p className="mt-1 text-sm text-muted">
+                Public collections page for your studio.
+              </p>
+            </div>
+            {homepageEnabled && homepageSlug ? (
+              <Button
+                type="button"
+                tone="accent"
+                size="sm"
+                onClick={() =>
+                  window.open(`/h/${homepageSlug}`, "_blank", "noopener")
+                }
+              >
+                View site
+              </Button>
+            ) : null}
+          </div>
+
+          <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 text-sm">
                 <input
                   type="checkbox"
                   checked={homepageEnabled}
                   onChange={(e) => setHomepageEnabled(e.target.checked)}
                 />
-                Enable public homepage at /h/{homepageSlug || "…"}
+                Homepage on
               </label>
-            </Field>
-            <PartnerListEditor partners={printPartners} onChange={setPrintPartners} />
-            <Button type="submit">Save studio</Button>
-          </form>
+
+              <Field>
+                <Label htmlFor="slug">Homepage URL</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    id="slug"
+                    value={homepageSlug}
+                    onChange={(e) => setHomepageSlug(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    tone="neutral"
+                    size="sm"
+                    disabled={!homepageSlug}
+                    onClick={async () => {
+                      const url = `${window.location.origin}/h/${homepageSlug}`;
+                      try {
+                        await navigator.clipboard.writeText(url);
+                        push("Link copied", "success");
+                      } catch {
+                        push("Could not copy", "danger");
+                      }
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+                <p className="mt-1 text-xs text-muted">/h/{homepageSlug || "…"}</p>
+              </Field>
+
+              <Field>
+                <Label htmlFor="hpw">Homepage password</Label>
+                <Input
+                  id="hpw"
+                  type="password"
+                  value={homepagePassword}
+                  onChange={(e) => {
+                    setHomepagePassword(e.target.value);
+                    if (e.target.value) setHomepageClearPassword(false);
+                  }}
+                  placeholder={
+                    homepageHasPassword ? "••••••••" : "Add a password"
+                  }
+                />
+                {homepageHasPassword ? (
+                  <label className="mt-2 flex items-center gap-2 text-sm text-muted">
+                    <input
+                      type="checkbox"
+                      checked={homepageClearPassword}
+                      onChange={(e) => {
+                        setHomepageClearPassword(e.target.checked);
+                        if (e.target.checked) setHomepagePassword("");
+                      }}
+                    />
+                    Remove password
+                  </label>
+                ) : null}
+              </Field>
+
+              <Field>
+                <Label htmlFor="bio">Biography</Label>
+                <Textarea
+                  id="bio"
+                  value={homepageBio}
+                  maxLength={500}
+                  rows={4}
+                  onChange={(e) => setHomepageBio(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-muted">
+                  {homepageBio.length}/500
+                </p>
+              </Field>
+
+              <div>
+                <Label>Homepage info</Label>
+                <ul className="mt-2 space-y-2 text-sm">
+                  {(
+                    [
+                      ["showBiography", "Biography", showBiography, setShowBiography],
+                      [
+                        "showSocialLinks",
+                        "Social links",
+                        showSocialLinks,
+                        setShowSocialLinks,
+                      ],
+                      ["showWebsite", "Website", showWebsite, setShowWebsite],
+                      ["showEmail", "Contact email", showEmail, setShowEmail],
+                      ["showPhone", "Phone number", showPhone, setShowPhone],
+                      [
+                        "showAddress",
+                        "Business address",
+                        showAddress,
+                        setShowAddress,
+                      ],
+                    ] as const
+                  ).map(([key, label, checked, setter]) => (
+                    <li key={key}>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => setter(e.target.checked)}
+                        />
+                        {label}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <Field>
+                <Label htmlFor="sort">Collection sort order</Label>
+                <Select
+                  id="sort"
+                  value={homepageSort}
+                  onChange={(e) =>
+                    setHomepageSort(
+                      e.target.value as
+                        | "created_desc"
+                        | "created_asc"
+                        | "title_asc",
+                    )
+                  }
+                >
+                  <option value="created_desc">Date created: New to Old</option>
+                  <option value="created_asc">Date created: Old to New</option>
+                  <option value="title_asc">Title: A to Z</option>
+                </Select>
+              </Field>
+
+              <Button type="button" onClick={() => void saveStudio()}>
+                Save homepage
+              </Button>
+            </div>
+
+            <div className="rounded-lg border border-line bg-canvas/60 p-4">
+              <p className="mb-3 text-center text-[10px] uppercase tracking-[0.2em] text-muted">
+                Preview
+              </p>
+              <div className="bg-surface px-4 py-8 text-center shadow-sm">
+                <p className="font-display text-2xl tracking-tight">
+                  {name || "Studio"}
+                </p>
+                <div className="mt-3 flex flex-wrap justify-center gap-3 text-[10px] text-muted">
+                  {showEmail ? <span>Email</span> : null}
+                  {showAddress ? <span>Location</span> : null}
+                  {showPhone ? <span>Phone</span> : null}
+                </div>
+                <div className="mt-6 grid grid-cols-3 gap-1.5">
+                  {[1.2, 0.9, 1.1, 1, 1.3, 0.85].map((a, i) => (
+                    <div
+                      key={i}
+                      className="bg-line"
+                      style={{ aspectRatio: String(a) }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </Card>
 
         <Card className="p-5">
@@ -509,8 +732,7 @@ export default function SettingsPage() {
         <Card className="p-5">
           <h2 className="mb-2 font-display text-2xl">Integrations</h2>
           <p className="mb-4 text-sm text-muted">
-            Google Calendar sync (Zoom is not supported).{" "}
-            {gcalConnected ? "Connected." : "Not connected."}
+            {gcalConnected ? "Google Calendar connected." : "Google Calendar"}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => void connectGoogle()}>

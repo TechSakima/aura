@@ -377,7 +377,7 @@ Order: **Resend wire → Stripe real → gallery polish → calendar UI → docu
 - Live Payment Links / invoices; processing fee line; Cash App Pay + wallets via Checkout.
 - Authenticate Stripe Cursor MCP when implementing; never commit secrets.
 
-### 6c — Gallery polish (refs 14–16)
+### 6c — Gallery polish (refs 14–16) ✅
 - `/g` hero + View gallery CTA; chrome without print store; masonry + motion + theme fonts.
 - Design preview parity; Homepage settings polish (ref `15`).
 

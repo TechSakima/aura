@@ -3,12 +3,23 @@ import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import type { DateFormat, FontPresetId, StudioHomepageSettings } from "@/lib/types";
 
+function studioForClient(studio: Awaited<ReturnType<typeof readStudioDb>>["studio"]) {
+  const homepage = studio.homepage
+    ? {
+        ...studio.homepage,
+        passwordHash: undefined,
+        hasPassword: Boolean(studio.homepage.passwordHash),
+      }
+    : undefined;
+  return { ...studio, homepage };
+}
+
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = await readStudioDb(admin.studioId);
   return NextResponse.json({
-    studio: db.studio,
+    studio: studioForClient(db.studio),
     watermarkPresets: db.watermarkPresets,
   });
 }
@@ -17,6 +28,16 @@ export async function PATCH(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
+
+  let homepagePasswordHash: string | undefined | null = undefined;
+  if (body.homepage && typeof body.homepage === "object") {
+    if (typeof body.homepage.password === "string" && body.homepage.password.length > 0) {
+      const bcrypt = await import("bcryptjs");
+      homepagePasswordHash = await bcrypt.hash(body.homepage.password, 10);
+    } else if (body.homepage.clearPassword === true) {
+      homepagePasswordHash = null;
+    }
+  }
 
   await updateStudioDb(admin.studioId, (db) => {
     const s = db.studio;
@@ -55,10 +76,22 @@ export async function PATCH(req: Request) {
     }
     if (body.homepage && typeof body.homepage === "object") {
       const prev = s.homepage!;
+      const {
+        password: _pw,
+        clearPassword: _clear,
+        passwordHash: _hash,
+        hasPassword: _has,
+        ...rest
+      } = body.homepage as Record<string, unknown>;
       s.homepage = {
         ...prev,
-        ...body.homepage,
+        ...rest,
       } as StudioHomepageSettings;
+      if (homepagePasswordHash === null) {
+        delete s.homepage.passwordHash;
+      } else if (typeof homepagePasswordHash === "string") {
+        s.homepage.passwordHash = homepagePasswordHash;
+      }
     }
     if (body.notificationPrefs && typeof body.notificationPrefs === "object") {
       s.notificationPrefs = {
