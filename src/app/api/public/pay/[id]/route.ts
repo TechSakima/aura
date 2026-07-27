@@ -20,6 +20,7 @@ export async function GET(
       : undefined;
   return NextResponse.json({
     paymentLink: hit.link,
+    studioName: hit.studioName,
     feePreview,
     checkoutReady: Boolean(
       getStripe() && hit.stripeAccountId && hit.stripeOnboardingComplete,
@@ -75,6 +76,8 @@ export async function POST(
       netAmount: net,
       customerEmail: payerEmail || undefined,
       customerName: payerName || undefined,
+      projectId: hit.link.projectId,
+      studioName: hit.studioName,
     });
     if (checkout?.session.url) {
       return NextResponse.json({
@@ -89,14 +92,17 @@ export async function POST(
   await recordPaymentLinkCharge({
     studioId: hit.studioId,
     linkId: id,
+    projectId: hit.link.projectId,
     ...breakdown,
   });
   await notifyStudio({
     studioId: hit.studioId,
     type: "payment_received",
     title: "Payment received",
-    body: `${hit.link.title}: $${breakdown.netAmount.toFixed(2)} net (client paid $${breakdown.grossAmount.toFixed(2)})`,
-    href: "/admin/payments",
+    body: `${hit.link.title}: $${breakdown.netAmount.toFixed(2)}`,
+    href: hit.link.projectId
+      ? `/admin/projects/${hit.link.projectId}`
+      : "/admin/payments",
   });
   if (payerEmail) {
     await emailPaymentReceipt({

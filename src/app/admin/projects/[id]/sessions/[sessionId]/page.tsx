@@ -1,18 +1,19 @@
 "use client";
 
+import { useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { ShootWizardShell } from "@/components/wizard/ShootWizardShell";
 import { useShootWizard } from "@/components/wizard/useShootWizard";
 import { DeliveryStep } from "@/components/wizard/steps/DeliveryStep";
-import { IntakeStep } from "@/components/wizard/steps/IntakeStep";
 import { PrepStep } from "@/components/wizard/steps/PrepStep";
-import { QuoteStep } from "@/components/wizard/steps/QuoteStep";
 import { ShootDayStep } from "@/components/wizard/steps/ShootDayStep";
 import { WrapStep } from "@/components/wizard/steps/WrapStep";
 import { useToast } from "@/components/ui";
 import type { WizardStepId } from "@/lib/types";
-import { WIZARD_STEPS } from "@/lib/wizard/steps";
+import { SESSION_TOOL_STEPS } from "@/lib/wizard/steps";
+
+const TOOL_IDS = new Set(SESSION_TOOL_STEPS.map((s) => s.id));
 
 function WizardInner() {
   const { id: projectId, sessionId } = useParams<{
@@ -22,10 +23,27 @@ function WizardInner() {
   const search = useSearchParams();
   const router = useRouter();
   const { push } = useToast();
+  const requested = search.get("step");
+  const safeRequested =
+    requested && TOOL_IDS.has(requested as WizardStepId) ? requested : "prep";
+
   const { data, loading, error, step, setStep, reload } = useShootWizard(
     sessionId,
-    search.get("step"),
+    safeRequested,
   );
+
+  useEffect(() => {
+    if (requested === "intake" || requested === "proposal") {
+      router.replace(`/admin/projects/${projectId}`);
+    }
+  }, [requested, projectId, router]);
+
+  useEffect(() => {
+    if (!loading && data && !TOOL_IDS.has(step)) {
+      selectStep("prep");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, data, step]);
 
   async function patchSession(body: Record<string, unknown>) {
     const res = await fetch(`/api/shoots/${sessionId}`, {
@@ -34,7 +52,7 @@ function WizardInner() {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      push("Could not update workflow", "danger");
+      push("Could not update session", "danger");
       return false;
     }
     await reload();
@@ -42,17 +60,17 @@ function WizardInner() {
   }
 
   function goRelative(delta: number) {
-    const idx = WIZARD_STEPS.findIndex((s) => s.id === step);
-    const next = WIZARD_STEPS[idx + delta];
+    const idx = SESSION_TOOL_STEPS.findIndex((s) => s.id === step);
+    const next = SESSION_TOOL_STEPS[idx + delta];
     if (!next || !data?.unlocked.includes(next.id)) return;
-    setStep(next.id);
-    router.replace(
-      `/admin/projects/${projectId}/sessions/${sessionId}?step=${next.id}`,
-      { scroll: false },
-    );
+    selectStep(next.id);
   }
 
   function selectStep(id: WizardStepId) {
+    if (!TOOL_IDS.has(id)) {
+      router.replace(`/admin/projects/${projectId}`);
+      return;
+    }
     setStep(id);
     router.replace(
       `/admin/projects/${projectId}/sessions/${sessionId}?step=${id}`,
@@ -66,10 +84,6 @@ function WizardInner() {
       router.push(`/admin/projects/${projectId}`);
       return;
     }
-    if (step === "proposal" && !data.proposal && !data.shoot.wizardSkippedProposal) {
-      push("Create a quote or skip for now", "danger");
-      return;
-    }
     if (step === "prep" && !data.plan && !data.shoot.wizardSkippedPrep) {
       push("Create a plan or skip prep", "danger");
       return;
@@ -81,8 +95,8 @@ function WizardInner() {
       push("Create a gallery before continuing", "danger");
       return;
     }
-    const idx = WIZARD_STEPS.findIndex((s) => s.id === step);
-    const next = WIZARD_STEPS[idx + 1];
+    const idx = SESSION_TOOL_STEPS.findIndex((s) => s.id === step);
+    const next = SESSION_TOOL_STEPS[idx + 1];
     if (next) {
       await reload();
       selectStep(next.id);
@@ -90,26 +104,25 @@ function WizardInner() {
   }
 
   async function onSkip() {
-    if (step === "proposal") {
-      await patchSession({ wizardSkippedProposal: true });
-      selectStep("prep");
-      return;
-    }
     if (step === "prep") {
       await patchSession({ wizardSkippedPrep: true });
       selectStep("shoot-day");
     }
   }
 
-  if (loading) return <p className="text-muted">Loading workflow…</p>;
+  if (requested === "intake" || requested === "proposal") {
+    return <p className="text-muted">Opening project workflow…</p>;
+  }
+
+  if (loading) return <p className="text-muted">Loading session…</p>;
   if (error || !data) return <p className="text-danger">{error || "Not found"}</p>;
   const ownerId = data.client?.id || data.shoot.projectId || data.shoot.clientId;
   if (ownerId && ownerId !== projectId) {
     return <p className="text-danger">This session belongs to another project.</p>;
   }
 
-  const canSkip = step === "proposal" || step === "prep";
   const projectName = data.client?.name || "Project";
+  const toolUnlocked = data.unlocked.filter((id) => TOOL_IDS.has(id));
 
   return (
     <ShootWizardShell
@@ -122,33 +135,17 @@ function WizardInner() {
       }
       quoteToken={data.proposal?.token}
       galleryToken={data.gallery?.publicToken}
-      step={step}
+      step={TOOL_IDS.has(step) ? step : "prep"}
       completed={data.completed}
-      unlocked={data.unlocked}
+      unlocked={toolUnlocked.length ? toolUnlocked : ["prep"]}
+      steps={SESSION_TOOL_STEPS}
       onStepChange={selectStep}
       onBack={() => goRelative(-1)}
       onNext={() => void onNext()}
-      onSkip={canSkip ? () => void onSkip() : undefined}
-      canSkip={canSkip}
+      onSkip={step === "prep" ? () => void onSkip() : undefined}
+      canSkip={step === "prep"}
       nextLabel={step === "wrap" ? "Back to project" : "Continue"}
     >
-      {step === "intake" ? (
-        <IntakeStep
-          client={data.client}
-          shoot={data.shoot}
-          onSaved={async () => {
-            await reload();
-          }}
-        />
-      ) : null}
-      {step === "proposal" ? (
-        <QuoteStep
-          shoot={data.shoot}
-          proposal={data.proposal}
-          packages={data.packages}
-          onChanged={reload}
-        />
-      ) : null}
       {step === "prep" ? (
         <PrepStep
           shoot={data.shoot}
@@ -190,7 +187,7 @@ function WizardInner() {
 
 export default function ProjectSessionWizardPage() {
   return (
-    <Suspense fallback={<p className="text-muted">Loading workflow…</p>}>
+    <Suspense fallback={<p className="text-muted">Loading session…</p>}>
       <WizardInner />
     </Suspense>
   );

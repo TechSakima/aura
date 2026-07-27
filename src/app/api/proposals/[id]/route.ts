@@ -25,6 +25,29 @@ export async function PATCH(
     if (body.intakeSchema != null) p.intakeSchema = body.intakeSchema;
     if (body.depositStatus != null) p.depositStatus = body.depositStatus as DepositStatus;
     p.updatedAt = new Date().toISOString();
+
+    if (body.status === "accepted") {
+      if (p.depositStatus === "none") p.depositStatus = "awaited";
+      const project = db.projects.find((x) => x.id === p.projectId);
+      if (project) {
+        project.stage = "booked";
+        project.workflowStep = "contract";
+        project.updatedAt = p.updatedAt;
+      }
+      const session = db.sessions.find(
+        (s) => s.id === (p.sessionId || p.shootId),
+      );
+      if (session) {
+        session.status = "booked";
+        session.updatedAt = p.updatedAt;
+      }
+    } else if (body.status === "sent") {
+      const project = db.projects.find((x) => x.id === p.projectId);
+      if (project && (project.workflowStep === "inquiry" || project.workflowStep === "questionnaire" || !project.workflowStep)) {
+        project.workflowStep = "pricing";
+        project.updatedAt = p.updatedAt;
+      }
+    }
     return p;
   });
 

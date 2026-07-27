@@ -79,7 +79,11 @@ export function useShootWizard(shootId: string, requestedStep?: string | null) {
     const preferred =
       requestedStep && isWizardStepId(requestedStep) && json.unlocked.includes(requestedStep)
         ? requestedStep
-        : json.currentStep;
+        : ["prep", "shoot-day", "delivery", "wrap"].includes(json.currentStep)
+          ? json.currentStep
+          : json.unlocked.includes("prep")
+            ? "prep"
+            : json.currentStep;
     setStep(preferred);
     return json;
   }, [shootId, requestedStep]);

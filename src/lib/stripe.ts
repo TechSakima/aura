@@ -157,13 +157,19 @@ export async function createPaymentLinkCheckout(opts: {
   customerEmail?: string;
   customerName?: string;
   projectId?: string;
+  studioName?: string;
 }) {
   const stripe = getStripe();
   if (!stripe) return null;
 
   const breakdown = grossUpAmount(opts.netAmount);
   const origin = appOrigin();
-  const feeLine = `Studio receives $${breakdown.netAmount.toFixed(2)}. Processing fee $${breakdown.processingFee.toFixed(2)}.`;
+  const productName = opts.studioName
+    ? `Payment to ${opts.studioName}`
+    : opts.title;
+  const productDescription =
+    opts.description ||
+    `Includes card processing fee. You’ll be charged $${breakdown.grossAmount.toFixed(2)}.`;
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -175,10 +181,8 @@ export async function createPaymentLinkCheckout(opts: {
           currency: "usd",
           unit_amount: breakdown.grossCents,
           product_data: {
-            name: opts.title,
-            description: opts.description
-              ? `${opts.description} — ${feeLine}`
-              : feeLine,
+            name: productName,
+            description: productDescription,
           },
         },
       },

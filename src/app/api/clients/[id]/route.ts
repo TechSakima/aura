@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import {
+  archiveProject,
+  deleteProjectCascade,
+  unarchiveProject,
+} from "@/lib/db/delete-project";
+import { cascadeProjectRename } from "@/lib/db/rename-project";
 import { getClientBundle, updateStudioDb } from "@/lib/db/store";
+import type { ProjectStage } from "@/lib/types";
 
 export async function GET(
   _req: Request,
@@ -24,18 +31,52 @@ export async function PATCH(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const body = await req.json();
+
+  if (body.stage === "archived") {
+    const ok = await archiveProject(admin.studioId, id);
+    if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const bundle = await getClientBundle(id);
+    return NextResponse.json({
+      client: bundle?.client,
+      project: bundle?.client,
+    });
+  }
+
+  if (body.unarchive === true) {
+    const ok = await unarchiveProject(admin.studioId, id);
+    if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const bundle = await getClientBundle(id);
+    return NextResponse.json({
+      client: bundle?.client,
+      project: bundle?.client,
+    });
+  }
+
   const client = await updateStudioDb(admin.studioId, (db) => {
     const c = db.projects.find((x) => x.id === id);
     if (!c) return null;
-    if (body.name != null) c.name = String(body.name);
+    if (body.name != null) {
+      const nextName = String(body.name).trim();
+      if (nextName && nextName !== c.name) {
+        cascadeProjectRename(db, id, c.name, nextName);
+        c.name = nextName;
+      }
+    }
     if (body.email != null) c.email = String(body.email);
     if (body.phone !== undefined) c.phone = body.phone ? String(body.phone) : undefined;
     if (body.notes !== undefined) c.notes = body.notes ? String(body.notes) : undefined;
+    if (body.type != null) c.type = String(body.type);
+    if (body.stage != null && body.stage !== "archived") {
+      c.stage = body.stage as ProjectStage;
+    }
+    if (body.workflowStep != null) {
+      c.workflowStep = body.workflowStep;
+    }
     c.updatedAt = new Date().toISOString();
     return c;
   });
   if (!client) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ client });
+  return NextResponse.json({ client, project: client });
 }
 
 export async function DELETE(
@@ -45,8 +86,7 @@ export async function DELETE(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  await updateStudioDb(admin.studioId, (db) => {
-    db.projects = db.projects.filter((c) => c.id !== id);
-  });
+  const ok = await deleteProjectCascade(admin.studioId, id);
+  if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

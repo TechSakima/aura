@@ -3,6 +3,10 @@ import JSZip from "jszip";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { deleteStorageObject, downloadStorageBuffer } from "@/lib/storage/upload";
+import {
+  downloadFilename,
+  uniqueZipName,
+} from "@/lib/images/download-filename";
 
 export async function POST(
   _req: Request,
@@ -44,11 +48,20 @@ export async function POST(
   ].join("\n");
   zip.file("client-details.txt", details);
 
+  const usedNames = new Set<string>();
   for (const photo of photos) {
     try {
       if (photo.storagePath.startsWith("studios/")) {
         const data = await downloadStorageBuffer(photo.storagePath);
-        zip.file(`photos/${photo.kind}-${photo.id}-v${photo.version}.jpg`, data);
+        const name = uniqueZipName(
+          usedNames,
+          downloadFilename(
+            photo.originalFilename,
+            `${photo.kind}-${photo.id}`,
+            photo.kind === "video" ? "mp4" : "jpg",
+          ),
+        );
+        zip.file(`photos/${name}`, data);
       }
     } catch {
       // skip missing

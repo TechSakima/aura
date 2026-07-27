@@ -31,6 +31,7 @@ import {
   useToast,
 } from "@/components/ui";
 import type { Comment, Gallery } from "@/lib/types";
+import { filenameFromContentDisposition } from "@/lib/images/download-filename";
 
 type PublicPhoto = MasonryPhoto & {
   kind: string;
@@ -193,8 +194,12 @@ export default function PublicGalleryPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const ext = downloadMode === "single" ? "jpg" : "zip";
-    a.download = `${data?.gallery.title || "gallery"}.${ext}`;
+    const headerName = filenameFromContentDisposition(
+      res.headers.get("Content-Disposition"),
+    );
+    a.download =
+      headerName ||
+      `${data?.gallery.title || "gallery"}.${downloadMode === "single" ? "jpg" : "zip"}`;
     a.click();
     URL.revokeObjectURL(url);
     setPinOpen(false);

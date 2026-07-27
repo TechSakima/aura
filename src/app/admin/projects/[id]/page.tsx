@@ -135,8 +135,52 @@ export default function ProjectDetailPage() {
     const session = data.session || data.shoot;
     push("Session created", "success");
     router.push(
-      `/admin/projects/${id}/sessions/${session.id}?step=intake`,
+      `/admin/projects/${id}/sessions/${session.id}?step=prep`,
     );
+  }
+
+  async function archiveProjectAction() {
+    if (!project) return;
+    const archiving = project.stage !== "archived";
+    const ok = await confirm({
+      title: archiving ? "Archive project?" : "Unarchive project?",
+      message: archiving
+        ? `“${project.name}” will be hidden from the default list.`
+        : `“${project.name}” will return to active projects.`,
+      confirmLabel: archiving ? "Archive" : "Unarchive",
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/clients/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        archiving ? { stage: "archived" } : { unarchive: true },
+      ),
+    });
+    if (!res.ok) {
+      push("Could not update project", "danger");
+      return;
+    }
+    push(archiving ? "Project archived" : "Project restored", "success");
+    await load();
+  }
+
+  async function deleteProjectAction() {
+    if (!project) return;
+    const ok = await confirm({
+      title: "Delete permanently?",
+      message: `“${project.name}” and its sessions, quotes, and galleries will be removed.`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      push("Could not delete project", "danger");
+      return;
+    }
+    push("Project deleted", "success");
+    router.push("/admin/projects");
   }
 
   async function deleteSession(session: SessionRow) {
@@ -166,9 +210,17 @@ export default function ProjectDetailPage() {
         title={project.name}
         description={`${project.type || "Project"} · ${project.stage || "inquiry"}`}
         actions={
-          <Button tone="ghost" onClick={() => router.push("/admin/projects")}>
-            All projects
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button tone="ghost" onClick={() => void archiveProjectAction()}>
+              {project.stage === "archived" ? "Unarchive" : "Archive"}
+            </Button>
+            <Button tone="danger" onClick={() => void deleteProjectAction()}>
+              Delete
+            </Button>
+            <Button tone="ghost" onClick={() => router.push("/admin/projects")}>
+              All projects
+            </Button>
+          </div>
         }
       />
 
@@ -190,7 +242,7 @@ export default function ProjectDetailPage() {
         {editing ? (
           <form onSubmit={saveProject} className="max-w-lg space-y-4">
             <Field>
-              <Label>Name</Label>
+              <Label>Project name</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} required />
             </Field>
             <Field>
@@ -233,7 +285,7 @@ export default function ProjectDetailPage() {
       <section className="space-y-5">
         <SectionIntro
           title="New session"
-          description="Start a workflow for booking through delivery."
+          description="Add a dated occurrence — prep, shoot day, and gallery."
         />
         <form
           onSubmit={createSession}
@@ -257,7 +309,7 @@ export default function ProjectDetailPage() {
           </Field>
           <div className="flex items-end">
             <Button type="submit" className="w-full min-h-11">
-              Start workflow
+              Add session
             </Button>
           </div>
         </form>
@@ -268,7 +320,7 @@ export default function ProjectDetailPage() {
         {sessions.length === 0 ? (
           <EmptyState
             title="No sessions yet"
-            description="Start a workflow to move from intake through delivery."
+            description="Add a session for shoot day and delivery."
           />
         ) : (
           <ul className="divide-y divide-line border-y border-line">
@@ -291,11 +343,15 @@ export default function ProjectDetailPage() {
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <Link
-                    href={`/admin/projects/${id}/sessions/${s.id}${
-                      s.currentStep ? `?step=${s.currentStep}` : ""
+                    href={`/admin/projects/${id}/sessions/${s.id}?step=${
+                      s.currentStep === "intake" ||
+                      s.currentStep === "proposal" ||
+                      !s.currentStep
+                        ? "prep"
+                        : s.currentStep
                     }`}
                   >
-                    <Button size="sm">Continue</Button>
+                    <Button size="sm">Open session</Button>
                   </Link>
                   <Button
                     size="sm"

@@ -57,20 +57,31 @@ export async function deletePhotosByIds(
   return photos.length;
 }
 
-/** Remove a shoot and related plans, proposals, galleries, photos, comments. */
+/** Remove a session/shoot and related plans, quotes, galleries, photos. */
 export async function deleteShootCascade(
   studioId: string,
   shootId: string,
 ): Promise<boolean> {
   const db = await readStudioDb(studioId);
-  const session = db.sessions.find((s) => s.id === shootId);
+  const session = db.sessions.find(
+    (s) => s.id === shootId && s.studioId === studioId,
+  );
   if (!session) return false;
 
-  const galleries = db.galleries.filter(
-    (g) => (g.sessionId || g.shootId) === shootId,
-  );
+  const galleries = db.galleries.filter((g) => {
+    const sid = g.sessionId || g.shootId;
+    if (sid === shootId) return true;
+    if (session.galleryId && g.id === session.galleryId) return true;
+    return false;
+  });
   const galleryIds = new Set(galleries.map((g) => g.id));
   const photos = db.photos.filter((p) => galleryIds.has(p.galleryId));
+  const proposalIds = new Set(
+    db.proposals
+      .filter((p) => (p.sessionId || p.shootId) === shootId)
+      .map((p) => p.id),
+  );
+  if (session.proposalId) proposalIds.add(session.proposalId);
 
   for (const photo of photos) {
     await deletePhotoFiles(photo.storagePath);
@@ -80,23 +91,30 @@ export async function deleteShootCascade(
     d.photos = d.photos.filter((p) => !galleryIds.has(p.galleryId));
     d.comments = d.comments.filter((c) => !galleryIds.has(c.galleryId));
     d.subAlbums = d.subAlbums.filter((a) => !galleryIds.has(a.galleryId));
-    d.galleries = d.galleries.filter(
-      (g) => (g.sessionId || g.shootId) !== shootId,
-    );
+    d.galleries = d.galleries.filter((g) => !galleryIds.has(g.id));
     d.shootPlans = d.shootPlans.filter(
       (p) => p.sessionId !== shootId && p.shootId !== shootId,
     );
-    d.proposals = d.proposals.filter(
-      (p) => (p.sessionId || p.shootId) !== shootId,
-    );
+    d.proposals = d.proposals.filter((p) => !proposalIds.has(p.id));
     d.analyticsEvents = d.analyticsEvents.filter(
       (e) =>
         e.sessionId !== shootId &&
         e.shootId !== shootId &&
         !(e.galleryId && galleryIds.has(e.galleryId)) &&
-        !(e.proposalId && session.proposalId === e.proposalId),
+        !(e.proposalId && proposalIds.has(e.proposalId)),
     );
+    for (const b of d.bookingRequests) {
+      if (b.sessionId === shootId) {
+        b.sessionId = undefined;
+        b.updatedAt = new Date().toISOString();
+      }
+    }
     d.sessions = d.sessions.filter((s) => s.id !== shootId);
+    d.shoots = d.sessions.map((s) => ({
+      ...s,
+      clientId: s.projectId,
+      shootDate: s.startsAt,
+    }));
   });
 
   return true;

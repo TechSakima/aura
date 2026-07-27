@@ -70,5 +70,5 @@ export async function DELETE(
   const { id } = await ctx.params;
   const ok = await deleteShootCascade(admin.studioId, id);
   if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, deleted: id });
 }

@@ -4,6 +4,10 @@ import {
   findGalleryByPublicToken,
   readStudioDb,
 } from "@/lib/db/store";
+import {
+  downloadFilename,
+  uniqueZipName,
+} from "@/lib/images/download-filename";
 import { verifyPin } from "@/lib/pin";
 import { recordEvent } from "@/lib/analytics";
 import { rateLimit } from "@/lib/rate-limit";
@@ -68,6 +72,11 @@ export async function POST(
   if (mode === "single" && photos[0]) {
     try {
       const data = await loadOriginal(photos[0].storagePath);
+      const filename = downloadFilename(
+        photos[0].originalFilename,
+        photos[0].id,
+        "jpg",
+      );
       await recordEvent({
         type: "download_single",
         studioId: gallery.studioId,
@@ -78,7 +87,7 @@ export async function POST(
       return new NextResponse(new Uint8Array(data), {
         headers: {
           "Content-Type": "image/jpeg",
-          "Content-Disposition": `attachment; filename="${photos[0].id}.jpg"`,
+          "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
         },
       });
     } catch {
@@ -87,10 +96,15 @@ export async function POST(
   }
 
   const zip = new JSZip();
+  const used = new Set<string>();
   for (const photo of photos) {
     try {
       const data = await loadOriginal(photo.storagePath);
-      zip.file(`${photo.id}.jpg`, data);
+      const name = uniqueZipName(
+        used,
+        downloadFilename(photo.originalFilename, photo.id, "jpg"),
+      );
+      zip.file(name, data);
     } catch {
       // skip missing
     }
@@ -104,10 +118,11 @@ export async function POST(
     meta: { count: photos.length, mode },
   });
 
+  const zipName = `${gallery.title.replace(/\s+/g, "-") || "gallery"}.zip`;
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${gallery.title.replace(/\s+/g, "-")}.zip"`,
+      "Content-Disposition": `attachment; filename="${zipName.replace(/"/g, "")}"`,
     },
   });
 }

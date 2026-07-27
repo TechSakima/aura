@@ -12,7 +12,8 @@ export type ProjectStage =
   | "in_progress"
   | "delivered"
   | "completed"
-  | "canceled";
+  | "canceled"
+  | "archived";
 
 /** Project pipeline after booking inquiry. */
 export type ProjectWorkflowStep =
@@ -263,6 +264,8 @@ export type Photo = {
   galleryId: string;
   kind: "main" | "peek" | "video";
   storagePath: string;
+  /** Original upload filename for client downloads. */
+  originalFilename?: string;
   thumbUrl: string;
   webUrl: string;
   watermarkedUrl: string;
@@ -561,7 +564,12 @@ export type Contract = {
   token: string;
   status: ContractStatus;
   signerName?: string;
+  /** ISO timestamp when signed */
   signedAt?: string;
+  /** Explicit calendar date acknowledged at signing (YYYY-MM-DD) */
+  signedDate?: string;
+  /** Client typed acknowledgment that they read the agreement */
+  acknowledgedTerms?: boolean;
   cancelPolicy?: CancelPolicy;
   createdAt: string;
   updatedAt: string;

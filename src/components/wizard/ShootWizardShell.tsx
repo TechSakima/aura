@@ -24,6 +24,7 @@ export function ShootWizardShell({
   onSkip,
   canSkip,
   nextLabel = "Continue",
+  steps = WIZARD_STEPS,
   children,
   /** @deprecated use projectId */
   clientId,
@@ -53,14 +54,16 @@ export function ShootWizardShell({
   onSkip?: () => void;
   canSkip?: boolean;
   nextLabel?: string;
+  steps?: typeof WIZARD_STEPS;
   children: ReactNode;
 }) {
   const pid = projectId || clientId || "";
   const pname = projectName || clientName || "Project";
   const stype = sessionType || shootType || "Session";
   const sdate = sessionDate || shootDate;
-  const idx = WIZARD_STEPS.findIndex((s) => s.id === step);
-  const activeStep = WIZARD_STEPS[idx];
+  const navSteps = steps;
+  const idx = navSteps.findIndex((s) => s.id === step);
+  const activeStep = navSteps[idx] || navSteps[0];
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -74,7 +77,7 @@ export function ShootWizardShell({
               {pname}
             </Link>
             <span className="mx-2 text-line">/</span>
-            Workflow
+            Session
           </p>
           <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl md:text-5xl">
             {stype}
@@ -99,22 +102,22 @@ export function ShootWizardShell({
       {/* Mobile: current step only + progress */}
       <div className="md:hidden">
         <p className="text-xs uppercase tracking-[0.16em] text-muted">
-          Step {idx + 1} of {WIZARD_STEPS.length}
+          Step {idx + 1} of {navSteps.length}
         </p>
         <p className="mt-1 font-medium text-ink">{activeStep?.label}</p>
         <div className="mt-3 h-1 overflow-hidden rounded-full bg-line">
           <div
             className="h-full bg-ink transition-all"
             style={{
-              width: `${((idx + 1) / WIZARD_STEPS.length) * 100}%`,
+              width: `${((Math.max(idx, 0) + 1) / navSteps.length) * 100}%`,
             }}
           />
         </div>
       </div>
 
-      <nav aria-label="Workflow steps" className="hidden md:block">
+      <nav aria-label="Session tools" className="hidden md:block">
         <ol className="flex flex-wrap gap-1 border-b border-line">
-          {WIZARD_STEPS.map((s, i) => {
+          {navSteps.map((s, i) => {
             const isActive = s.id === step;
             const isDone = completed.includes(s.id);
             const isUnlocked = unlocked.includes(s.id);

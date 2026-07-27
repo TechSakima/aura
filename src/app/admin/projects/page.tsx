@@ -27,6 +27,7 @@ export default function ProjectsPage() {
   const [notes, setNotes] = useState("");
   const [projectType, setProjectType] = useState("Wedding");
   const [q, setQ] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
 
   async function load() {
     const res = await fetch("/api/clients");
@@ -70,6 +71,7 @@ export default function ProjectsPage() {
   }
 
   const filtered = projects.filter((c) => {
+    if (!showArchived && c.stage === "archived") return false;
     const s = q.toLowerCase();
     return (
       !s ||
@@ -184,6 +186,14 @@ export default function ProjectsPage() {
               placeholder="Name, email, phone"
             />
           </Field>
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />
+            Show archived
+          </label>
           {filtered.length === 0 ? (
             <EmptyState
               title={projects.length === 0 ? "No projects yet" : "No matches"}

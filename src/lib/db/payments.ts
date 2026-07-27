@@ -16,6 +16,7 @@ export async function listStudiosWithPaymentLink(linkId: string) {
   if (!studio) return null;
   return {
     studioId: link.studioId,
+    studioName: studio.name,
     ownerEmail: studio.ownerEmail,
     stripeAccountId: studio.stripeAccountId,
     stripeOnboardingComplete: studio.stripeOnboardingComplete,
@@ -60,11 +61,48 @@ export async function recordPaymentLinkCharge(opts: {
       createdAt: now,
     });
 
+    db.analyticsEvents.push({
+      id: nanoid(),
+      studioId: opts.studioId,
+      type: "payment_received",
+      projectId: opts.projectId,
+      meta: {
+        netAmount: opts.netAmount,
+        grossAmount: opts.grossAmount,
+        paymentLinkId: opts.linkId,
+      },
+      at: now,
+    });
+
     if (opts.projectId) {
       const project = db.projects.find((p) => p.id === opts.projectId);
       if (project) {
         project.paidAmount = (project.paidAmount || 0) + opts.netAmount;
+        project.stage = "booked";
+        project.workflowStep = "prep";
         project.updatedAt = now;
+      }
+      for (const prop of db.proposals.filter(
+        (x) => x.projectId === opts.projectId,
+      )) {
+        if (prop.depositStatus === "awaited" || prop.depositStatus === "none") {
+          prop.depositStatus = "received";
+        }
+      }
+      const inv =
+        db.invoices.find(
+          (i) =>
+            opts.stripeCheckoutSessionId &&
+            i.stripeCheckoutSessionId === opts.stripeCheckoutSessionId,
+        ) ||
+        db.invoices.find(
+          (i) =>
+            i.projectId === opts.projectId &&
+            (i.status === "upcoming" || i.status === "past_due"),
+        );
+      if (inv) {
+        inv.status = "paid";
+        inv.updatedAt = now;
       }
     }
   });

@@ -68,6 +68,17 @@ export async function POST(req: Request) {
       s.wizardSkippedProposal = false;
       s.updatedAt = now;
     }
+    const project = d.projects.find((p) => p.id === session.projectId);
+    if (project) {
+      if (
+        !project.workflowStep ||
+        project.workflowStep === "inquiry" ||
+        project.workflowStep === "questionnaire"
+      ) {
+        project.workflowStep = "pricing";
+      }
+      project.updatedAt = now;
+    }
   });
 
   return NextResponse.json({ proposal });

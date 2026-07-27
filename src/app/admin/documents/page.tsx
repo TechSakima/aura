@@ -22,6 +22,7 @@ import type {
   QuestionnaireResponse,
   QuestionnaireTemplate,
 } from "@/lib/types";
+import { defaultContractBody } from "@/lib/contracts/defaults";
 
 function defaultQuestions(): IntakeQuestion[] {
   return [
@@ -79,16 +80,12 @@ export default function DocumentsPage() {
   );
   const [projectId, setProjectId] = useState("");
   const [title, setTitle] = useState("Photography agreement");
-  const [body, setBody] = useState(
-    "This agreement covers photography services, usage rights, and payment terms as discussed.",
-  );
+  const [body, setBody] = useState(() => defaultContractBody());
   const [untilPayment, setUntilPayment] = useState(true);
   const [daysBeforeSession, setDaysBeforeSession] = useState("7");
   const [contractTemplateId, setContractTemplateId] = useState("");
-  const [tmplName, setTmplName] = useState("Standard agreement");
-  const [tmplBody, setTmplBody] = useState(
-    "This agreement covers photography services, usage rights, and payment terms as discussed.",
-  );
+  const [tmplName, setTmplName] = useState("Photography agreement");
+  const [tmplBody, setTmplBody] = useState(() => defaultContractBody());
   const [tmplUntilPayment, setTmplUntilPayment] = useState(true);
   const [tmplDaysBefore, setTmplDaysBefore] = useState("7");
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -356,9 +353,17 @@ export default function DocumentsPage() {
                 id="body"
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                rows={8}
+                rows={12}
                 required
               />
+              <Button
+                type="button"
+                tone="ghost"
+                size="sm"
+                onClick={() => setBody(defaultContractBody())}
+              >
+                Reset to standard clauses
+              </Button>
             </Field>
             <fieldset className="space-y-3 border border-line p-4">
               <legend className="px-1 text-sm font-medium">Cancel policy</legend>
@@ -514,9 +519,19 @@ export default function DocumentsPage() {
               id="tmpl-body"
               value={tmplBody}
               onChange={(e) => setTmplBody(e.target.value)}
-              rows={6}
+              rows={14}
               required
             />
+            {!editingTemplateId ? (
+              <Button
+                type="button"
+                tone="ghost"
+                size="sm"
+                onClick={() => setTmplBody(defaultContractBody())}
+              >
+                Reset to standard clauses
+              </Button>
+            ) : null}
           </Field>
           <fieldset className="space-y-3 border border-line p-4">
             <legend className="px-1 text-sm font-medium">Cancel policy</legend>

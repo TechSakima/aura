@@ -12,13 +12,14 @@ import type { Invoice, PaymentLinkTemplate } from "@/lib/types";
 
 /** Create a project deposit invoice and optional Stripe Checkout URL. */
 export async function POST(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id: projectId } = await ctx.params;
+  const body = await req.json().catch(() => ({}));
   const db = await readStudioDb(admin.studioId);
   const project = db.projects.find((p) => p.id === projectId);
   if (!project) {
@@ -28,12 +29,22 @@ export async function POST(
   const booking = db.bookingRequests.find((r) => r.projectId === projectId);
   const sessionType = booking
     ? db.sessionTypes.find((t) => t.id === booking.sessionTypeId)
-    : undefined;
+    : db.sessionTypes.find(
+        (t) => t.name.toLowerCase() === (project.type || "").toLowerCase(),
+      ) || db.sessionTypes.find((t) => t.active);
+
+  const fromBody =
+    body.amount !== undefined && body.amount !== null && body.amount !== ""
+      ? Number(body.amount)
+      : undefined;
   const netAmount =
-    sessionType?.depositAmount ?? sessionType?.basePrice ?? undefined;
+    fromBody !== undefined && Number.isFinite(fromBody) && fromBody > 0
+      ? fromBody
+      : sessionType?.depositAmount ?? sessionType?.basePrice ?? undefined;
+
   if (netAmount == null || netAmount <= 0) {
     return NextResponse.json(
-      { error: "No deposit amount on session type" },
+      { error: "Enter a deposit amount" },
       { status: 400 },
     );
   }
@@ -78,6 +89,9 @@ export async function POST(
       }
       p.updatedAt = now;
     }
+    for (const prop of d.proposals.filter((x) => x.projectId === projectId)) {
+      if (prop.depositStatus === "none") prop.depositStatus = "awaited";
+    }
   });
 
   let checkoutUrl: string | undefined;
@@ -99,6 +113,7 @@ export async function POST(
         customerEmail: project.email || undefined,
         customerName: project.name || undefined,
         projectId,
+        studioName: db.studio.name,
       });
       if (checkout?.session.url) {
         checkoutUrl = checkout.session.url;
@@ -123,6 +138,7 @@ export async function POST(
     },
     paymentLink,
     checkoutUrl: checkoutUrl || paymentLink.publicUrl,
+    payUrl: paymentLink.publicUrl,
     feePreview: { netAmount: net, processingFee, grossAmount },
     workflowStep: "deposit" as const,
   });

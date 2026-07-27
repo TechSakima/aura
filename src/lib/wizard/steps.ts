@@ -19,6 +19,15 @@ export const WIZARD_STEPS: {
   { id: "wrap", label: "Wrap", short: "6" },
 ];
 
+/** Session tools only — quote/intake live on the project workflow. */
+export const SESSION_TOOL_STEPS = WIZARD_STEPS.filter(
+  (s) =>
+    s.id === "prep" ||
+    s.id === "shoot-day" ||
+    s.id === "delivery" ||
+    s.id === "wrap",
+);
+
 export function isWizardStepId(value: string): value is WizardStepId {
   return WIZARD_STEPS.some((s) => s.id === value);
 }
@@ -86,6 +95,9 @@ export function deriveWizardProgress(input: {
   const currentIdx = order.indexOf(currentStep);
   for (let i = 0; i <= currentIdx; i++) unlockedSet.add(order[i]!);
   unlockedSet.add("intake");
+  // Quote lives on the project workflow — session tools stay reachable
+  unlockedSet.add("prep");
+  unlockedSet.add("shoot-day");
   if (proposal) unlockedSet.add("prep");
   if (plan || shoot.wizardSkippedPrep) unlockedSet.add("shoot-day");
   if (gallery) {

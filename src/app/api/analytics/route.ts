@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb } from "@/lib/db/store";
 
+function sum(nums: number[]) {
+  return nums.reduce((a, b) => a + b, 0);
+}
+
 export async function GET(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -11,7 +15,21 @@ export async function GET(req: Request) {
 
   const db = await readStudioDb(admin.studioId);
   let events = db.analyticsEvents;
-  if (shootId) events = events.filter((e) => e.shootId === shootId);
+
+  let projectIdFilter: string | undefined;
+  if (shootId) {
+    const session = db.sessions.find((s) => s.id === shootId);
+    projectIdFilter = session?.projectId;
+  }
+
+  if (shootId) {
+    events = events.filter(
+      (e) =>
+        e.shootId === shootId ||
+        e.sessionId === shootId ||
+        (projectIdFilter != null && e.projectId === projectIdFilter),
+    );
+  }
   if (galleryId) events = events.filter((e) => e.galleryId === galleryId);
 
   const counts: Record<string, number> = {};
@@ -41,10 +59,57 @@ export async function GET(req: Request) {
     byDay[day] = (byDay[day] || 0) + 1;
   }
 
+  let txs = db.paymentTransactions;
+  let invoices = db.invoices;
+  if (projectIdFilter) {
+    txs = txs.filter((t) => t.projectId === projectIdFilter);
+    invoices = invoices.filter((i) => i.projectId === projectIdFilter);
+  } else if (shootId) {
+    // Session filter with no project — empty money slice
+    txs = [];
+    invoices = [];
+  }
+
+  const revenueByDay: Record<string, number> = {};
+  for (const t of txs) {
+    const day = t.createdAt.slice(0, 10);
+    revenueByDay[day] = (revenueByDay[day] || 0) + t.netAmount;
+  }
+
+  const openInvoices = invoices.filter(
+    (i) => i.status === "upcoming" || i.status === "past_due" || i.status === "draft",
+  );
+  const paidInvoices = invoices.filter((i) => i.status === "paid");
+
+  const projectName = (projectId?: string) =>
+    projectId
+      ? db.projects.find((p) => p.id === projectId)?.name
+      : undefined;
+
+  const financials = {
+    collectedNet: sum(txs.map((t) => t.netAmount)),
+    collectedGross: sum(txs.map((t) => t.grossAmount)),
+    processingFees: sum(txs.map((t) => t.processingFee)),
+    transactionCount: txs.length,
+    openInvoiceNet: sum(openInvoices.map((i) => i.netAmount)),
+    openInvoiceCount: openInvoices.length,
+    paidInvoiceNet: sum(paidInvoices.map((i) => i.netAmount)),
+    byDay: revenueByDay,
+    recent: txs.slice(0, 12).map((t) => ({
+      id: t.id,
+      netAmount: t.netAmount,
+      grossAmount: t.grossAmount,
+      processingFee: t.processingFee,
+      projectName: projectName(t.projectId),
+      createdAt: t.createdAt,
+    })),
+  };
+
   return NextResponse.json({
     totals: counts,
     topPhotos,
     byDay,
     recent: events.slice(-50).reverse(),
+    financials,
   });
 }

@@ -18,6 +18,14 @@ async function findContract(token: string) {
   return { id: d.id, ...d.data() } as Contract;
 }
 
+function parseSignedDate(raw: unknown): string | null {
+  const s = String(raw || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return s;
+}
+
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ token: string }> },
@@ -33,6 +41,8 @@ export async function GET(
       status: contract.status,
       signerName: contract.signerName,
       signedAt: contract.signedAt,
+      signedDate: contract.signedDate,
+      acknowledgedTerms: contract.acknowledgedTerms,
     },
     studio: { name: studio?.name },
   });
@@ -48,6 +58,17 @@ export async function POST(
   if (!signerName) {
     return NextResponse.json({ error: "Name required" }, { status: 400 });
   }
+  if (!body.acknowledgedTerms) {
+    return NextResponse.json(
+      { error: "Acknowledgment required" },
+      { status: 400 },
+    );
+  }
+  const signedDate = parseSignedDate(body.signedDate);
+  if (!signedDate) {
+    return NextResponse.json({ error: "Valid date required" }, { status: 400 });
+  }
+
   const contract = await findContract(token);
   if (!contract) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (contract.status === "completed") {
@@ -60,6 +81,8 @@ export async function POST(
     c.status = "completed";
     c.signerName = signerName;
     c.signedAt = signedAt;
+    c.signedDate = signedDate;
+    c.acknowledgedTerms = true;
     c.updatedAt = signedAt;
     const p = db.projects.find((x) => x.id === c.projectId);
     if (p) {
@@ -74,5 +97,5 @@ export async function POST(
     body: `${contract.title} signed by ${signerName}`,
     href: `/admin/projects/${contract.projectId}`,
   });
-  return NextResponse.json({ ok: true, signedAt });
+  return NextResponse.json({ ok: true, signedAt, signedDate });
 }

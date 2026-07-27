@@ -13,6 +13,7 @@ export default function PublicPayPage() {
     amount?: number;
     minAmount?: number;
     maxAmount?: number;
+    studioName?: string;
     feePreview?: {
       grossAmount: number;
       processingFee: number;
@@ -36,6 +37,7 @@ export default function PublicPayPage() {
         else {
           setLink({
             ...d.paymentLink,
+            studioName: d.studioName,
             feePreview: d.feePreview,
           });
           if (d.paymentLink?.amount) setAmount(String(d.paymentLink.amount));
@@ -84,10 +86,19 @@ export default function PublicPayPage() {
   }
 
   const previewNet = Number(amount) || link.amount || 0;
+  const gross =
+    link.feePreview?.grossAmount ??
+    (previewNet > 0 ? previewNet * 1.03 : 0); // fallback approx if preview missing
+  const payLabel = link.studioName
+    ? `Pay ${link.studioName}`
+    : "Pay now";
 
   return (
     <div className="shell-pad mx-auto max-w-md py-16">
       <h1 className="font-display text-4xl">{link.title}</h1>
+      {link.studioName ? (
+        <p className="mt-2 text-sm text-muted">Payment to {link.studioName}</p>
+      ) : null}
       {link.description ? (
         <p className="mt-2 text-muted">{link.description}</p>
       ) : null}
@@ -111,7 +122,7 @@ export default function PublicPayPage() {
           />
         </Field>
         <Field>
-          <Label htmlFor="amount">Amount (studio receives)</Label>
+          <Label htmlFor="amount">Amount</Label>
           <Input
             id="amount"
             type="number"
@@ -125,12 +136,13 @@ export default function PublicPayPage() {
           />
         </Field>
         <p className="text-sm text-muted">
-          A card processing fee is added at checkout so the studio receives $
-          {previewNet.toFixed(2)}.
+          You’ll be charged about $
+          {(link.feePreview?.grossAmount ?? gross).toFixed(2)} (includes card
+          fee).
         </p>
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         <Button type="submit" className="w-full">
-          Pay now
+          {payLabel}
         </Button>
       </form>
     </div>

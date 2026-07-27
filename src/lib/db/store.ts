@@ -484,6 +484,14 @@ export async function updateStudioDb<T>(
     result = await mutator(current);
     current.studio.id = studioId;
     current.studio.updatedAt = new Date().toISOString();
+    // Keep legacy aliases in sync. normalizeDb merges shoots/clients back into
+    // sessions/projects — stale aliases would resurrect deleted rows on persist.
+    current.shoots = current.sessions.map((s) => ({
+      ...s,
+      clientId: s.projectId,
+      shootDate: s.startsAt,
+    }));
+    current.clients = current.projects;
     await persistStudioDatabase(db, current);
   });
   await writeQueue;
@@ -787,17 +795,33 @@ export async function getClientBundle(clientId: string) {
     .collection(COL.projectSessions)
     .where("projectId", "==", clientId)
     .get();
-  let shoots = sessionsSnap.docs.map((d) => {
+  const byId = new Map<string, Shoot>();
+  for (const d of sessionsSnap.docs) {
     const s = { id: d.id, ...d.data() } as ProjectSession;
-    return { ...s, clientId: s.projectId, shootDate: s.startsAt } as Shoot;
-  });
-  if (!shoots.length) {
-    const shootsSnap = await db
-      .collection(COL.shoots)
-      .where("clientId", "==", clientId)
-      .get();
-    shoots = shootsSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Shoot);
+    byId.set(d.id, {
+      ...s,
+      clientId: s.projectId,
+      shootDate: s.startsAt,
+    } as Shoot);
   }
+  const shootsSnap = await db
+    .collection(COL.shoots)
+    .where("clientId", "==", clientId)
+    .get();
+  for (const d of shootsSnap.docs) {
+    if (byId.has(d.id)) continue;
+    byId.set(d.id, { id: d.id, ...d.data() } as Shoot);
+  }
+  // Also catch legacy shoots keyed by projectId
+  const shootsByProject = await db
+    .collection(COL.shoots)
+    .where("projectId", "==", clientId)
+    .get();
+  for (const d of shootsByProject.docs) {
+    if (byId.has(d.id)) continue;
+    byId.set(d.id, { id: d.id, ...d.data() } as Shoot);
+  }
+  const shoots = [...byId.values()];
   return { client, shoots, project: client, sessions: shoots };
 }
 

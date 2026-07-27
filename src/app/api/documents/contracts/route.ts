@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { publicToken } from "@/lib/tokens";
 import type { CancelPolicy, Contract, ContractTemplate } from "@/lib/types";
+import { defaultContractBody } from "@/lib/contracts/defaults";
 import {
   absoluteUrl,
   emailContractToSign,
@@ -50,11 +51,9 @@ export async function POST(req: Request) {
   const cancelPolicy = parseCancelPolicy(body.cancelPolicy);
 
   if (action === "create_template") {
-    const name = String(body.name || body.title || "").trim() || "Contract";
-    const templateBody = String(body.body || "").trim();
-    if (!templateBody) {
-      return NextResponse.json({ error: "body required" }, { status: 400 });
-    }
+    const name = String(body.name || body.title || "").trim() || "Photography agreement";
+    const templateBody =
+      String(body.body || "").trim() || defaultContractBody();
     const template: ContractTemplate = {
       id: nanoid(),
       studioId: admin.studioId,
@@ -95,12 +94,13 @@ export async function POST(req: Request) {
   }
 
   const projectId = String(body.projectId || "");
-  const title = String(body.title || "Contract").trim();
-  const contractBody = String(body.body || "").trim();
+  const title = String(body.title || "Photography agreement").trim();
+  const contractBody =
+    String(body.body || "").trim() || defaultContractBody();
   const templateId = body.templateId ? String(body.templateId) : undefined;
-  if (!projectId || !contractBody) {
+  if (!projectId) {
     return NextResponse.json(
-      { error: "projectId and body required" },
+      { error: "projectId required" },
       { status: 400 },
     );
   }
