@@ -10,14 +10,124 @@ import type { WatermarkPreset } from "@/lib/types";
 
 type SharpFn = typeof import("sharp").default;
 
-async function loadSharp(): Promise<SharpFn> {
+let sharpLoadAttempted = false;
+let sharpCached: SharpFn | null = null;
+
+async function tryLoadSharp(): Promise<SharpFn | null> {
+  if (sharpLoadAttempted) return sharpCached;
+  sharpLoadAttempted = true;
   try {
     const mod = await import("sharp");
-    return mod.default;
+    // Force native load now so we fail early in this helper, not mid-pipeline.
+    await mod.default({
+      create: { width: 1, height: 1, channels: 3, background: "#000" },
+    })
+      .png()
+      .toBuffer();
+    sharpCached = mod.default;
+    return sharpCached;
   } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
-    throw new Error(`Image engine unavailable (${detail})`);
+    console.error(
+      "[images] sharp unavailable; using raw upload fallback:",
+      e instanceof Error ? e.message : e,
+    );
+    sharpCached = null;
+    return null;
   }
+}
+
+async function loadSharp(): Promise<SharpFn> {
+  const sharp = await tryLoadSharp();
+  if (!sharp) {
+    throw new Error(
+      "Image engine unavailable (sharp native bindings missing on this host)",
+    );
+  }
+  return sharp;
+}
+
+function sniffImage(buf: Buffer): { contentType: string; ext: string } {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return { contentType: "image/jpeg", ext: "jpg" };
+  }
+  if (
+    buf.length >= 8 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47
+  ) {
+    return { contentType: "image/png", ext: "png" };
+  }
+  if (
+    buf.length >= 12 &&
+    buf.toString("ascii", 0, 4) === "RIFF" &&
+    buf.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return { contentType: "image/webp", ext: "webp" };
+  }
+  return { contentType: "application/octet-stream", ext: "bin" };
+}
+
+/** When sharp is missing, store the original bytes for every derivative. */
+async function processUploadRaw(opts: {
+  buffer: Buffer;
+  baseName: string;
+  studioId: string;
+  galleryId?: string;
+  folder?: "galleries" | "ideas" | "brand" | "moodboards" | "watermarks";
+}): Promise<ProcessedImage> {
+  const folder = opts.folder ?? "galleries";
+  const gallerySegment = opts.galleryId ?? "shared";
+  const studioId = opts.studioId || "shared";
+  const id = opts.baseName;
+  const sniffed = sniffImage(opts.buffer);
+  const base =
+    folder === "galleries"
+      ? storageObjectPath(studioId, "galleries", gallerySegment)
+      : storageObjectPath(studioId, folder);
+
+  const originalPath = `${base}/originals/${id}.${sniffed.ext}`;
+  const thumbPath = `${base}/derivatives/${id}-thumb.${sniffed.ext}`;
+  const webPath = `${base}/derivatives/${id}-web.${sniffed.ext}`;
+  const wmPath = `${base}/derivatives/${id}-wm.${sniffed.ext}`;
+
+  const [original, thumb, web, wm] = await Promise.all([
+    uploadBuffer({
+      buffer: opts.buffer,
+      objectPath: originalPath,
+      contentType: sniffed.contentType,
+      makePublic: false,
+    }),
+    uploadBuffer({
+      buffer: opts.buffer,
+      objectPath: thumbPath,
+      contentType: sniffed.contentType,
+      makePublic: false,
+    }),
+    uploadBuffer({
+      buffer: opts.buffer,
+      objectPath: webPath,
+      contentType: sniffed.contentType,
+      makePublic: false,
+    }),
+    uploadBuffer({
+      buffer: opts.buffer,
+      objectPath: wmPath,
+      contentType: sniffed.contentType,
+      makePublic: false,
+    }),
+  ]);
+
+  return {
+    storagePath: original.path,
+    thumbUrl: thumb.url,
+    webUrl: web.url,
+    watermarkedUrl: wm.url,
+    width: 1,
+    height: 1,
+    aspect: 1,
+  };
 }
 
 export type ProcessedImage = {
@@ -147,11 +257,15 @@ export async function processUpload(opts: {
   folder?: "galleries" | "ideas" | "brand" | "moodboards" | "watermarks";
   watermark?: WatermarkPreset | null;
 }): Promise<ProcessedImage> {
+  const sharp = await tryLoadSharp();
+  if (!sharp) {
+    return processUploadRaw(opts);
+  }
+
   const folder = opts.folder ?? "galleries";
   const gallerySegment = opts.galleryId ?? "shared";
   const studioId = opts.studioId || "shared";
   const id = opts.baseName;
-  const sharp = await loadSharp();
 
   let width = 1;
   let height = 1;
@@ -184,8 +298,8 @@ export async function processUpload(opts: {
       ? await applyWatermarkComposite(webBuf, opts.watermark)
       : await sharp(webBuf).webp({ quality: 82 }).toBuffer();
   } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
-    throw new Error(`Could not process image: ${detail}`);
+    console.error("[images] process failed; raw fallback:", e);
+    return processUploadRaw(opts);
   }
 
   const base =
@@ -198,7 +312,6 @@ export async function processUpload(opts: {
   const webPath = `${base}/derivatives/${id}-web.webp`;
   const wmPath = `${base}/derivatives/${id}-wm.webp`;
 
-  // Private objects served via /api/media — avoids public ACL / token issues.
   const [original, thumb, web, wm] = await Promise.all([
     uploadBuffer({
       buffer: originalBuf,

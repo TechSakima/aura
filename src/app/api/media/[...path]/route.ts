@@ -25,13 +25,18 @@ export async function GET(
   try {
     const data = await downloadStorageBuffer(objectPath);
     const lower = objectPath.toLowerCase();
-    const type = lower.endsWith(".webp")
-      ? "image/webp"
-      : lower.endsWith(".png")
-        ? "image/png"
-        : lower.endsWith(".jpg") || lower.endsWith(".jpeg")
-          ? "image/jpeg"
-          : "application/octet-stream";
+    let type = "application/octet-stream";
+    if (data[0] === 0xff && data[1] === 0xd8) type = "image/jpeg";
+    else if (data[0] === 0x89 && data[1] === 0x50) type = "image/png";
+    else if (
+      data.toString("ascii", 0, 4) === "RIFF" &&
+      data.toString("ascii", 8, 12) === "WEBP"
+    ) {
+      type = "image/webp";
+    } else if (lower.endsWith(".webp")) type = "image/webp";
+    else if (lower.endsWith(".png")) type = "image/png";
+    else if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) type = "image/jpeg";
+
     return new NextResponse(new Uint8Array(data), {
       headers: {
         "Content-Type": type,
