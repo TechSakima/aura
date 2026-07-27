@@ -14,6 +14,7 @@ import {
   useToast,
   useUploadSession,
 } from "@/components/ui";
+import { GalleryDesignPanel } from "@/components/admin/GalleryDesignPanel";
 import type { Shoot, WatermarkPreset } from "@/lib/types";
 import type { WizardGallery, WizardPhoto } from "@/components/wizard/useShootWizard";
 
@@ -40,13 +41,18 @@ export function DeliveryStep({
   const [resetPin, setResetPin] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [tab, setTab] = useState<"photos" | "design">("photos");
 
   const peekPhotos = useMemo(
     () => photos.filter((p) => p.kind === "peek"),
     [photos],
   );
+  const videoPhotos = useMemo(
+    () => photos.filter((p) => p.kind === "video"),
+    [photos],
+  );
   const mainPhotos = useMemo(
-    () => photos.filter((p) => p.kind !== "peek"),
+    () => photos.filter((p) => p.kind === "main" || (!["peek", "video"].includes(p.kind))),
     [photos],
   );
 
@@ -75,10 +81,15 @@ export function DeliveryStep({
     await onChanged();
   }
 
-  async function uploadFiles(kind: "main" | "peek", files: File[]) {
+  async function uploadFiles(kind: "main" | "peek" | "video", files: File[]) {
     if (!gallery || !files.length) return;
     await uploadSession.runUpload({
-      title: kind === "peek" ? "Uploading sneak peek" : "Uploading photos",
+      title:
+        kind === "peek"
+          ? "Uploading sneak peek"
+          : kind === "video"
+            ? "Uploading video"
+            : "Uploading photos",
       files,
       uploadFile: async (file) => {
         const form = new FormData();
@@ -231,6 +242,20 @@ export function DeliveryStep({
           </a>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            tone={tab === "photos" ? "accent" : "ghost"}
+            onClick={() => setTab("photos")}
+          >
+            Photos
+          </Button>
+          <Button
+            size="sm"
+            tone={tab === "design" ? "accent" : "ghost"}
+            onClick={() => setTab("design")}
+          >
+            Design
+          </Button>
           <FileUploadButton
             label="Upload gallery"
             multiple
@@ -243,6 +268,14 @@ export function DeliveryStep({
             tone="neutral"
             disabled={uploadSession.busy}
             onFiles={(files) => void uploadFiles("peek", files)}
+          />
+          <FileUploadButton
+            label="Upload video"
+            accept="video/*"
+            multiple
+            tone="neutral"
+            disabled={uploadSession.busy}
+            onFiles={(files) => void uploadFiles("video", files)}
           />
           {gallery.status === "draft" ? (
             <Button
@@ -257,120 +290,148 @@ export function DeliveryStep({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-3 border-y border-line py-3">
-        <label className="inline-flex items-center gap-2 text-sm">
-          <Switch
-            checked={gallery.commentsEnabled}
-            onCheckedChange={(v) => void patch({ commentsEnabled: v })}
-            label="Comments"
-          />
-          Comments
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <Switch
-            checked={gallery.watermarkEnabled}
-            onCheckedChange={(v) => void patch({ watermarkEnabled: v })}
-            label="Watermark"
-          />
-          Watermark
-        </label>
-        <Field className="min-w-[10rem]">
-          <Label>Watermark preset</Label>
-          <Select
-            value={gallery.watermarkPresetId || ""}
-            onChange={(e) => void patch({ watermarkPresetId: e.target.value })}
-          >
-            <option value="">Studio default</option>
-            {watermarkPresets.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Button
-          size="sm"
-          tone="ghost"
-          type="button"
-          onClick={() => void refreshWatermarks()}
-        >
-          Refresh watermarks
-        </Button>
-        <Field className="min-w-[8rem]">
-          <Label>PIN</Label>
-          <div className="flex gap-2">
-            <Input
-              value={resetPin}
-              maxLength={4}
-              placeholder="####"
-              onChange={(e) =>
-                setResetPin(e.target.value.replace(/\D/g, "").slice(0, 4))
-              }
-            />
-            <Button
-              size="sm"
-              tone="neutral"
-              onClick={async () => {
-                if (!/^\d{4}$/.test(resetPin)) {
-                  push("PIN must be 4 digits", "danger");
-                  return;
-                }
-                await patch({ pin: resetPin });
-                setResetPin("");
-                push("PIN updated", "success");
-              }}
-            >
-              Save
-            </Button>
-          </div>
-        </Field>
-      </div>
-
-      {selected.size > 0 ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-line/30 px-3 py-2">
-          <span className="text-sm">{selected.size} selected</span>
-          <Button
-            size="sm"
-            tone="danger"
-            disabled={deleting}
-            onClick={() => void deleteIds([...selected])}
-          >
-            Delete selected
-          </Button>
-          <Button
-            size="sm"
-            tone="ghost"
-            onClick={() => setSelected(new Set())}
-          >
-            Clear
-          </Button>
-        </div>
+      {tab === "design" ? (
+        <GalleryDesignPanel
+          design={gallery.design}
+          showOnHomepage={gallery.showOnHomepage}
+          coverPhotoUrl={gallery.coverPhotoUrl}
+          onSave={async (body) => {
+            await patch(body);
+            push("Design saved", "success");
+          }}
+        />
       ) : null}
 
-      {photos.length === 0 ? (
-        <EmptyState title="No photos yet" description="Upload gallery or sneak peek images." />
-      ) : (
-        <div className="space-y-8">
-          <PhotoGroup
-            title="Sneak peek"
-            photos={peekPhotos}
-            selected={selected}
-            onToggle={toggleSelect}
-            onToggleAll={(on) => toggleGroup(peekPhotos, on)}
-            onDeleteOne={(id) => void deleteIds([id])}
-            deleting={deleting}
-          />
-          <PhotoGroup
-            title="Gallery"
-            photos={mainPhotos}
-            selected={selected}
-            onToggle={toggleSelect}
-            onToggleAll={(on) => toggleGroup(mainPhotos, on)}
-            onDeleteOne={(id) => void deleteIds([id])}
-            deleting={deleting}
-          />
+      {tab === "photos" ? (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-3 border-y border-line py-3">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <Switch
+                checked={gallery.commentsEnabled}
+                onCheckedChange={(v) => void patch({ commentsEnabled: v })}
+                label="Comments"
+              />
+              Comments
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <Switch
+                checked={gallery.watermarkEnabled}
+                onCheckedChange={(v) => void patch({ watermarkEnabled: v })}
+                label="Watermark"
+              />
+              Watermark
+            </label>
+            <Field className="min-w-[10rem]">
+              <Label>Watermark preset</Label>
+              <Select
+                value={gallery.watermarkPresetId || ""}
+                onChange={(e) => void patch({ watermarkPresetId: e.target.value })}
+              >
+                <option value="">Studio default</option>
+                {watermarkPresets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Button
+              size="sm"
+              tone="ghost"
+              type="button"
+              onClick={() => void refreshWatermarks()}
+            >
+              Refresh watermarks
+            </Button>
+            <Field className="min-w-[8rem]">
+              <Label>PIN</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={resetPin}
+                  maxLength={4}
+                  placeholder="####"
+                  onChange={(e) =>
+                    setResetPin(e.target.value.replace(/\D/g, "").slice(0, 4))
+                  }
+                />
+                <Button
+                  size="sm"
+                  tone="neutral"
+                  onClick={async () => {
+                    if (!/^\d{4}$/.test(resetPin)) {
+                      push("PIN must be 4 digits", "danger");
+                      return;
+                    }
+                    await patch({ pin: resetPin });
+                    setResetPin("");
+                    push("PIN updated", "success");
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            </Field>
+          </div>
+
+          {selected.size > 0 ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-line/30 px-3 py-2">
+              <span className="text-sm">{selected.size} selected</span>
+              <Button
+                size="sm"
+                tone="danger"
+                disabled={deleting}
+                onClick={() => void deleteIds([...selected])}
+              >
+                Delete selected
+              </Button>
+              <Button
+                size="sm"
+                tone="ghost"
+                onClick={() => setSelected(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          ) : null}
+
+          {photos.length === 0 ? (
+            <EmptyState
+              title="No photos yet"
+              description="Upload gallery, sneak peek, or video."
+            />
+          ) : (
+            <div className="space-y-8">
+              <PhotoGroup
+                title="Sneak peek"
+                photos={peekPhotos}
+                selected={selected}
+                onToggle={toggleSelect}
+                onToggleAll={(on) => toggleGroup(peekPhotos, on)}
+                onDeleteOne={(id) => void deleteIds([id])}
+                deleting={deleting}
+              />
+              <PhotoGroup
+                title="Gallery"
+                photos={mainPhotos}
+                selected={selected}
+                onToggle={toggleSelect}
+                onToggleAll={(on) => toggleGroup(mainPhotos, on)}
+                onDeleteOne={(id) => void deleteIds([id])}
+                deleting={deleting}
+              />
+              <PhotoGroup
+                title="Video"
+                photos={videoPhotos}
+                selected={selected}
+                onToggle={toggleSelect}
+                onToggleAll={(on) => toggleGroup(videoPhotos, on)}
+                onDeleteOne={(id) => void deleteIds([id])}
+                deleting={deleting}
+              />
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

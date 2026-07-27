@@ -142,6 +142,26 @@ export function QuoteStep({
     }
   }
 
+  async function emailQuote() {
+    if (!proposal) return;
+    setBusy(true);
+    const res = await fetch(`/api/proposals/${proposal.id}/email`, {
+      method: "POST",
+    });
+    setBusy(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      push(data.error || "Could not email quote", "danger");
+      return;
+    }
+    if (data.emailed === false) {
+      push("Quote marked; email skipped (prefs or missing key)", "neutral");
+    } else {
+      push("Quote emailed", "success");
+    }
+    await onChanged();
+  }
+
   async function markSent(showToast = true) {
     if (!proposal) return;
     setBusy(true);
@@ -220,6 +240,13 @@ export function QuoteStep({
           <div className="flex flex-wrap gap-2">
             <Button disabled={busy} onClick={() => void copyLink()}>
               Copy &amp; mark sent
+            </Button>
+            <Button
+              tone="neutral"
+              disabled={busy}
+              onClick={() => void emailQuote()}
+            >
+              Email quote link
             </Button>
             {canShare ? (
               <Button

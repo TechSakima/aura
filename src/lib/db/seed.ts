@@ -7,11 +7,33 @@ export function createEmptyStudio(opts: {
   ownerEmail: string;
 }): Studio {
   const now = new Date().toISOString();
+  const id = opts.id || nanoid();
+  const slug =
+    (opts.name.trim() || "studio")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 40) || "studio";
   return {
-    id: opts.id || nanoid(),
+    id,
     name: opts.name.trim() || "My Studio",
     ownerEmail: opts.ownerEmail.toLowerCase(),
     brandTagline: "Photography, delivered with care",
+    timeZone: "America/Denver",
+    dateFormat: "mm/dd/yyyy",
+    theme: { background: "#F3F3F3", accent: "#1D1D1D", fontPreset: "sans" },
+    homepage: {
+      enabled: false,
+      slug: `${slug}-${id.slice(0, 6)}`,
+      showBiography: true,
+      showSocialLinks: true,
+      showWebsite: true,
+      showEmail: true,
+      showPhone: true,
+      showAddress: false,
+      sortOrder: "created_desc",
+    },
+    socialLinks: [],
     printPartners: [
       {
         id: nanoid(),
@@ -45,6 +67,27 @@ export function createStudioDatabase(studio: Studio): AuraDatabase {
       ...studio,
       defaultWatermarkPresetId: watermarkId,
     },
+    projects: [],
+    sessions: [],
+    clients: [],
+    shoots: [],
+    notifications: [],
+    paymentLinks: [],
+    invoices: [],
+    paymentTransactions: [],
+    contractTemplates: [],
+    contracts: [],
+    questionnaireTemplates: [],
+    questionnaireResponses: [],
+    sessionTypes: [],
+    bookingRequests: [],
+    ideaCards: [],
+    analyticsEvents: [],
+    galleries: [],
+    photos: [],
+    comments: [],
+    subAlbums: [],
+    proposals: [],
     watermarkPresets: [
       {
         id: watermarkId,
@@ -185,15 +228,6 @@ export function createStudioDatabase(studio: Studio): AuraDatabase {
         updatedAt: now,
       },
     ],
-    clients: [],
-    shoots: [],
-    proposals: [],
-    galleries: [],
-    photos: [],
-    comments: [],
-    subAlbums: [],
-    analyticsEvents: [],
-    ideaCards: [],
     shotListTemplates: [
       {
         id: nanoid(),

@@ -25,7 +25,7 @@ export async function PATCH(
   const { id } = await ctx.params;
   const body = await req.json();
   const client = await updateStudioDb(admin.studioId, (db) => {
-    const c = db.clients.find((x) => x.id === id);
+    const c = db.projects.find((x) => x.id === id);
     if (!c) return null;
     if (body.name != null) c.name = String(body.name);
     if (body.email != null) c.email = String(body.email);
@@ -46,7 +46,7 @@ export async function DELETE(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   await updateStudioDb(admin.studioId, (db) => {
-    db.clients = db.clients.filter((c) => c.id !== id);
+    db.projects = db.projects.filter((c) => c.id !== id);
   });
   return NextResponse.json({ ok: true });
 }

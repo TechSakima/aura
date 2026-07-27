@@ -23,32 +23,43 @@ export function AlbumView({
   actions?: ReactNode;
   emptyMessage?: string;
 }) {
+  const showHeader = Boolean(title || onBack || actions || subtitle);
   return (
-    <div className="min-h-full bg-canvas text-ink">
-      <header className="sticky top-0 z-20 border-b border-line bg-canvas/95 backdrop-blur">
-        <div className="shell-pad mx-auto flex max-w-[var(--shell-max)] flex-wrap items-center justify-between gap-3 py-3">
-          <div>
-            {onBack ? (
-              <button
-                type="button"
-                className="text-sm text-muted hover:text-ink"
-                onClick={onBack}
-              >
-                ← Back
-              </button>
-            ) : null}
-            <h1 className="font-display text-2xl sm:text-3xl">{title}</h1>
-            {subtitle ? (
-              <p className="text-sm text-muted">{subtitle}</p>
+    <div className={showHeader ? "min-h-full bg-canvas text-ink" : undefined}>
+      {showHeader ? (
+        <header className="sticky top-0 z-20 border-b border-line bg-canvas/95 backdrop-blur">
+          <div className="shell-pad mx-auto flex max-w-[var(--shell-max)] flex-wrap items-center justify-between gap-3 py-3">
+            <div>
+              {onBack ? (
+                <button
+                  type="button"
+                  className="text-sm text-muted hover:text-ink"
+                  onClick={onBack}
+                >
+                  ← Back
+                </button>
+              ) : null}
+              {title ? (
+                <h1 className="font-display text-2xl sm:text-3xl">{title}</h1>
+              ) : null}
+              {subtitle ? (
+                <p className="text-sm text-muted">{subtitle}</p>
+              ) : null}
+            </div>
+            {actions ? (
+              <div className="flex flex-wrap gap-2">{actions}</div>
             ) : null}
           </div>
-          {actions ? (
-            <div className="flex flex-wrap gap-2">{actions}</div>
-          ) : null}
-        </div>
-      </header>
+        </header>
+      ) : null}
 
-      <main className="shell-pad mx-auto max-w-[var(--shell-max)] py-6">
+      <main
+        className={
+          showHeader
+            ? "shell-pad mx-auto max-w-[var(--shell-max)] py-6"
+            : undefined
+        }
+      >
         {photos.length === 0 ? (
           <p className="py-16 text-center text-muted">
             {emptyMessage || "No photos in this album yet."}

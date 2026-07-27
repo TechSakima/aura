@@ -73,10 +73,10 @@ export function PrepStep({
       <div>
         <h2 className="font-display text-2xl">Prep</h2>
         <p className="mt-1 text-sm text-muted">
-          Attach a shot list for this shoot. Each shot can include a category, name,
-          and example photo.{" "}
+          Build this session&apos;s plan from your shot library — must-haves,
+          categories, and optional reference photos for shoot day.{" "}
           <Link href="/admin/prep" className="text-accent">
-            Manage shot lists in Prep
+            Manage shot library
           </Link>
         </p>
       </div>

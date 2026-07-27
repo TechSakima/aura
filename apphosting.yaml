@@ -54,3 +54,16 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://aura.stroburm.app
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: RESEND_FROM_EMAIL
+    value: Aura <notify@aura.stroburm.app>
+    availability:
+      - RUNTIME
+  - variable: RESEND_API_KEY
+    secret: RESEND_API_KEY
+    availability:
+      - RUNTIME

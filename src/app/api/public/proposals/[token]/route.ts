@@ -6,6 +6,7 @@ import {
 } from "@/lib/db/store";
 import { recordEvent } from "@/lib/analytics";
 import { resolveMediaUrl } from "@/lib/media-url";
+import { notifyQuoteAccepted } from "@/lib/notify/send";
 
 export async function GET(
   _req: Request,
@@ -20,8 +21,12 @@ export async function GET(
   const db = await readStudioDb(hit.studioId);
   const proposal = db.proposals.find((p) => p.token === token);
   if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const shoot = db.shoots.find((s) => s.id === proposal.shootId);
-  const client = shoot ? db.clients.find((c) => c.id === shoot.clientId) : null;
+  const session = db.sessions.find(
+    (s) => s.id === (proposal.sessionId || proposal.shootId),
+  );
+  const project = session
+    ? db.projects.find((c) => c.id === session.projectId)
+    : db.projects.find((c) => c.id === proposal.projectId) || null;
 
   await recordEvent({
     type: "proposal_view",
@@ -39,7 +44,7 @@ export async function GET(
       logoUrl: resolveMediaUrl(db.studio.logoUrl),
       brandTagline: db.studio.brandTagline,
     },
-    clientName: client?.name,
+    clientName: project?.name,
   });
 }
 
@@ -60,20 +65,40 @@ export async function POST(
     const proposal = db.proposals.find((p) => p.token === token);
     if (!proposal) return null;
     if (proposal.status === "accepted") {
-      return { proposal, already: true };
+      return {
+        proposal,
+        already: true,
+        projectId: proposal.projectId as string | undefined,
+        clientName: null as string | null,
+      };
     }
     proposal.intakeAnswers = body.intakeAnswers || {};
     proposal.selectedTierId = body.selectedTierId;
     proposal.status = "accepted";
     proposal.depositStatus = "awaited";
     proposal.updatedAt = now;
-    const shoot = db.shoots.find((s) => s.id === proposal.shootId);
-    if (shoot) {
-      shoot.status = "booked";
-      shoot.intakeAnswers = proposal.intakeAnswers;
-      shoot.updatedAt = now;
+    const session = db.sessions.find(
+      (s) => s.id === (proposal.sessionId || proposal.shootId),
+    );
+    if (session) {
+      session.status = "booked";
+      session.intakeAnswers = proposal.intakeAnswers;
+      session.updatedAt = now;
     }
-    return { proposal, already: false };
+    const projectId = proposal.projectId || session?.projectId;
+    const project = projectId
+      ? db.projects.find((p) => p.id === projectId)
+      : null;
+    if (project) {
+      project.stage = "booked";
+      project.updatedAt = now;
+    }
+    return {
+      proposal,
+      already: false,
+      projectId,
+      clientName: project?.name || null,
+    };
   });
 
   if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -84,6 +109,13 @@ export async function POST(
       studioId: result.proposal.studioId,
       proposalId: result.proposal.id,
       shootId: result.proposal.shootId,
+    });
+    await notifyQuoteAccepted({
+      studioId: result.proposal.studioId,
+      proposalId: result.proposal.id,
+      projectId: result.projectId,
+      title: result.proposal.title,
+      clientName: result.clientName || undefined,
     });
   }
 

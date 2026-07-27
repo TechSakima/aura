@@ -59,6 +59,22 @@ export async function PATCH(
             : Number(body.selectLimit);
       }
       if (body.coverPhotoUrl != null) g.coverPhotoUrl = String(body.coverPhotoUrl);
+      if (body.showOnHomepage != null) {
+        g.showOnHomepage = Boolean(body.showOnHomepage);
+      }
+      if (body.design && typeof body.design === "object") {
+        g.design = {
+          coverStyle: body.design.coverStyle || g.design?.coverStyle || "full",
+          themeId: body.design.themeId || g.design?.themeId || "echo",
+          gridMode: body.design.gridMode || g.design?.gridMode || "masonry",
+          coverPhotoId: body.design.coverPhotoId ?? g.design?.coverPhotoId,
+          coverFocalX: body.design.coverFocalX ?? g.design?.coverFocalX,
+          coverFocalY: body.design.coverFocalY ?? g.design?.coverFocalY,
+          background: body.design.background ?? g.design?.background,
+          accent: body.design.accent ?? g.design?.accent,
+          appIconUrl: body.design.appIconUrl ?? g.design?.appIconUrl,
+        };
+      }
       if (body.extendDays != null) {
         const base = new Date(g.expiresAt).getTime();
         g.expiresAt = new Date(
@@ -84,6 +100,36 @@ export async function PATCH(
     });
 
     if (!gallery) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    if (body.goLive) {
+      const { readStudioDb } = await import("@/lib/db/store");
+      const { emailGalleryLive } = await import("@/lib/notify/send");
+      const db = await readStudioDb(admin.studioId);
+      const g = db.galleries.find((x) => x.id === id);
+      if (g) {
+        const project =
+          db.projects.find((p) => p.id === g.projectId) ||
+          (() => {
+            const sid = g.sessionId || g.shootId;
+            const session = sid
+              ? db.sessions.find((s) => s.id === sid)
+              : null;
+            return session
+              ? db.projects.find((p) => p.id === session.projectId)
+              : null;
+          })();
+        if (project?.email) {
+          await emailGalleryLive({
+            studioId: admin.studioId,
+            to: project.email,
+            clientName: project.name,
+            galleryTitle: g.title,
+            publicToken: g.publicToken,
+          });
+        }
+      }
+    }
+
     const { downloadPinHash: _, ...safe } = gallery;
     return NextResponse.json({ gallery: safe, watermarksReprocessed: watermarkChanged });
   } catch (e) {

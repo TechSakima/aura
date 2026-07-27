@@ -31,6 +31,32 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [brandTagline, setBrandTagline] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
+  const [timeZone, setTimeZone] = useState("America/Denver");
+  const [dateFormat, setDateFormat] = useState("mm/dd/yyyy");
+  const [website, setWebsite] = useState("");
+  const [phone, setPhone] = useState("");
+  const [addressLine1, setAddressLine1] = useState("");
+  const [city, setCity] = useState("");
+  const [region, setRegion] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [coverLogoUrl, setCoverLogoUrl] = useState("");
+  const [fontPreset, setFontPreset] = useState<"sans" | "serif" | "display">(
+    "sans",
+  );
+  const [accent, setAccent] = useState("#1D1D1D");
+  const [background, setBackground] = useState("#F3F3F3");
+  const [homepageEnabled, setHomepageEnabled] = useState(false);
+  const [homepageSlug, setHomepageSlug] = useState("");
+  const [gcalConnected, setGcalConnected] = useState(false);
+  const [prefs, setPrefs] = useState({
+    emailQuoteAccepted: true,
+    emailPaymentReceived: true,
+    emailBookingSubmitted: true,
+    emailClientQuote: true,
+    emailClientGallery: true,
+    emailClientPayment: true,
+    emailClientBooking: true,
+  });
   const [defaultWatermarkPresetId, setDefaultWatermarkPresetId] = useState("");
   const [printPartners, setPrintPartners] = useState<PrintPartner[]>([]);
   const [presets, setPresets] = useState<WatermarkPreset[]>([]);
@@ -56,6 +82,35 @@ export default function SettingsPage() {
     setBrandTagline(data.studio.brandTagline || "");
     setOwnerEmail(data.studio.ownerEmail || "");
     setLogoUrl(data.studio.logoUrl || "");
+    setTimeZone(data.studio.timeZone || "America/Denver");
+    setDateFormat(data.studio.dateFormat || "mm/dd/yyyy");
+    setWebsite(data.studio.website || "");
+    setPhone(data.studio.phone || "");
+    setAddressLine1(data.studio.addressLine1 || "");
+    setCity(data.studio.city || "");
+    setRegion(data.studio.region || "");
+    setPostalCode(data.studio.postalCode || "");
+    setCoverLogoUrl(data.studio.coverLogoUrl || "");
+    setFontPreset(data.studio.theme?.fontPreset || "sans");
+    setAccent(data.studio.theme?.accent || "#1D1D1D");
+    setBackground(data.studio.theme?.background || "#F3F3F3");
+    setHomepageEnabled(Boolean(data.studio.homepage?.enabled));
+    setHomepageSlug(data.studio.homepage?.slug || "");
+    setGcalConnected(Boolean(data.studio.googleCalendarConnected));
+    setPrefs({
+      emailQuoteAccepted: data.studio.notificationPrefs?.emailQuoteAccepted !== false,
+      emailPaymentReceived:
+        data.studio.notificationPrefs?.emailPaymentReceived !== false,
+      emailBookingSubmitted:
+        data.studio.notificationPrefs?.emailBookingSubmitted !== false,
+      emailClientQuote: data.studio.notificationPrefs?.emailClientQuote !== false,
+      emailClientGallery:
+        data.studio.notificationPrefs?.emailClientGallery !== false,
+      emailClientPayment:
+        data.studio.notificationPrefs?.emailClientPayment !== false,
+      emailClientBooking:
+        data.studio.notificationPrefs?.emailClientBooking !== false,
+    });
     setDefaultWatermarkPresetId(data.studio.defaultWatermarkPresetId || "");
     setPrintPartners(data.studio.printPartners || []);
     setPresets(data.watermarkPresets || []);
@@ -95,6 +150,21 @@ export default function SettingsPage() {
         brandTagline,
         defaultWatermarkPresetId,
         printPartners,
+        timeZone,
+        dateFormat,
+        website,
+        phone,
+        addressLine1,
+        city,
+        region,
+        postalCode,
+        coverLogoUrl,
+        theme: { background, accent, fontPreset },
+        homepage: {
+          enabled: homepageEnabled,
+          slug: homepageSlug,
+        },
+        notificationPrefs: prefs,
       }),
     });
     if (!res.ok) {
@@ -102,6 +172,21 @@ export default function SettingsPage() {
       return;
     }
     push("Settings saved", "success");
+  }
+
+  async function connectGoogle() {
+    const res = await fetch("/api/integrations/google", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      push("Could not connect", "danger");
+      return;
+    }
+    if (data.authUrl) {
+      window.location.href = data.authUrl as string;
+      return;
+    }
+    setGcalConnected(Boolean(data.connected));
+    push(data.note || "Google Calendar updated", "success");
   }
 
   async function uploadLogo(files: File[]) {
@@ -191,7 +276,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Studio"
         title="Settings"
-        description="Brand, watermarks, and print partners."
+        description="Branding, business profile, homepage, and integrations."
         actions={
           <Button
             tone="ghost"
@@ -245,6 +330,15 @@ export default function SettingsPage() {
               />
             </Field>
             <Field>
+              <Label htmlFor="coverLogo">Cover / inverted logo URL</Label>
+              <Input
+                id="coverLogo"
+                value={coverLogoUrl}
+                onChange={(e) => setCoverLogoUrl(e.target.value)}
+                placeholder="Optional transparent PNG for dark covers"
+              />
+            </Field>
+            <Field>
               <Label htmlFor="wm">Default watermark</Label>
               <Select
                 id="wm"
@@ -262,9 +356,184 @@ export default function SettingsPage() {
                 )}
               </Select>
             </Field>
+            <Field>
+              <Label htmlFor="tz">Time zone</Label>
+              <Input
+                id="tz"
+                value={timeZone}
+                onChange={(e) => setTimeZone(e.target.value)}
+                placeholder="America/Denver"
+              />
+            </Field>
+            <Field>
+              <Label htmlFor="df">Date format</Label>
+              <Select
+                id="df"
+                value={dateFormat}
+                onChange={(e) => setDateFormat(e.target.value)}
+              >
+                <option value="mm/dd/yyyy">mm/dd/yyyy</option>
+                <option value="dd/mm/yyyy">dd/mm/yyyy</option>
+                <option value="yyyy-mm-dd">yyyy-mm-dd</option>
+              </Select>
+            </Field>
+            <Field>
+              <Label htmlFor="web">Website</Label>
+              <Input
+                id="web"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor="addr">Address</Label>
+              <Input
+                id="addr"
+                value={addressLine1}
+                onChange={(e) => setAddressLine1(e.target.value)}
+                placeholder="Street"
+              />
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <Input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="City"
+                />
+                <Input
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  placeholder="State"
+                />
+                <Input
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                  placeholder="ZIP"
+                />
+              </div>
+            </Field>
+            <Field>
+              <Label htmlFor="font">Font preset</Label>
+              <Select
+                id="font"
+                value={fontPreset}
+                onChange={(e) =>
+                  setFontPreset(e.target.value as "sans" | "serif" | "display")
+                }
+              >
+                <option value="sans">Sans</option>
+                <option value="serif">Serif</option>
+                <option value="display">Display</option>
+              </Select>
+            </Field>
+            <Field>
+              <Label htmlFor="accent">Accent color</Label>
+              <Input
+                id="accent"
+                value={accent}
+                onChange={(e) => setAccent(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor="bg">Background color</Label>
+              <Input
+                id="bg"
+                value={background}
+                onChange={(e) => setBackground(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor="slug">Gallery homepage slug</Label>
+              <Input
+                id="slug"
+                value={homepageSlug}
+                onChange={(e) => setHomepageSlug(e.target.value)}
+              />
+              <label className="mt-2 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={homepageEnabled}
+                  onChange={(e) => setHomepageEnabled(e.target.checked)}
+                />
+                Enable public homepage at /h/{homepageSlug || "…"}
+              </label>
+            </Field>
             <PartnerListEditor partners={printPartners} onChange={setPrintPartners} />
             <Button type="submit">Save studio</Button>
           </form>
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="mb-2 font-display text-2xl">Notifications</h2>
+          <p className="mb-4 text-sm text-muted">
+            Transactional email via Resend. In-app bell always records events.
+          </p>
+          <ul className="space-y-3 text-sm">
+            {(
+              [
+                ["emailQuoteAccepted", "Email me when a quote is accepted"],
+                ["emailPaymentReceived", "Email me when a payment is received"],
+                ["emailBookingSubmitted", "Email me on booking requests"],
+                ["emailClientQuote", "Email client when a quote is shared"],
+                ["emailClientGallery", "Email client when a gallery goes live"],
+                ["emailClientPayment", "Email client a payment receipt"],
+                ["emailClientBooking", "Email client booking confirmation"],
+              ] as const
+            ).map(([key, label]) => (
+              <li key={key}>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={prefs[key]}
+                    onChange={(e) =>
+                      setPrefs((p) => ({ ...p, [key]: e.target.checked }))
+                    }
+                  />
+                  {label}
+                </label>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-muted">
+            Saved with Studio settings.
+          </p>
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="mb-2 font-display text-2xl">Integrations</h2>
+          <p className="mb-4 text-sm text-muted">
+            Google Calendar sync (Zoom is not supported).{" "}
+            {gcalConnected ? "Connected." : "Not connected."}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={() => void connectGoogle()}>
+              {gcalConnected ? "Refresh connection" : "Connect Google Calendar"}
+            </Button>
+            {gcalConnected ? (
+              <Button
+                type="button"
+                tone="neutral"
+                onClick={async () => {
+                  await fetch("/api/integrations/google", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "disconnect" }),
+                  });
+                  setGcalConnected(false);
+                  push("Disconnected", "success");
+                }}
+              >
+                Disconnect
+              </Button>
+            ) : null}
+          </div>
         </Card>
 
         <Card className="space-y-6 p-5">

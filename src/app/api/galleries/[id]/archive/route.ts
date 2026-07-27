@@ -15,25 +15,30 @@ export async function POST(
   const gallery = db.galleries.find((g) => g.id === id);
   if (!gallery) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const shoot = db.shoots.find((s) => s.id === gallery.shootId);
-  const client = shoot ? db.clients.find((c) => c.id === shoot.clientId) : null;
-  const proposal = shoot?.proposalId
-    ? db.proposals.find((p) => p.id === shoot.proposalId)
+  const sessionId = gallery.sessionId || gallery.shootId;
+  const session = sessionId
+    ? db.sessions.find((s) => s.id === sessionId)
+    : null;
+  const project = session
+    ? db.projects.find((c) => c.id === session.projectId)
+    : null;
+  const proposal = session?.proposalId
+    ? db.proposals.find((p) => p.id === session.proposalId)
     : null;
   const photos = db.photos.filter((p) => p.galleryId === id);
 
   const zip = new JSZip();
   const details = [
     `Gallery: ${gallery.title}`,
-    `Client: ${client?.name || "—"}`,
-    `Email: ${client?.email || "—"}`,
-    `Phone: ${client?.phone || "—"}`,
-    `Shoot type: ${shoot?.type || "—"}`,
-    `Shoot date: ${shoot?.shootDate || "—"}`,
-    `Status: ${shoot?.status || "—"}`,
+    `Client: ${project?.name || "—"}`,
+    `Email: ${project?.email || "—"}`,
+    `Phone: ${project?.phone || "—"}`,
+    `Shoot type: ${session?.type || "—"}`,
+    `Shoot date: ${session?.startsAt || "—"}`,
+    `Status: ${session?.status || "—"}`,
     "",
     "Intake answers:",
-    JSON.stringify(shoot?.intakeAnswers || proposal?.intakeAnswers || {}, null, 2),
+    JSON.stringify(session?.intakeAnswers || proposal?.intakeAnswers || {}, null, 2),
     "",
     `Archived at: ${new Date().toISOString()}`,
   ].join("\n");
@@ -72,10 +77,12 @@ export async function POST(
       g.updatedAt = new Date().toISOString();
     }
     d.photos = d.photos.filter((p) => p.galleryId !== id);
-    const s = d.shoots.find((x) => x.id === gallery.shootId);
-    if (s) {
-      s.status = "archived";
-      s.updatedAt = new Date().toISOString();
+    const linked = d.sessions.find(
+      (x) => x.id === (gallery.sessionId || gallery.shootId),
+    );
+    if (linked) {
+      linked.status = "archived";
+      linked.updatedAt = new Date().toISOString();
     }
   });
 

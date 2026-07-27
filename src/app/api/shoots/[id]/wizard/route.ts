@@ -11,17 +11,23 @@ export async function GET(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const db = await readStudioDb(admin.studioId);
-  const shoot = db.shoots.find((s) => s.id === id);
-  if (!shoot) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const session = db.sessions.find((s) => s.id === id);
+  if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const client = db.clients.find((c) => c.id === shoot.clientId) || null;
-  const proposal = shoot.proposalId
-    ? db.proposals.find((p) => p.id === shoot.proposalId) || null
-    : db.proposals.find((p) => p.shootId === id) || null;
-  const plan = db.shootPlans.find((p) => p.shootId === id) || null;
-  const gallery = shoot.galleryId
-    ? db.galleries.find((g) => g.id === shoot.galleryId) || null
-    : db.galleries.find((g) => g.shootId === id) || null;
+  const project =
+    db.projects.find((c) => c.id === session.projectId) || null;
+  const proposal = session.proposalId
+    ? db.proposals.find((p) => p.id === session.proposalId) || null
+    : db.proposals.find(
+        (p) => (p.sessionId || p.shootId) === id,
+      ) || null;
+  const plan =
+    db.shootPlans.find((p) => p.sessionId === id || p.shootId === id) || null;
+  const gallery = session.galleryId
+    ? db.galleries.find((g) => g.id === session.galleryId) || null
+    : db.galleries.find(
+        (g) => (g.sessionId || g.shootId) === id,
+      ) || null;
   const photos = gallery
     ? db.photos.filter((p) => p.galleryId === gallery.id)
     : [];
@@ -35,7 +41,7 @@ export async function GET(
     : null;
 
   const progress = deriveWizardProgress({
-    shoot,
+    shoot: session,
     proposal,
     plan,
     gallery,
@@ -43,8 +49,8 @@ export async function GET(
   });
 
   return NextResponse.json({
-    client,
-    shoot,
+    client: project,
+    shoot: session,
     proposal,
     plan,
     gallery: safeGallery,
@@ -54,6 +60,7 @@ export async function GET(
       kind: p.kind,
       thumbUrl: p.thumbUrl,
       watermarkedUrl: p.watermarkedUrl,
+      videoUrl: p.videoUrl,
       version: p.version,
       sortOrder: p.sortOrder,
     })),

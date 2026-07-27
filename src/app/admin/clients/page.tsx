@@ -25,16 +25,17 @@ export default function ClientsPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [projectType, setProjectType] = useState("Wedding");
   const [q, setQ] = useState("");
 
   async function load() {
     const res = await fetch("/api/clients");
     if (!res.ok) {
-      push("Could not load clients", "danger");
+      push("Could not load projects", "danger");
       return;
     }
     const data = await res.json();
-    setClients(data.clients || []);
+    setClients(data.projects || data.clients || []);
   }
 
   useEffect(() => {
@@ -53,18 +54,19 @@ export default function ClientsPage() {
     const res = await fetch("/api/clients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, phone, notes }),
+      body: JSON.stringify({ name, email, phone, notes, type: projectType }),
     });
     if (!res.ok) {
-      push("Could not save client", "danger");
+      push("Could not save project", "danger");
       return;
     }
     const data = await res.json();
-    setClients((prev) => [data.client, ...prev]);
+    const project = data.project || data.client;
+    setClients((prev) => [project, ...prev]);
     resetForm();
     setAdding(false);
-    push("Client saved — open them to start a shoot workflow", "success");
-    router.push(`/admin/clients/${data.client.id}`);
+    push("Project saved — open it to add sessions and run the workflow", "success");
+    router.push(`/admin/projects/${project.id}`);
   }
 
   const filtered = clients.filter((c) => {
@@ -80,9 +82,9 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Directory"
-        title="Clients"
-        description="Open a client to continue their shoot workflow."
+        eyebrow="Studio"
+        title="Projects"
+        description="Jobs and engagements — each project can have multiple sessions."
         actions={
           adding ? (
             <Button
@@ -101,7 +103,7 @@ export default function ClientsPage() {
                 setQ("");
               }}
             >
-              Add client
+              New project
             </Button>
           )
         }
@@ -109,10 +111,10 @@ export default function ClientsPage() {
 
       {adding ? (
         <Card className="mx-auto max-w-lg p-5">
-          <h2 className="mb-4 font-display text-2xl">New client</h2>
+          <h2 className="mb-4 font-display text-2xl">New project</h2>
           <form onSubmit={onCreate} className="space-y-4">
             <Field>
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">Client / project name</Label>
               <Input
                 id="name"
                 value={name}
@@ -132,6 +134,15 @@ export default function ClientsPage() {
               />
             </Field>
             <Field>
+              <Label htmlFor="type">Type</Label>
+              <Input
+                id="type"
+                value={projectType}
+                onChange={(e) => setProjectType(e.target.value)}
+                placeholder="Wedding, Portrait…"
+              />
+            </Field>
+            <Field>
               <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
@@ -148,7 +159,7 @@ export default function ClientsPage() {
               />
             </Field>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit">Save client</Button>
+              <Button type="submit">Save project</Button>
               <Button
                 type="button"
                 tone="ghost"
@@ -175,10 +186,10 @@ export default function ClientsPage() {
           </Field>
           {filtered.length === 0 ? (
             <EmptyState
-              title={clients.length === 0 ? "No clients yet" : "No matches"}
+              title={clients.length === 0 ? "No projects yet" : "No matches"}
               description={
                 clients.length === 0
-                  ? "Add your first contact to start a shoot workflow."
+                  ? "Create a project, then add sessions for each shoot day."
                   : "Try a different search."
               }
             />
@@ -191,14 +202,16 @@ export default function ClientsPage() {
                 >
                   <div>
                     <Link
-                      href={`/admin/clients/${c.id}`}
+                      href={`/admin/projects/${c.id}`}
                       className="font-display text-xl text-ink no-underline hover:opacity-80"
                     >
                       {c.name}
                     </Link>
-                    <p className="text-sm text-muted">{c.email}</p>
+                    <p className="text-sm text-muted">
+                      {c.type || "Project"} · {c.stage || "inquiry"} · {c.email}
+                    </p>
                   </div>
-                  <Link href={`/admin/clients/${c.id}`}>
+                  <Link href={`/admin/projects/${c.id}`}>
                     <Button size="sm" tone="neutral">
                       Open
                     </Button>

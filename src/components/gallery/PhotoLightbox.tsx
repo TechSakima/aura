@@ -84,13 +84,23 @@ export function PhotoLightbox({
           </button>
         ) : null}
 
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          key={photo.id}
-          src={photo.url}
-          alt=""
-          className="max-h-full max-w-full object-contain animate-enter"
-        />
+        {photo.kind === "video" || photo.videoUrl ? (
+          <video
+            key={photo.id}
+            src={photo.videoUrl || photo.url}
+            controls
+            playsInline
+            className="max-h-full max-w-full animate-enter"
+          />
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            key={photo.id}
+            src={photo.url}
+            alt=""
+            className="max-h-full max-w-full object-contain animate-enter"
+          />
+        )}
       </div>
 
       {footer ? (

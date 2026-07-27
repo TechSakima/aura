@@ -12,11 +12,12 @@ export async function GET(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const db = await readStudioDb(admin.studioId);
-  const plan = db.shootPlans.find((p) => p.shootId === id) || null;
-  const shoot = db.shoots.find((s) => s.id === id) || null;
+  const plan =
+    db.shootPlans.find((p) => p.sessionId === id || p.shootId === id) || null;
+  const session = db.sessions.find((s) => s.id === id) || null;
   return NextResponse.json({
     plan,
-    shoot,
+    shoot: session,
     templates: db.shotListTemplates,
   });
 }
@@ -32,14 +33,16 @@ export async function POST(
   const now = new Date().toISOString();
 
   const plan = await updateStudioDb(admin.studioId, (db) => {
-    const shoot = db.shoots.find((s) => s.id === id);
-    if (!shoot) return null;
-    const existing = db.shootPlans.find((p) => p.shootId === id);
+    const session = db.sessions.find((s) => s.id === id);
+    if (!session) return null;
+    const existing = db.shootPlans.find(
+      (p) => p.sessionId === id || p.shootId === id,
+    );
     if (existing && !body.force) return existing;
 
     const template = body.templateId
       ? db.shotListTemplates.find((t) => t.id === body.templateId)
-      : db.shotListTemplates.find((t) => t.shootType === shoot.type) ||
+      : db.shotListTemplates.find((t) => t.shootType === session.type) ||
         db.shotListTemplates[0];
 
     const items: ShotItem[] = (template?.items || []).map((item) => {
@@ -58,12 +61,12 @@ export async function POST(
     });
 
     // Merge intake must-haves as extra items
-    if (shoot.intakeAnswers) {
-      for (const [key, value] of Object.entries(shoot.intakeAnswers)) {
+    if (session.intakeAnswers) {
+      for (const [key, value] of Object.entries(session.intakeAnswers)) {
         if (!value?.trim()) continue;
         const qLabel =
           db.proposals
-            .find((p) => p.id === shoot.proposalId)
+            .find((p) => p.id === session.proposalId)
             ?.intakeSchema.find((q) => q.id === key)?.label || key;
         if (/must|moment|pose|shot/i.test(qLabel) || /must|moment/i.test(value)) {
           items.push({
@@ -82,8 +85,9 @@ export async function POST(
     const next = {
       id: existing?.id || nanoid(),
       studioId: admin.studioId,
+      sessionId: id,
       shootId: id,
-      title: String(body.title || `${shoot.type} plan`),
+      title: String(body.title || `${session.type} plan`),
       templateId: template?.id,
       items,
       dayNotes: existing?.dayNotes || "",
@@ -114,7 +118,7 @@ export async function PATCH(
   const body = await req.json();
 
   const plan = await updateStudioDb(admin.studioId, (db) => {
-    const p = db.shootPlans.find((x) => x.shootId === id);
+    const p = db.shootPlans.find((x) => x.sessionId === id || x.shootId === id);
     if (!p) return null;
     if (body.title != null) p.title = String(body.title);
     if (body.dayNotes != null) p.dayNotes = String(body.dayNotes);

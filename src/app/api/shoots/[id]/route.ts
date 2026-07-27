@@ -37,11 +37,12 @@ export async function PATCH(
   const { id } = await ctx.params;
   const body = await req.json();
   const shoot = await updateStudioDb(admin.studioId, (db) => {
-    const s = db.shoots.find((x) => x.id === id);
+    const s = db.sessions.find((x) => x.id === id);
     if (!s) return null;
     if (body.type != null) s.type = String(body.type);
-    if (body.shootDate !== undefined) {
-      s.shootDate = body.shootDate ? String(body.shootDate) : undefined;
+    if (body.startsAt !== undefined || body.shootDate !== undefined) {
+      const raw = body.startsAt ?? body.shootDate;
+      s.startsAt = raw ? String(raw) : undefined;
     }
     if (body.status != null) s.status = body.status as ShootStatus;
     if (body.wizardSkippedProposal != null) {

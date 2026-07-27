@@ -4,10 +4,18 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Badge, Button, PageHeader, SectionIntro } from "@/components/ui";
 
-
 type Dash = {
-  studio: { name: string; brandTagline?: string };
+  studio: { name: string; brandTagline?: string; timeZone?: string };
   counts: Record<string, number>;
+  upcomingSession: {
+    id: string;
+    projectId: string;
+    projectName: string;
+    type: string;
+    startsAt?: string;
+    helperHref: string;
+    projectHref: string;
+  } | null;
   awaitingProposals: { id: string; title: string; token: string }[];
   expiringGalleries: {
     id: string;
@@ -19,8 +27,8 @@ type Dash = {
 };
 
 const COUNT_LABELS: Record<string, string> = {
-  clients: "Clients",
-  shoots: "Shoots",
+  projects: "Projects",
+  sessions: "Sessions",
   quotes: "Quotes",
   galleries: "Galleries",
 };
@@ -39,12 +47,53 @@ export default function AdminDashboard() {
     return <p className="text-muted">Loading dashboard…</p>;
   }
 
+  const upcomingLabel = data.upcomingSession?.startsAt
+    ? new Date(data.upcomingSession.startsAt).toLocaleString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : null;
+
   return (
     <div className="space-y-12">
       <PageHeader
         title="Dashboard"
-        description="Quotes waiting, galleries closing, and work to wrap."
+        description="Next session, quotes waiting, and galleries closing."
       />
+
+      {data.upcomingSession ? (
+        <section className="border border-line bg-surface px-6 py-8">
+          <p className="text-xs uppercase tracking-[0.16em] text-muted">
+            Next session
+          </p>
+          <h2 className="mt-2 font-display text-3xl tracking-tight">
+            {data.upcomingSession.projectName}
+          </h2>
+          <p className="mt-1 text-muted">
+            {data.upcomingSession.type}
+            {upcomingLabel ? ` · ${upcomingLabel}` : ""}
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href={data.upcomingSession.helperHref}>
+              <Button size="lg">Open shoot day</Button>
+            </Link>
+            <Link href={data.upcomingSession.projectHref}>
+              <Button size="lg" tone="neutral">
+                Open project
+              </Button>
+            </Link>
+          </div>
+        </section>
+      ) : (
+        <section className="border border-dashed border-line px-6 py-8">
+          <p className="text-sm text-muted">
+            No upcoming sessions. Add a session date on a project to see it here.
+          </p>
+        </section>
+      )}
 
       <section className="grid gap-6 border-b border-line pb-10 sm:grid-cols-2 lg:grid-cols-4">
         {Object.entries(data.counts).map(([key, value]) => (
@@ -104,54 +153,19 @@ export default function AdminDashboard() {
                   className="flex items-center justify-between gap-3 py-4"
                 >
                   <div>
-                    <p className="font-medium">{g.title}</p>
-                    <p className="text-sm text-muted">
-                      Expires {new Date(g.expiresAt).toLocaleDateString()}
-                    </p>
+                    <span className="font-medium">{g.title}</span>
+                    <Badge className="ml-2">
+                      {new Date(g.expiresAt).toLocaleDateString()}
+                    </Badge>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <a
-                      className="text-sm text-accent"
-                      href={`/g/${g.publicToken}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      View
-                    </a>
-                    <Badge tone="accent">Soon</Badge>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="space-y-5 lg:col-span-2">
-          <SectionIntro
-            eyebrow="Wrap"
-            title="Archive queue"
-            description="Expired galleries ready to close out."
-          />
-          {data.archiveFlags.length === 0 ? (
-            <p className="text-sm text-muted">Nothing waiting to archive.</p>
-          ) : (
-            <ul className="divide-y divide-line border-y border-line">
-              {data.archiveFlags.map((g) => (
-                <li
-                  key={g.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-4"
-                >
-                  <div>
-                    <p className="font-medium">{g.title}</p>
-                    <p className="text-sm text-muted">
-                      Expired {new Date(g.expiresAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <Link href={`/admin/galleries/${g.id}`}>
-                    <Button size="sm" tone="danger">
-                      Review & archive
-                    </Button>
-                  </Link>
+                  <a
+                    className="text-sm text-accent"
+                    href={`/g/${g.publicToken}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open
+                  </a>
                 </li>
               ))}
             </ul>

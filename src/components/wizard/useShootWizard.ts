@@ -14,7 +14,9 @@ import { isWizardStepId } from "@/lib/wizard/steps";
 
 export type WizardGallery = {
   id: string;
-  shootId: string;
+  shootId?: string;
+  sessionId?: string;
+  projectId?: string;
   publicToken: string;
   title: string;
   commentsEnabled: boolean;
@@ -25,6 +27,8 @@ export type WizardGallery = {
   expiresAt: string;
   favoritePhotoIds: string[];
   coverPhotoUrl?: string;
+  design?: import("@/lib/types").GalleryDesign;
+  showOnHomepage?: boolean;
 };
 
 export type WizardPhoto = {
@@ -32,6 +36,7 @@ export type WizardPhoto = {
   kind: string;
   thumbUrl: string;
   watermarkedUrl: string;
+  videoUrl?: string;
   version: number;
   sortOrder: number;
 };

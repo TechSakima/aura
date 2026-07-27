@@ -63,10 +63,12 @@ export async function deleteShootCascade(
   shootId: string,
 ): Promise<boolean> {
   const db = await readStudioDb(studioId);
-  const shoot = db.shoots.find((s) => s.id === shootId);
-  if (!shoot) return false;
+  const session = db.sessions.find((s) => s.id === shootId);
+  if (!session) return false;
 
-  const galleries = db.galleries.filter((g) => g.shootId === shootId);
+  const galleries = db.galleries.filter(
+    (g) => (g.sessionId || g.shootId) === shootId,
+  );
   const galleryIds = new Set(galleries.map((g) => g.id));
   const photos = db.photos.filter((p) => galleryIds.has(p.galleryId));
 
@@ -78,16 +80,23 @@ export async function deleteShootCascade(
     d.photos = d.photos.filter((p) => !galleryIds.has(p.galleryId));
     d.comments = d.comments.filter((c) => !galleryIds.has(c.galleryId));
     d.subAlbums = d.subAlbums.filter((a) => !galleryIds.has(a.galleryId));
-    d.galleries = d.galleries.filter((g) => g.shootId !== shootId);
-    d.shootPlans = d.shootPlans.filter((p) => p.shootId !== shootId);
-    d.proposals = d.proposals.filter((p) => p.shootId !== shootId);
+    d.galleries = d.galleries.filter(
+      (g) => (g.sessionId || g.shootId) !== shootId,
+    );
+    d.shootPlans = d.shootPlans.filter(
+      (p) => p.sessionId !== shootId && p.shootId !== shootId,
+    );
+    d.proposals = d.proposals.filter(
+      (p) => (p.sessionId || p.shootId) !== shootId,
+    );
     d.analyticsEvents = d.analyticsEvents.filter(
       (e) =>
+        e.sessionId !== shootId &&
         e.shootId !== shootId &&
         !(e.galleryId && galleryIds.has(e.galleryId)) &&
-        !(e.proposalId && shoot.proposalId === e.proposalId),
+        !(e.proposalId && session.proposalId === e.proposalId),
     );
-    d.shoots = d.shoots.filter((s) => s.id !== shootId);
+    d.sessions = d.sessions.filter((s) => s.id !== shootId);
   });
 
   return true;
@@ -107,17 +116,19 @@ export async function deleteProposalCascade(
     d.analyticsEvents = d.analyticsEvents.filter(
       (e) => e.proposalId !== proposalId,
     );
-    const shoot = d.shoots.find((s) => s.id === proposal.shootId);
-    if (shoot) {
-      if (shoot.proposalId === proposalId) {
-        shoot.proposalId = undefined;
+    const session = d.sessions.find(
+      (s) => s.id === (proposal.sessionId || proposal.shootId),
+    );
+    if (session) {
+      if (session.proposalId === proposalId) {
+        session.proposalId = undefined;
       }
       // Revert booking that came from this proposal (keep if already delivered/archived)
-      if (shoot.status === "proposed" || shoot.status === "booked") {
-        shoot.status = "inquiry";
+      if (session.status === "proposed" || session.status === "booked") {
+        session.status = "inquiry";
       }
-      shoot.wizardSkippedProposal = false;
-      shoot.updatedAt = new Date().toISOString();
+      session.wizardSkippedProposal = false;
+      session.updatedAt = new Date().toISOString();
     }
   });
 

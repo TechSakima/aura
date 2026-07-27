@@ -11,8 +11,8 @@ export async function GET() {
   const db = await readStudioDb(admin.studioId);
   return NextResponse.json({
     galleries: db.galleries.map(({ downloadPinHash: _, ...g }) => g),
-    shoots: db.shoots,
-    clients: db.clients.map((c) => ({
+    shoots: db.sessions,
+    clients: db.projects.map((c) => ({
       id: c.id,
       name: c.name,
       email: c.email,
@@ -45,10 +45,13 @@ export async function POST(req: Request) {
       now.getTime() + 60 * 24 * 60 * 60 * 1000,
     ).toISOString();
 
+    const sessionId = String(body.shootId);
     const gallery = {
       id: nanoid(),
       studioId: admin.studioId,
-      shootId: String(body.shootId),
+      projectId: "",
+      sessionId,
+      shootId: sessionId,
       publicToken: publicToken(),
       title: String(body.title),
       downloadPinHash: pinHash,
@@ -65,17 +68,19 @@ export async function POST(req: Request) {
     };
 
     const db = await readStudioDb(admin.studioId);
-    if (!db.shoots.some((s) => s.id === gallery.shootId)) {
+    const session = db.sessions.find((s) => s.id === sessionId);
+    if (!session) {
       return NextResponse.json({ error: "Shoot not found" }, { status: 400 });
     }
+    gallery.projectId = session.projectId;
 
     await updateStudioDb(admin.studioId, (d) => {
       d.galleries.unshift(gallery);
-      const shoot = d.shoots.find((s) => s.id === gallery.shootId);
-      if (shoot) {
-        shoot.galleryId = gallery.id;
-        if (live) shoot.status = "delivered";
-        shoot.updatedAt = now.toISOString();
+      const linked = d.sessions.find((s) => s.id === sessionId);
+      if (linked) {
+        linked.galleryId = gallery.id;
+        if (live) linked.status = "delivered";
+        linked.updatedAt = now.toISOString();
       }
     });
 

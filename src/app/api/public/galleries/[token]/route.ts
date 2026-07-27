@@ -36,14 +36,23 @@ export async function GET(
       id: p.id,
       kind: p.kind,
       thumbUrl: p.thumbUrl,
-      url: gallery.watermarkEnabled ? p.watermarkedUrl : p.webUrl,
+      url:
+        p.kind === "video"
+          ? p.videoUrl || p.webUrl
+          : gallery.watermarkEnabled
+            ? p.watermarkedUrl
+            : p.webUrl,
+      videoUrl: p.videoUrl,
       aspect: p.aspect,
       version: p.version,
     }));
 
-  const shoot = db.shoots.find((s) => s.id === gallery.shootId);
-  const client = shoot
-    ? db.clients.find((c) => c.id === shoot.clientId)
+  const sessionId = gallery.sessionId || gallery.shootId;
+  const session = sessionId
+    ? db.sessions.find((s) => s.id === sessionId)
+    : null;
+  const project = session
+    ? db.projects.find((c) => c.id === session.projectId)
     : null;
 
   const photoById = new Map(photos.map((p) => [p.id, p]));
@@ -72,7 +81,7 @@ export async function GET(
   return NextResponse.json({
     gallery: safe,
     photos,
-    clientName: client?.name || null,
+    clientName: project?.name || null,
     subAlbums,
     studio: {
       name: db.studio.name,

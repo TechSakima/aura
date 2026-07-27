@@ -10,8 +10,8 @@ export async function GET() {
   const db = await readStudioDb(admin.studioId);
   return NextResponse.json({
     proposals: db.proposals,
-    shoots: db.shoots,
-    clients: db.clients,
+    shoots: db.sessions,
+    clients: db.projects,
     packages: db.packageTemplates,
   });
 }
@@ -25,8 +25,8 @@ export async function POST(req: Request) {
   }
 
   const db = await readStudioDb(admin.studioId);
-  const shoot = db.shoots.find((s) => s.id === body.shootId);
-  if (!shoot) return NextResponse.json({ error: "Shoot not found" }, { status: 404 });
+  const session = db.sessions.find((s) => s.id === body.shootId);
+  if (!session) return NextResponse.json({ error: "Shoot not found" }, { status: 404 });
 
   const pkg = body.packageTemplateId
     ? db.packageTemplates.find((p) => p.id === body.packageTemplateId)
@@ -37,10 +37,12 @@ export async function POST(req: Request) {
     id: nanoid(),
     studioId: admin.studioId,
     token: publicToken(),
-    shootId: shoot.id,
+    projectId: session.projectId,
+    sessionId: session.id,
+    shootId: session.id,
     packageTemplateId: pkg?.id,
     status: "draft" as const,
-    title: String(body.title || `${pkg?.name || shoot.type} Quote`),
+    title: String(body.title || `${pkg?.name || session.type} Quote`),
     moodBoard: body.moodBoard || [],
     tiers: body.tiers || pkg?.defaultPricing || [],
     inclusions: body.inclusions || pkg?.inclusions || [],
@@ -54,9 +56,11 @@ export async function POST(req: Request) {
 
   await updateStudioDb(admin.studioId, (d) => {
     // Replace any existing proposal for this shoot (change package)
-    d.proposals = d.proposals.filter((p) => p.shootId !== shoot.id);
+    d.proposals = d.proposals.filter(
+      (p) => (p.sessionId || p.shootId) !== session.id,
+    );
     d.proposals.unshift(proposal);
-    const s = d.shoots.find((x) => x.id === shoot.id);
+    const s = d.sessions.find((x) => x.id === session.id);
     if (s) {
       s.proposalId = proposal.id;
       s.status = "proposed";

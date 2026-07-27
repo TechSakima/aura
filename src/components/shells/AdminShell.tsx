@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NotificationBell } from "@/components/shells/NotificationBell";
 import { cn } from "@/lib/cn";
 import { resolveMediaUrl } from "@/lib/media-url";
 import type { ReactNode } from "react";
@@ -9,9 +10,10 @@ import type { ReactNode } from "react";
 const nav = [
   { href: "/admin", label: "Dashboard", match: (p: string) => p === "/admin" },
   {
-    href: "/admin/clients",
-    label: "Clients",
+    href: "/admin/projects",
+    label: "Projects",
     match: (p: string) =>
+      p.startsWith("/admin/projects") ||
       p.startsWith("/admin/clients") ||
       p.startsWith("/admin/shoots") ||
       p.startsWith("/admin/galleries") ||
@@ -25,6 +27,22 @@ const nav = [
       p.startsWith("/admin/ideas") ||
       p.startsWith("/admin/shot-lists") ||
       p.startsWith("/admin/packages"),
+  },
+  {
+    href: "/admin/payments",
+    label: "Payments",
+    match: (p: string) => p.startsWith("/admin/payments"),
+  },
+  {
+    href: "/admin/documents",
+    label: "Documents",
+    match: (p: string) =>
+      p.startsWith("/admin/documents") || p.startsWith("/admin/templates"),
+  },
+  {
+    href: "/admin/bookings",
+    label: "Bookings",
+    match: (p: string) => p.startsWith("/admin/bookings"),
   },
   {
     href: "/admin/analytics",
@@ -73,28 +91,31 @@ export function AdminShell({
               {studioName}
             </span>
           </Link>
-          <nav className="overflow-x-auto">
-            <ul className="flex min-w-max items-center gap-1">
-              {nav.map((item) => {
-                const active = item.match(pathname);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "inline-flex min-h-10 items-center rounded-md px-3 text-sm no-underline transition-colors",
-                        active
-                          ? "bg-ink text-surface"
-                          : "text-muted hover:bg-line/50 hover:text-ink",
-                      )}
-                    >
-                      {item.label}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <nav className="overflow-x-auto">
+              <ul className="flex min-w-max items-center gap-1">
+                {nav.map((item) => {
+                  const active = item.match(pathname);
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "inline-flex min-h-10 items-center rounded-md px-3 text-sm no-underline transition-colors",
+                          active
+                            ? "bg-ink text-surface"
+                            : "text-muted hover:bg-line/50 hover:text-ink",
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+          </div>
         </div>
       </header>
       <main className="shell-pad mx-auto w-full max-w-[var(--shell-max)] py-10 animate-enter sm:py-12">

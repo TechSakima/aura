@@ -11,6 +11,7 @@ export function GalleryHero({
   clientName,
   title,
   daysLeft,
+  compact = false,
 }: {
   images: string[];
   studioName: string;
@@ -18,9 +19,14 @@ export function GalleryHero({
   clientName?: string | null;
   title: string;
   daysLeft?: number | null;
+  /** Third-height cover (Pixieset-style) */
+  compact?: boolean;
 }) {
   const slides = images.length ? images : [];
   const [index, setIndex] = useState(0);
+  const minH = compact
+    ? "min-h-[32vh] sm:min-h-[36vh]"
+    : "min-h-[78vh] sm:min-h-[88vh]";
 
   useEffect(() => {
     if (slides.length < 2) return;
@@ -31,7 +37,12 @@ export function GalleryHero({
   }, [slides.length]);
 
   return (
-    <section className="relative min-h-[78vh] w-full overflow-hidden bg-ink text-surface sm:min-h-[88vh]">
+    <section
+      className={cn(
+        "relative w-full overflow-hidden bg-ink text-surface",
+        minH,
+      )}
+    >
       {slides.length ? (
         slides.map((src, i) => (
           // eslint-disable-next-line @next/next/no-img-element
@@ -51,7 +62,12 @@ export function GalleryHero({
 
       <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/35 to-ink/25" />
 
-      <div className="relative z-10 flex min-h-[78vh] flex-col justify-end px-5 pb-14 pt-10 sm:min-h-[88vh] sm:px-10 sm:pb-16">
+      <div
+        className={cn(
+          "relative z-10 flex flex-col justify-end px-5 pb-10 pt-8 sm:px-10 sm:pb-12",
+          minH,
+        )}
+      >
         <div className="mx-auto w-full max-w-[var(--shell-max)] animate-enter">
           <StudioMark logoUrl={studioLogoUrl} name={studioName} tone="light" />
 

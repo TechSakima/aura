@@ -28,13 +28,18 @@ export async function POST(
     const gallery = await updateStudioDb(admin.studioId, (db) => {
       const proposal = db.proposals.find((p) => p.id === id);
       if (!proposal) return null;
-      const existing = db.galleries.find((g) => g.shootId === proposal.shootId);
+      const sessionId = proposal.sessionId || proposal.shootId;
+      const existing = db.galleries.find(
+        (g) => (g.sessionId || g.shootId) === sessionId,
+      );
       if (existing) return existing;
 
       const g = {
         id: nanoid(),
         studioId: admin.studioId,
-        shootId: proposal.shootId,
+        projectId: proposal.projectId,
+        sessionId,
+        shootId: sessionId,
         publicToken: publicToken(),
         title:
           proposal.title
@@ -54,10 +59,12 @@ export async function POST(
         updatedAt: now.toISOString(),
       };
       db.galleries.unshift(g);
-      const shoot = db.shoots.find((s) => s.id === proposal.shootId);
-      if (shoot) {
-        shoot.galleryId = g.id;
-        shoot.updatedAt = now.toISOString();
+      const session = db.sessions.find(
+        (s) => s.id === (proposal.sessionId || proposal.shootId),
+      );
+      if (session) {
+        session.galleryId = g.id;
+        session.updatedAt = now.toISOString();
       }
       return g;
     });

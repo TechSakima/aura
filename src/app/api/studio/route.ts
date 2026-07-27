@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import type { DateFormat, FontPresetId, StudioHomepageSettings } from "@/lib/types";
 
 export async function GET() {
   const admin = await requireAdmin();
@@ -18,14 +19,55 @@ export async function PATCH(req: Request) {
   const body = await req.json();
 
   await updateStudioDb(admin.studioId, (db) => {
-    if (typeof body.name === "string") db.studio.name = body.name;
-    if (typeof body.brandTagline === "string") db.studio.brandTagline = body.brandTagline;
-    if (typeof body.logoUrl === "string") db.studio.logoUrl = body.logoUrl;
-    if (typeof body.defaultWatermarkPresetId === "string") {
-      db.studio.defaultWatermarkPresetId = body.defaultWatermarkPresetId;
+    const s = db.studio;
+    if (typeof body.name === "string") s.name = body.name;
+    if (typeof body.brandTagline === "string") s.brandTagline = body.brandTagline;
+    if (typeof body.logoUrl === "string") s.logoUrl = body.logoUrl;
+    if (typeof body.coverLogoUrl === "string") s.coverLogoUrl = body.coverLogoUrl;
+    if (typeof body.defaultCoverImageUrl === "string") {
+      s.defaultCoverImageUrl = body.defaultCoverImageUrl;
     }
-    if (Array.isArray(body.printPartners)) {
-      db.studio.printPartners = body.printPartners;
+    if (typeof body.defaultWatermarkPresetId === "string") {
+      s.defaultWatermarkPresetId = body.defaultWatermarkPresetId;
+    }
+    if (Array.isArray(body.printPartners)) s.printPartners = body.printPartners;
+    if (typeof body.ownerFirstName === "string") s.ownerFirstName = body.ownerFirstName;
+    if (typeof body.ownerLastName === "string") s.ownerLastName = body.ownerLastName;
+    if (typeof body.website === "string") s.website = body.website;
+    if (typeof body.phone === "string") s.phone = body.phone;
+    if (typeof body.addressLine1 === "string") s.addressLine1 = body.addressLine1;
+    if (typeof body.city === "string") s.city = body.city;
+    if (typeof body.region === "string") s.region = body.region;
+    if (typeof body.postalCode === "string") s.postalCode = body.postalCode;
+    if (typeof body.country === "string") s.country = body.country;
+    if (typeof body.timeZone === "string") s.timeZone = body.timeZone;
+    if (typeof body.dateFormat === "string") {
+      s.dateFormat = body.dateFormat as DateFormat;
+    }
+    if (body.theme && typeof body.theme === "object") {
+      s.theme = {
+        background: String(body.theme.background || s.theme?.background || "#F3F3F3"),
+        accent: String(body.theme.accent || s.theme?.accent || "#1D1D1D"),
+        fontPreset: (body.theme.fontPreset ||
+          s.theme?.fontPreset ||
+          "sans") as FontPresetId,
+      };
+    }
+    if (body.homepage && typeof body.homepage === "object") {
+      const prev = s.homepage!;
+      s.homepage = {
+        ...prev,
+        ...body.homepage,
+      } as StudioHomepageSettings;
+    }
+    if (body.notificationPrefs && typeof body.notificationPrefs === "object") {
+      s.notificationPrefs = {
+        ...s.notificationPrefs,
+        ...body.notificationPrefs,
+      };
+    }
+    if (typeof body.googleCalendarConnected === "boolean") {
+      s.googleCalendarConnected = body.googleCalendarConnected;
     }
   });
 

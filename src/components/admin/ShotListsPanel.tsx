@@ -98,8 +98,8 @@ export function ShotListsPanel({ embedded = false }: { embedded?: boolean }) {
     <div>
       {!embedded ? (
         <PageHeader
-          title="Shot lists"
-          description="Each shot is an idea: category, name, and optional example photo."
+          title="Shot library"
+          description="Studio templates for prep and the shoot-day helper. Add shots with category, name, and optional reference photo — then attach a list to a session."
         />
       ) : (
         <h2 className="mb-4 font-display text-2xl">Shot lists</h2>

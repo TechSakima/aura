@@ -18,7 +18,9 @@ export async function POST(
 
   try {
     const form = await req.formData();
-    const kind = String(form.get("kind") || "main") === "peek" ? "peek" : "main";
+    const kindRaw = String(form.get("kind") || "main");
+    const kind =
+      kindRaw === "peek" ? "peek" : kindRaw === "video" ? "video" : "main";
     const files = form.getAll("files").flatMap((entry) => {
       if (typeof entry === "string") return [];
       // App Hosting/Node may surface uploads as File or Blob.
@@ -43,6 +45,40 @@ export async function POST(
     for (const file of files) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const baseName = `${id}-${nanoid(10)}`;
+      const mime = file.type || "";
+      const now = new Date().toISOString();
+
+      if (kind === "video" || mime.startsWith("video/")) {
+        const { uploadBuffer } = await import("@/lib/storage/upload");
+        const objectPath = `studios/${admin.studioId}/galleries/${id}/video-${nanoid(8)}.mp4`;
+        const { path: storagePath, url: videoUrl } = await uploadBuffer({
+          buffer,
+          objectPath,
+          contentType: mime || "video/mp4",
+          makePublic: true,
+        });
+        created.push({
+          id: nanoid(),
+          studioId: admin.studioId,
+          galleryId: id,
+          kind: "video",
+          storagePath,
+          thumbUrl: gallery.coverPhotoUrl || videoUrl,
+          webUrl: videoUrl,
+          watermarkedUrl: videoUrl,
+          videoUrl,
+          mimeType: mime || "video/mp4",
+          sortOrder: sortBase++,
+          aspect: 16 / 9,
+          version: 1,
+          width: 1920,
+          height: 1080,
+          createdAt: now,
+          updatedAt: now,
+        });
+        continue;
+      }
+
       const processed = await processUpload({
         buffer,
         baseName,
@@ -51,7 +87,6 @@ export async function POST(
         folder: "galleries",
         watermark,
       });
-      const now = new Date().toISOString();
       const photo = {
         id: nanoid(),
         studioId: admin.studioId,
