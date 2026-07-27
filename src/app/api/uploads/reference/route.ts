@@ -18,6 +18,7 @@ export async function POST(req: Request) {
   const processed = await processUpload({
     buffer,
     baseName: `shot-${nanoid(8)}`,
+    studioId: admin.studioId,
     folder: "ideas",
     watermark: null,
   });

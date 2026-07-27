@@ -1,42 +1,57 @@
-import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
-import type { AuraDatabase } from "@/lib/types";
+import type { AuraDatabase, Studio } from "@/lib/types";
 
-export function createSeedDatabase(): AuraDatabase {
+export function createEmptyStudio(opts: {
+  id?: string;
+  name: string;
+  ownerEmail: string;
+}): Studio {
+  const now = new Date().toISOString();
+  return {
+    id: opts.id || nanoid(),
+    name: opts.name.trim() || "My Studio",
+    ownerEmail: opts.ownerEmail.toLowerCase(),
+    brandTagline: "Photography, delivered with care",
+    printPartners: [
+      {
+        id: nanoid(),
+        name: "Mixbook",
+        url: "https://www.mixbook.com",
+        note: "Beautiful albums and layflat books with strong color.",
+      },
+      {
+        id: nanoid(),
+        name: "Mpix",
+        url: "https://www.mpix.com",
+        note: "Reliable pro-quality prints and wall art.",
+      },
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/** Fresh workspace for a newly signed-up studio. */
+export function createStudioDatabase(studio: Studio): AuraDatabase {
   const now = new Date().toISOString();
   const watermarkId = nanoid();
   const weddingPkg = nanoid();
   const maternityPkg = nanoid();
   const miniPkg = nanoid();
+  const studioId = studio.id;
 
   return {
     studio: {
-      name: "Aura Studio",
-      adminEmail: "admin@aura.studio",
-      adminPasswordHash: bcrypt.hashSync("aura-admin", 10),
+      ...studio,
       defaultWatermarkPresetId: watermarkId,
-      brandTagline: "Photography, delivered with care",
-      printPartners: [
-        {
-          id: nanoid(),
-          name: "Mixbook",
-          url: "https://www.mixbook.com",
-          note: "Beautiful albums and layflat books with strong color.",
-        },
-        {
-          id: nanoid(),
-          name: "Mpix",
-          url: "https://www.mpix.com",
-          note: "Reliable pro-quality prints and wall art.",
-        },
-      ],
     },
     watermarkPresets: [
       {
         id: watermarkId,
+        studioId,
         name: "Studio text mark",
         mode: "text",
-        text: "AURA",
+        text: studio.name.slice(0, 24).toUpperCase() || "STUDIO",
         position: "bottom-right",
         opacity: 0.35,
         scale: 0.14,
@@ -45,6 +60,7 @@ export function createSeedDatabase(): AuraDatabase {
     packageTemplates: [
       {
         id: weddingPkg,
+        studioId,
         name: "Weddings",
         defaultPricing: [
           {
@@ -74,7 +90,7 @@ export function createSeedDatabase(): AuraDatabase {
           "Print partner guidance",
         ],
         contractTerms:
-          "A non-refundable retainer reserves your date. Remaining balance is due 14 days before the event. Images are delivered via Aura gallery for 60 days. Copyright remains with the photographer; personal print/use rights are granted to the clients.",
+          "A non-refundable retainer reserves your date. Remaining balance is due 14 days before the event. Images are delivered via online gallery for 60 days. Copyright remains with the photographer; personal print/use rights are granted to the clients.",
         intakeQuestions: [
           {
             id: nanoid(),
@@ -99,6 +115,7 @@ export function createSeedDatabase(): AuraDatabase {
       },
       {
         id: maternityPkg,
+        studioId,
         name: "Maternity",
         defaultPricing: [
           {
@@ -142,6 +159,7 @@ export function createSeedDatabase(): AuraDatabase {
       },
       {
         id: miniPkg,
+        studioId,
         name: "Mini-Sessions",
         defaultPricing: [
           {
@@ -175,28 +193,112 @@ export function createSeedDatabase(): AuraDatabase {
     comments: [],
     subAlbums: [],
     analyticsEvents: [],
-    sessions: [],
     ideaCards: [],
     shotListTemplates: [
       {
         id: nanoid(),
+        studioId,
         name: "Wedding full day",
         shootType: "Weddings",
         items: [
-          { id: nanoid(), label: "Getting ready details", category: "Documentary", section: "Documentary", mustHave: true },
-          { id: nanoid(), label: "Dress on hanger", category: "Detail", section: "Detail", mustHave: true },
-          { id: nanoid(), label: "Rings", category: "Close-up", section: "Close-up", mustHave: true },
-          { id: nanoid(), label: "First look", category: "Couple", section: "Couple", mustHave: true },
-          { id: nanoid(), label: "Ceremony aisle", category: "Wide", section: "Wide", mustHave: true },
-          { id: nanoid(), label: "Vows", category: "Close-up", section: "Close-up", mustHave: true },
-          { id: nanoid(), label: "Family formals", category: "Group", section: "Group", mustHave: true },
-          { id: nanoid(), label: "Wedding party", category: "Group", section: "Group", mustHave: true },
-          { id: nanoid(), label: "Couples portraits", category: "Couple", section: "Couple", mustHave: true },
-          { id: nanoid(), label: "Backdrop portraits", category: "Backdrop showcase", section: "Backdrop showcase", mustHave: false },
-          { id: nanoid(), label: "Golden hour", category: "Couple", section: "Couple", mustHave: false },
-          { id: nanoid(), label: "Reception entrance", category: "Reception", section: "Reception", mustHave: true },
-          { id: nanoid(), label: "First dance", category: "Reception", section: "Reception", mustHave: true },
-          { id: nanoid(), label: "Cake cutting", category: "Reception", section: "Reception", mustHave: false },
+          {
+            id: nanoid(),
+            label: "Getting ready details",
+            category: "Documentary",
+            section: "Documentary",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "Dress on hanger",
+            category: "Detail",
+            section: "Detail",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "Rings",
+            category: "Close-up",
+            section: "Close-up",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "First look",
+            category: "Couple",
+            section: "Couple",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "Ceremony aisle",
+            category: "Wide",
+            section: "Wide",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "Vows",
+            category: "Close-up",
+            section: "Close-up",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "Family formals",
+            category: "Group",
+            section: "Group",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "Wedding party",
+            category: "Group",
+            section: "Group",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "Couples portraits",
+            category: "Couple",
+            section: "Couple",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "Backdrop portraits",
+            category: "Backdrop showcase",
+            section: "Backdrop showcase",
+            mustHave: false,
+          },
+          {
+            id: nanoid(),
+            label: "Golden hour",
+            category: "Couple",
+            section: "Couple",
+            mustHave: false,
+          },
+          {
+            id: nanoid(),
+            label: "Reception entrance",
+            category: "Reception",
+            section: "Reception",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "First dance",
+            category: "Reception",
+            section: "Reception",
+            mustHave: true,
+          },
+          {
+            id: nanoid(),
+            label: "Cake cutting",
+            category: "Reception",
+            section: "Reception",
+            mustHave: false,
+          },
         ],
         createdAt: now,
         updatedAt: now,
@@ -204,4 +306,13 @@ export function createSeedDatabase(): AuraDatabase {
     ],
     shootPlans: [],
   };
+}
+
+/** @deprecated use createStudioDatabase */
+export function createSeedDatabase(): AuraDatabase {
+  const studio = createEmptyStudio({
+    name: "Aura Studio",
+    ownerEmail: "admin@aura.studio",
+  });
+  return createStudioDatabase(studio);
 }

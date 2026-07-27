@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { updateDb } from "@/lib/db/store";
+import { updateStudioDb } from "@/lib/db/store";
 import { saveBrandLogo } from "@/lib/images/process";
 
 export async function POST(req: Request) {
@@ -19,8 +19,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "empty file" }, { status: 400 });
     }
 
-    const logoUrl = await saveBrandLogo(buffer);
-    await updateDb((db) => {
+    const logoUrl = await saveBrandLogo(buffer, admin.studioId);
+    await updateStudioDb(admin.studioId, (db) => {
       db.studio.logoUrl = logoUrl;
     });
     return NextResponse.json({ logoUrl });

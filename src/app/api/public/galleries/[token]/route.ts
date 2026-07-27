@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { readDb, updateDb } from "@/lib/db/store";
+import {
+  findGalleryByPublicToken,
+  readStudioDb,
+  updateStudioDb,
+} from "@/lib/db/store";
 import { recordEvent } from "@/lib/analytics";
 import { resolveMediaUrl } from "@/lib/media-url";
 
@@ -8,12 +12,17 @@ export async function GET(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const db = await readDb();
+  const galleryHit = await findGalleryByPublicToken(token);
+  if (!galleryHit?.studioId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const db = await readStudioDb(galleryHit.studioId);
   const gallery = db.galleries.find((g) => g.publicToken === token);
   if (!gallery) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (gallery.status === "live" && new Date(gallery.expiresAt) < new Date()) {
-    await updateDb((d) => {
+    await updateStudioDb(gallery.studioId, (d) => {
       const g = d.galleries.find((x) => x.id === gallery.id);
       if (g) g.status = "expired";
     });
@@ -53,6 +62,7 @@ export async function GET(
 
   await recordEvent({
     type: "gallery_view",
+    studioId: gallery.studioId,
     galleryId: gallery.id,
     shootId: gallery.shootId,
   });

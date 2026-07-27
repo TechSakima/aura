@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { saveWatermarkAsset } from "@/lib/images/process";
 import {
   galleriesUsingWatermarkPreset,
@@ -17,7 +17,7 @@ export async function PATCH(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
 
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   const existing = db.watermarkPresets.find((x) => x.id === id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -50,7 +50,7 @@ export async function PATCH(
     const file = form.get("file");
     if (file instanceof File && file.size > 0) {
       const buf = Buffer.from(await file.arrayBuffer());
-      nextImagePath = await saveWatermarkAsset(buf, file.name);
+      nextImagePath = await saveWatermarkAsset(buf, file.name, admin.studioId);
       replaceImage = true;
     }
   } else {
@@ -66,7 +66,7 @@ export async function PATCH(
   }
 
   const oldPath = existing.imagePath;
-  const result = await updateDb(async (d) => {
+  const result = await updateStudioDb(admin.studioId, async (d) => {
     const p = d.watermarkPresets.find((x) => x.id === id);
     if (!p) return null;
     p.name = name;
@@ -103,7 +103,7 @@ export async function DELETE(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
 
-  const removed = await updateDb((db) => {
+  const removed = await updateStudioDb(admin.studioId, (db) => {
     const p = db.watermarkPresets.find((x) => x.id === id);
     if (!p) return null;
     db.watermarkPresets = db.watermarkPresets.filter((x) => x.id !== id);

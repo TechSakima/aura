@@ -19,23 +19,34 @@ function normalizePlanItem(item: ShotItem): ShotItem {
   };
 }
 
+function stampStudioId<T extends { studioId?: string }>(
+  items: T[] | undefined,
+  studioId: string,
+): T[] {
+  return (items || []).map((item) => ({
+    ...item,
+    studioId: item.studioId || studioId,
+  }));
+}
+
 /** Ensure older data gains new fields / collections. */
 export function normalizeDb(db: AuraDatabase): AuraDatabase {
-  db.ideaCards ??= [];
-  db.shotListTemplates ??= [];
-  db.shootPlans ??= [];
-  db.clients ??= [];
-  db.shoots ??= [];
-  db.packageTemplates ??= [];
-  db.proposals ??= [];
-  db.galleries ??= [];
-  db.photos ??= [];
-  db.comments ??= [];
-  db.subAlbums ??= [];
-  db.watermarkPresets ??= [];
-  db.analyticsEvents ??= [];
-  db.sessions ??= [];
-  delete (db as { emailJobs?: unknown }).emailJobs;
+  const studioId = db.studio?.id || "unknown";
+  db.ideaCards = stampStudioId(db.ideaCards, studioId);
+  db.shotListTemplates = stampStudioId(db.shotListTemplates, studioId);
+  db.shootPlans = stampStudioId(db.shootPlans, studioId);
+  db.clients = stampStudioId(db.clients, studioId);
+  db.shoots = stampStudioId(db.shoots, studioId);
+  db.packageTemplates = stampStudioId(db.packageTemplates, studioId);
+  db.proposals = stampStudioId(db.proposals, studioId);
+  db.galleries = stampStudioId(db.galleries, studioId);
+  db.photos = stampStudioId(db.photos, studioId);
+  db.comments = stampStudioId(db.comments, studioId);
+  db.subAlbums = stampStudioId(db.subAlbums, studioId);
+  db.watermarkPresets = stampStudioId(db.watermarkPresets, studioId);
+  db.analyticsEvents = stampStudioId(db.analyticsEvents, studioId);
+  delete (db as { emailJobs?: unknown; sessions?: unknown }).emailJobs;
+  delete (db as { sessions?: unknown }).sessions;
   for (const pkg of db.packageTemplates) {
     delete (pkg as { emailSchedule?: unknown }).emailSchedule;
     for (const q of pkg.intakeQuestions || []) {
@@ -58,11 +69,14 @@ export function normalizeDb(db: AuraDatabase): AuraDatabase {
     p.items = (p.items || []).map(normalizePlanItem);
   }
   for (const w of db.watermarkPresets) {
-    // Prefer a small corner mark over a huge centered stamp.
     if (!w.position || w.position === "center") {
       w.position = "bottom-right";
     }
     if (w.scale == null) w.scale = 0.14;
+  }
+  if (db.studio) {
+    db.studio.printPartners ??= [];
+    db.studio.ownerEmail ??= "";
   }
   return db;
 }

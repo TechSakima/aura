@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { processUpload } from "@/lib/images/process";
 
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   return NextResponse.json({ ideas: db.ideaCards });
 }
 
@@ -27,6 +27,7 @@ export async function POST(req: Request) {
       const processed = await processUpload({
         buffer,
         baseName: `idea-${nanoid(8)}`,
+        studioId: admin.studioId,
         folder: "ideas",
         watermark: null,
       });
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
     const tagsRaw = String(form.get("tags") || "");
     const idea = {
       id: nanoid(),
+      studioId: admin.studioId,
       title: String(form.get("title") || "Untitled idea"),
       category: String(form.get("category") || "General"),
       notes: form.get("notes") ? String(form.get("notes")) : undefined,
@@ -45,7 +47,7 @@ export async function POST(req: Request) {
       createdAt: now,
       updatedAt: now,
     };
-    await updateDb((db) => {
+    await updateStudioDb(admin.studioId, (db) => {
       db.ideaCards.unshift(idea);
     });
     return NextResponse.json({ idea });
@@ -54,6 +56,7 @@ export async function POST(req: Request) {
   const body = await req.json();
   const idea = {
     id: nanoid(),
+    studioId: admin.studioId,
     title: String(body.title || "Untitled idea"),
     category: String(body.category || "General"),
     notes: body.notes ? String(body.notes) : undefined,
@@ -64,7 +67,7 @@ export async function POST(req: Request) {
     createdAt: now,
     updatedAt: now,
   };
-  await updateDb((db) => {
+  await updateStudioDb(admin.studioId, (db) => {
     db.ideaCards.unshift(idea);
   });
   return NextResponse.json({ idea });

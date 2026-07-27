@@ -13,6 +13,6 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "ids required" }, { status: 400 });
   }
 
-  const deleted = await deletePhotosByIds(ids);
+  const deleted = await deletePhotosByIds(admin.studioId, ids);
   return NextResponse.json({ ok: true, deleted });
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { updateDb } from "@/lib/db/store";
+import { updateStudioDb } from "@/lib/db/store";
 import { hashPin, PinValidationError } from "@/lib/pin";
 import { publicToken } from "@/lib/tokens";
 
@@ -25,7 +25,7 @@ export async function POST(
     const pinHash = await hashPin(pin);
     const now = new Date();
 
-    const gallery = await updateDb((db) => {
+    const gallery = await updateStudioDb(admin.studioId, (db) => {
       const proposal = db.proposals.find((p) => p.id === id);
       if (!proposal) return null;
       const existing = db.galleries.find((g) => g.shootId === proposal.shootId);
@@ -33,6 +33,7 @@ export async function POST(
 
       const g = {
         id: nanoid(),
+        studioId: admin.studioId,
         shootId: proposal.shootId,
         publicToken: publicToken(),
         title:

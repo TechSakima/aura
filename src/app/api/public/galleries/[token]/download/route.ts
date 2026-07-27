@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import JSZip from "jszip";
-import { readDb } from "@/lib/db/store";
+import {
+  findGalleryByPublicToken,
+  readStudioDb,
+} from "@/lib/db/store";
 import { verifyPin } from "@/lib/pin";
 import { recordEvent } from "@/lib/analytics";
 import { rateLimit } from "@/lib/rate-limit";
@@ -26,7 +29,13 @@ export async function POST(
   const body = await req.json();
   const pin = String(body.pin || "");
   const mode = body.mode === "favorites" ? "favorites" : body.photoId ? "single" : "all";
-  const db = await readDb();
+
+  const galleryHit = await findGalleryByPublicToken(token);
+  if (!galleryHit?.studioId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const db = await readStudioDb(galleryHit.studioId);
   const gallery = db.galleries.find((g) => g.publicToken === token);
   if (!gallery) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (gallery.status === "archived" || gallery.status === "expired") {
@@ -53,7 +62,6 @@ export async function POST(
     if (storagePath.startsWith("studios/")) {
       return downloadStorageBuffer(storagePath);
     }
-    // Legacy local-relative paths are no longer supported
     throw new Error("Missing storage object");
   }
 
@@ -62,6 +70,7 @@ export async function POST(
       const data = await loadOriginal(photos[0].storagePath);
       await recordEvent({
         type: "download_single",
+        studioId: gallery.studioId,
         galleryId: gallery.id,
         photoId: photos[0].id,
         shootId: gallery.shootId,
@@ -89,6 +98,7 @@ export async function POST(
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
   await recordEvent({
     type: "download_bulk",
+    studioId: gallery.studioId,
     galleryId: gallery.id,
     shootId: gallery.shootId,
     meta: { count: photos.length, mode },

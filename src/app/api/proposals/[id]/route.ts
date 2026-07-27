@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { deleteProposalCascade } from "@/lib/db/delete-shoot";
-import { updateDb } from "@/lib/db/store";
+import { updateStudioDb } from "@/lib/db/store";
 import type { DepositStatus, ProposalStatus } from "@/lib/types";
 
 export async function PATCH(
@@ -13,7 +13,7 @@ export async function PATCH(
   const { id } = await ctx.params;
   const body = await req.json();
 
-  const proposal = await updateDb((db) => {
+  const proposal = await updateStudioDb(admin.studioId, (db) => {
     const p = db.proposals.find((x) => x.id === id);
     if (!p) return null;
     if (body.title != null) p.title = String(body.title);
@@ -39,7 +39,7 @@ export async function DELETE(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const ok = await deleteProposalCascade(id);
+  const ok = await deleteProposalCascade(admin.studioId, id);
   if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

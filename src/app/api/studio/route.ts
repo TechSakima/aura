@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, hashPassword } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { requireAdmin } from "@/lib/auth";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await readDb();
-  const { adminPasswordHash: _, ...studio } = db.studio;
+  const db = await readStudioDb(admin.studioId);
   return NextResponse.json({
-    studio,
+    studio: db.studio,
     watermarkPresets: db.watermarkPresets,
   });
 }
@@ -18,10 +17,9 @@ export async function PATCH(req: Request) {
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
 
-  await updateDb((db) => {
+  await updateStudioDb(admin.studioId, (db) => {
     if (typeof body.name === "string") db.studio.name = body.name;
     if (typeof body.brandTagline === "string") db.studio.brandTagline = body.brandTagline;
-    if (typeof body.adminEmail === "string") db.studio.adminEmail = body.adminEmail;
     if (typeof body.logoUrl === "string") db.studio.logoUrl = body.logoUrl;
     if (typeof body.defaultWatermarkPresetId === "string") {
       db.studio.defaultWatermarkPresetId = body.defaultWatermarkPresetId;
@@ -30,13 +28,6 @@ export async function PATCH(req: Request) {
       db.studio.printPartners = body.printPartners;
     }
   });
-
-  if (typeof body.password === "string" && body.password.length >= 8) {
-    const hash = await hashPassword(body.password);
-    await updateDb((db) => {
-      db.studio.adminPasswordHash = hash;
-    });
-  }
 
   return NextResponse.json({ ok: true });
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { processUpload } from "@/lib/images/process";
 import type { Photo } from "@/lib/types";
 
@@ -12,7 +12,7 @@ export async function POST(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   const gallery = db.galleries.find((g) => g.id === id);
   if (!gallery) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -46,6 +46,7 @@ export async function POST(
       const processed = await processUpload({
         buffer,
         baseName,
+        studioId: admin.studioId,
         galleryId: id,
         folder: "galleries",
         watermark,
@@ -53,6 +54,7 @@ export async function POST(
       const now = new Date().toISOString();
       const photo = {
         id: nanoid(),
+        studioId: admin.studioId,
         galleryId: id,
         kind: kind as "main" | "peek",
         ...processed,
@@ -64,7 +66,7 @@ export async function POST(
       created.push(photo);
     }
 
-    await updateDb((d) => {
+    await updateStudioDb(admin.studioId, (d) => {
       d.photos.push(...created);
       const g = d.galleries.find((x) => x.id === id);
       if (g && !g.coverPhotoUrl && created[0]) {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { updateDb } from "@/lib/db/store";
+import { updateStudioDb } from "@/lib/db/store";
 
 export async function PATCH(
   req: Request,
@@ -10,7 +10,7 @@ export async function PATCH(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const body = await req.json();
-  const template = await updateDb((db) => {
+  const template = await updateStudioDb(admin.studioId, (db) => {
     const t = db.shotListTemplates.find((x) => x.id === id);
     if (!t) return null;
     if (body.name != null) t.name = String(body.name);
@@ -30,7 +30,7 @@ export async function DELETE(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  await updateDb((db) => {
+  await updateStudioDb(admin.studioId, (db) => {
     db.shotListTemplates = db.shotListTemplates.filter((t) => t.id !== id);
   });
   return NextResponse.json({ ok: true });

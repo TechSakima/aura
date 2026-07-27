@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import JSZip from "jszip";
 import { requireAdmin } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { deleteStorageObject, downloadStorageBuffer } from "@/lib/storage/upload";
 
 export async function POST(
@@ -11,7 +11,7 @@ export async function POST(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   const gallery = db.galleries.find((g) => g.id === id);
   if (!gallery) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -64,7 +64,7 @@ export async function POST(
     ]);
   }
 
-  await updateDb((d) => {
+  await updateStudioDb(admin.studioId, (d) => {
     const g = d.galleries.find((x) => x.id === id);
     if (g) {
       g.status = "archived";

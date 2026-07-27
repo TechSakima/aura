@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getGalleryBundle, updateDb } from "@/lib/db/store";
+import { getGalleryBundle, updateStudioDb } from "@/lib/db/store";
 import { markGalleryLive } from "@/lib/gallery-live";
 import { reprocessGalleryWatermarks } from "@/lib/images/rewatermark";
 import { hashPin, PinValidationError } from "@/lib/pin";
@@ -13,7 +13,9 @@ export async function GET(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const bundle = await getGalleryBundle(id);
-  if (!bundle) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!bundle || bundle.gallery.studioId !== admin.studioId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const { downloadPinHash: _, ...gallery } = bundle.gallery;
   return NextResponse.json({
     gallery,
@@ -35,7 +37,7 @@ export async function PATCH(
 
   try {
     let watermarkChanged = false;
-    const gallery = await updateDb(async (db) => {
+    const gallery = await updateStudioDb(admin.studioId, async (db) => {
       const g = db.galleries.find((x) => x.id === id);
       if (!g) return null;
       if (body.title != null) g.title = String(body.title);

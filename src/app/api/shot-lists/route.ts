@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   return NextResponse.json({ templates: db.shotListTemplates });
 }
 
@@ -17,6 +17,7 @@ export async function POST(req: Request) {
   const now = new Date().toISOString();
   const template = {
     id: nanoid(),
+    studioId: admin.studioId,
     name: String(body.name || "Shot list"),
     shootType: String(body.shootType || "Weddings"),
     items: Array.isArray(body.items)
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
     createdAt: now,
     updatedAt: now,
   };
-  await updateDb((db) => {
+  await updateStudioDb(admin.studioId, (db) => {
     db.shotListTemplates.unshift(template);
   });
   return NextResponse.json({ template });

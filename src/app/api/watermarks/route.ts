@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { saveWatermarkAsset } from "@/lib/images/process";
 import type { WatermarkMode, WatermarkPosition } from "@/lib/types";
 
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   return NextResponse.json({ presets: db.watermarkPresets });
 }
 
@@ -31,10 +31,11 @@ export async function POST(req: Request) {
     const file = form.get("file");
     if (file instanceof File) {
       const buf = Buffer.from(await file.arrayBuffer());
-      imagePath = await saveWatermarkAsset(buf, file.name);
+      imagePath = await saveWatermarkAsset(buf, file.name, admin.studioId);
     }
     const preset = {
       id: nanoid(),
+      studioId: admin.studioId,
       name,
       mode,
       text,
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
       opacity,
       scale,
     };
-    await updateDb((db) => {
+    await updateStudioDb(admin.studioId, (db) => {
       db.watermarkPresets.push(preset);
       if (!db.studio.defaultWatermarkPresetId) {
         db.studio.defaultWatermarkPresetId = preset.id;
@@ -55,6 +56,7 @@ export async function POST(req: Request) {
   const body = await req.json();
   const preset = {
     id: nanoid(),
+    studioId: admin.studioId,
     name: String(body.name || "Watermark"),
     mode: (body.mode || "text") as WatermarkMode,
     text: body.text,
@@ -63,7 +65,7 @@ export async function POST(req: Request) {
     opacity: Number(body.opacity ?? 0.35),
     scale: body.scale != null ? Number(body.scale) : 0.14,
   };
-  await updateDb((db) => {
+  await updateStudioDb(admin.studioId, (db) => {
     db.watermarkPresets.push(preset);
   });
   return NextResponse.json({ preset });

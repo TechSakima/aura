@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { hashPin, PinValidationError } from "@/lib/pin";
 import { publicToken } from "@/lib/tokens";
 
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   return NextResponse.json({
     galleries: db.galleries.map(({ downloadPinHash: _, ...g }) => g),
     shoots: db.shoots,
@@ -47,6 +47,7 @@ export async function POST(req: Request) {
 
     const gallery = {
       id: nanoid(),
+      studioId: admin.studioId,
       shootId: String(body.shootId),
       publicToken: publicToken(),
       title: String(body.title),
@@ -63,12 +64,12 @@ export async function POST(req: Request) {
       updatedAt: now.toISOString(),
     };
 
-    const db = await readDb();
+    const db = await readStudioDb(admin.studioId);
     if (!db.shoots.some((s) => s.id === gallery.shootId)) {
       return NextResponse.json({ error: "Shoot not found" }, { status: 400 });
     }
 
-    await updateDb((d) => {
+    await updateStudioDb(admin.studioId, (d) => {
       d.galleries.unshift(gallery);
       const shoot = d.shoots.find((s) => s.id === gallery.shootId);
       if (shoot) {

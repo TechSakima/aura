@@ -1,22 +1,37 @@
 import { cookies } from "next/headers";
 import { nanoid } from "nanoid";
-import { readDb, updateDb } from "@/lib/db/store";
+import {
+  claimStudioMembership,
+  createSession,
+  createStudioWithDefaults,
+  deleteSession,
+  getMemberByUid,
+  getSession,
+  getStudioDoc,
+} from "@/lib/db/store";
 import { firebaseReady } from "@/lib/db/require-firebase";
 import { getAdminAuth } from "@/lib/firebase/admin";
+import type { AdminContext } from "@/lib/types";
 
 const COOKIE = "aura_session";
 const SESSION_DAYS = 14;
-const SEED_ADMIN = "admin@aura.studio";
 
-async function createSessionCookie() {
+async function createSessionCookie(opts: {
+  uid: string;
+  email: string;
+  studioId: string;
+}) {
   const token = nanoid(32);
   const expiresAt = new Date(
     Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  await updateDb((d) => {
-    d.sessions = d.sessions.filter((s) => new Date(s.expiresAt) > new Date());
-    d.sessions.push({ token, expiresAt });
+  await createSession({
+    token,
+    expiresAt,
+    uid: opts.uid,
+    email: opts.email,
+    studioId: opts.studioId,
   });
 
   const jar = await cookies();
@@ -31,15 +46,7 @@ async function createSessionCookie() {
   return token;
 }
 
-/** Local password login is disabled — Firebase Auth only. */
-export async function login(_email: string, _password: string) {
-  return {
-    ok: false as const,
-    error: "Use Firebase email/password sign-in",
-  };
-}
-
-/** Verify Firebase Auth ID token and open an Aura session cookie. */
+/** Verify Firebase Auth ID token and open an Aura session for an existing studio member. */
 export async function loginWithFirebaseIdToken(idToken: string) {
   if (!firebaseReady()) {
     return { ok: false as const, error: "Firebase is not configured" };
@@ -51,30 +58,92 @@ export async function loginWithFirebaseIdToken(idToken: string) {
   try {
     const decoded = await auth.verifyIdToken(idToken);
     const email = decoded.email?.toLowerCase();
-    if (!email) {
+    const uid = decoded.uid;
+    if (!email || !uid) {
       return { ok: false as const, error: "Token missing email" };
     }
-    const db = await readDb();
-    const current = db.studio.adminEmail?.toLowerCase() || "";
-    const unlocked =
-      !current || current === SEED_ADMIN || current === email;
 
-    if (!unlocked) {
+    let member = await getMemberByUid(uid);
+    if (!member) {
+      member = await claimStudioMembership({ uid, email });
+    }
+    if (!member) {
       return {
         ok: false as const,
-        error: "This account is not the studio admin",
+        error: "No studio found for this account. Create a studio to get started.",
       };
     }
 
-    if (current !== email) {
-      await updateDb((d) => {
-        d.studio.adminEmail = email;
-      });
-    }
-    await createSessionCookie();
-    return { ok: true as const };
+    await createSessionCookie({
+      uid,
+      email,
+      studioId: member.studioId,
+    });
+    return { ok: true as const, studioId: member.studioId };
   } catch {
     return { ok: false as const, error: "Invalid Firebase token" };
+  }
+}
+
+/** After Firebase createUser — create studio + membership + session. */
+export async function signupWithFirebaseIdToken(opts: {
+  idToken: string;
+  studioName: string;
+}) {
+  if (!firebaseReady()) {
+    return { ok: false as const, error: "Firebase is not configured" };
+  }
+  const auth = getAdminAuth();
+  if (!auth) {
+    return { ok: false as const, error: "Firebase Admin not configured" };
+  }
+
+  const name = opts.studioName.trim();
+  if (name.length < 2) {
+    return { ok: false as const, error: "Studio name is required" };
+  }
+
+  try {
+    const decoded = await auth.verifyIdToken(opts.idToken);
+    const email = decoded.email?.toLowerCase();
+    const uid = decoded.uid;
+    if (!email || !uid) {
+      return { ok: false as const, error: "Token missing email" };
+    }
+
+    const existing = await getMemberByUid(uid);
+    if (existing) {
+      return {
+        ok: false as const,
+        error: "This account already belongs to a studio. Sign in instead.",
+      };
+    }
+
+    // Migrated owner email should claim, not create a second studio.
+    const claimed = await claimStudioMembership({ uid, email });
+    if (claimed) {
+      await createSessionCookie({
+        uid,
+        email,
+        studioId: claimed.studioId,
+      });
+      return { ok: true as const, studioId: claimed.studioId, claimed: true };
+    }
+
+    const { studio } = await createStudioWithDefaults({
+      name,
+      ownerEmail: email,
+      ownerUid: uid,
+    });
+
+    await createSessionCookie({
+      uid,
+      email,
+      studioId: studio.id,
+    });
+    return { ok: true as const, studioId: studio.id, claimed: false };
+  } catch {
+    return { ok: false as const, error: "Could not create studio" };
   }
 }
 
@@ -82,24 +151,34 @@ export async function logout() {
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;
   if (token) {
-    await updateDb((d) => {
-      d.sessions = d.sessions.filter((s) => s.token !== token);
-    });
+    await deleteSession(token).catch(() => undefined);
   }
   jar.delete(COOKIE);
 }
 
-export async function requireAdmin() {
+export async function requireAdmin(): Promise<AdminContext | null> {
   if (!firebaseReady()) return null;
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;
   if (!token) return null;
-  const db = await readDb();
-  const session = db.sessions.find(
-    (s) => s.token === token && new Date(s.expiresAt) > new Date(),
-  );
-  if (!session) return null;
-  return db.studio;
+
+  const session = await getSession(token);
+  if (!session || new Date(session.expiresAt) <= new Date()) {
+    return null;
+  }
+  if (!session.studioId || !session.uid) {
+    return null;
+  }
+
+  const studio = await getStudioDoc(session.studioId);
+  if (!studio) return null;
+
+  return {
+    studio,
+    studioId: studio.id,
+    uid: session.uid,
+    email: session.email,
+  };
 }
 
 export async function hashPassword(password: string) {

@@ -1,18 +1,10 @@
 import { randomUUID } from "crypto";
 import { assertFirebaseReady } from "@/lib/db/require-firebase";
 
-function projectPrefix() {
-  return (
-    process.env.FIREBASE_PROJECT_ID ||
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
-    "aura"
-  );
-}
-
-export function storageObjectPath(
-  ...parts: string[]
-): string {
-  return ["studios", projectPrefix(), ...parts]
+/** Tenant-scoped storage path: studios/{studioId}/... */
+export function storageObjectPath(studioId: string, ...parts: string[]): string {
+  const id = studioId.replace(/^\/+|\/+$/g, "") || "shared";
+  return ["studios", id, ...parts]
     .map((p) => p.replace(/^\/+|\/+$/g, ""))
     .join("/");
 }

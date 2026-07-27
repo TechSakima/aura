@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { updateDb } from "@/lib/db/store";
+import { updateStudioDb } from "@/lib/db/store";
 
 export async function PATCH(
   req: Request,
@@ -10,7 +10,7 @@ export async function PATCH(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const body = await req.json();
-  const idea = await updateDb((db) => {
+  const idea = await updateStudioDb(admin.studioId, (db) => {
     const i = db.ideaCards.find((x) => x.id === id);
     if (!i) return null;
     if (body.title != null) i.title = String(body.title);
@@ -34,7 +34,7 @@ export async function DELETE(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  await updateDb((db) => {
+  await updateStudioDb(admin.studioId, (db) => {
     db.ideaCards = db.ideaCards.filter((i) => i.id !== id);
   });
   return NextResponse.json({ ok: true });

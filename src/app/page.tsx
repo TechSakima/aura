@@ -14,13 +14,13 @@ export default function HomePage() {
       <div className="shell-pad relative z-10 mx-auto w-full max-w-[var(--shell-max)] pb-16 pt-24 animate-enter">
         <p className="font-display text-5xl tracking-tight md:text-7xl">Aura</p>
         <p className="mt-4 max-w-md text-lg text-surface/80">
-          Quotes, cinematic delivery, and a 60-day gallery window — built for a
-          solo studio.
+          Quotes, cinematic delivery, and a 60-day gallery window — for
+          photography studios.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link href="/admin/login">
             <Button tone="accent" size="lg">
-              Open studio admin
+              Sign in or create a studio
             </Button>
           </Link>
         </div>

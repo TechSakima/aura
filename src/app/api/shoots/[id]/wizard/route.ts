@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { readDb } from "@/lib/db/store";
+import { readStudioDb } from "@/lib/db/store";
 import { deriveWizardProgress } from "@/lib/wizard/steps";
 
 export async function GET(
@@ -10,7 +10,7 @@ export async function GET(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   const shoot = db.shoots.find((s) => s.id === id);
   if (!shoot) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

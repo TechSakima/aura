@@ -6,8 +6,9 @@
 - `.firebaserc` → `aura-photo-manager`
 - `firebase.json` Hosting (Next.js frameworks backend, `us-central1`)
 - `firestore.rules` / `storage.rules` (authenticated admin; public traffic uses Admin SDK via API)
-- Login tries Firebase Auth first, then local password fallback
+- Open signup: email + password creates a Firebase Auth user and a new studio
 - Data store uses **Firestore** when `serviceAccountKey.json` is present; otherwise `.data/`
+- Existing single-studio data migrates into `studios/{id}` on first boot
 
 ## What you still need to do
 
@@ -27,7 +28,7 @@ C:\Users\EnochWHarker\Documents\repos\Aura\serviceAccountKey.json
 
 1. Build → **Authentication** → Get started
 2. Sign-in method → enable **Email/Password**
-3. Users → **Add user** (your studio login), e.g. `admin@aura.studio` + a strong password
+3. Create your first studio from `/admin/login` → **Create a studio** (no Console-only admin user required)
 
 Authorized domains already include `localhost`, `*.web.app`, `*.firebaseapp.com`.
 

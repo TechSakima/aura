@@ -9,7 +9,7 @@ export async function DELETE(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const deleted = await deletePhotosByIds([id]);
+  const deleted = await deletePhotosByIds(admin.studioId, [id]);
   if (!deleted) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

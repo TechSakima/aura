@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { readDb } from "@/lib/db/store";
+import { readStudioDb } from "@/lib/db/store";
 
 export async function GET(req: Request) {
   const admin = await requireAdmin();
@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   const shootId = url.searchParams.get("shootId") || undefined;
   const galleryId = url.searchParams.get("galleryId") || undefined;
 
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   let events = db.analyticsEvents;
   if (shootId) events = events.filter((e) => e.shootId === shootId);
   if (galleryId) events = events.filter((e) => e.galleryId === galleryId);

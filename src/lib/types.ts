@@ -55,6 +55,7 @@ export type PrintPartner = {
 
 export type Client = {
   id: string;
+  studioId: string;
   name: string;
   email: string;
   phone?: string;
@@ -73,6 +74,7 @@ export type WizardStepId =
 
 export type Shoot = {
   id: string;
+  studioId: string;
   clientId: string;
   type: string;
   shootDate?: string;
@@ -92,6 +94,7 @@ export type Shoot = {
 
 export type PackageTemplate = {
   id: string;
+  studioId: string;
   name: string;
   defaultPricing: PackageTier[];
   contractTerms: string;
@@ -103,6 +106,7 @@ export type PackageTemplate = {
 
 export type Proposal = {
   id: string;
+  studioId: string;
   token: string;
   shootId: string;
   packageTemplateId?: string;
@@ -122,6 +126,7 @@ export type Proposal = {
 
 export type WatermarkPreset = {
   id: string;
+  studioId: string;
   name: string;
   mode: WatermarkMode;
   text?: string;
@@ -133,6 +138,7 @@ export type WatermarkPreset = {
 
 export type Photo = {
   id: string;
+  studioId: string;
   galleryId: string;
   kind: "main" | "peek";
   storagePath: string;
@@ -150,6 +156,7 @@ export type Photo = {
 
 export type Comment = {
   id: string;
+  studioId: string;
   galleryId: string;
   photoId: string;
   authorName: string;
@@ -159,6 +166,7 @@ export type Comment = {
 
 export type SubAlbum = {
   id: string;
+  studioId: string;
   galleryId: string;
   token: string;
   label: string;
@@ -168,6 +176,7 @@ export type SubAlbum = {
 
 export type Gallery = {
   id: string;
+  studioId: string;
   shootId: string;
   publicToken: string;
   title: string;
@@ -187,6 +196,7 @@ export type Gallery = {
 
 export type AnalyticsEvent = {
   id: string;
+  studioId?: string;
   type: AnalyticsEventType;
   galleryId?: string;
   proposalId?: string;
@@ -196,6 +206,7 @@ export type AnalyticsEvent = {
   at: string;
 };
 
+/** @deprecated Prefer Studio — kept for gradual migration */
 export type StudioSettings = {
   name: string;
   logoUrl?: string;
@@ -206,8 +217,38 @@ export type StudioSettings = {
   brandTagline?: string;
 };
 
+export type Studio = {
+  id: string;
+  name: string;
+  logoUrl?: string;
+  brandTagline?: string;
+  defaultWatermarkPresetId?: string;
+  printPartners: PrintPartner[];
+  /** Email of the owner at creation / migration (for claiming membership). */
+  ownerEmail: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StudioMember = {
+  uid: string;
+  email: string;
+  studioId: string;
+  role: "owner";
+  createdAt: string;
+};
+
+export type Session = {
+  token: string;
+  expiresAt: string;
+  uid: string;
+  email: string;
+  studioId: string;
+};
+
 export type IdeaCard = {
   id: string;
+  studioId: string;
   title: string;
   category: string;
   notes?: string;
@@ -234,6 +275,7 @@ export type ShotListTemplateItem = {
 
 export type ShotListTemplate = {
   id: string;
+  studioId: string;
   name: string;
   shootType: string;
   items: ShotListTemplateItem[];
@@ -257,6 +299,7 @@ export type ShotItem = {
 
 export type ShootPlan = {
   id: string;
+  studioId: string;
   shootId: string;
   title: string;
   templateId?: string;
@@ -268,8 +311,9 @@ export type ShootPlan = {
   updatedAt: string;
 };
 
+/** In-memory workspace for one studio (admin session). */
 export type AuraDatabase = {
-  studio: StudioSettings;
+  studio: Studio;
   clients: Client[];
   shoots: Shoot[];
   packageTemplates: PackageTemplate[];
@@ -280,8 +324,14 @@ export type AuraDatabase = {
   subAlbums: SubAlbum[];
   watermarkPresets: WatermarkPreset[];
   analyticsEvents: AnalyticsEvent[];
-  sessions: { token: string; expiresAt: string }[];
   ideaCards: IdeaCard[];
   shotListTemplates: ShotListTemplate[];
   shootPlans: ShootPlan[];
+};
+
+export type AdminContext = {
+  studio: Studio;
+  studioId: string;
+  uid: string;
+  email: string;
 };

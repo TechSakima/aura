@@ -1,9 +1,14 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { createSeedDatabase } from "@/lib/db/seed";
+import { nanoid } from "nanoid";
+import {
+  createEmptyStudio,
+  createStudioDatabase,
+} from "@/lib/db/seed";
 import {
   COL,
   LEGACY_DATABASE_DOC,
   STUDIO_SETTINGS_DOC,
+  TENANT_COLLECTIONS,
 } from "@/lib/db/collections";
 import { assertFirebaseReady } from "@/lib/db/require-firebase";
 import { normalizeDb } from "@/lib/db/normalize";
@@ -17,22 +22,37 @@ import type {
   PackageTemplate,
   Photo,
   Proposal,
+  Session,
   Shoot,
   ShootPlan,
   ShotListTemplate,
+  Studio,
+  StudioMember,
   StudioSettings,
   SubAlbum,
   WatermarkPreset,
 } from "@/lib/types";
 
 let writeQueue: Promise<void> = Promise.resolve();
-let migrated = false;
+let multiTenantMigrated = false;
 
 function stripUndefined<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-async function listCollection<T extends { id: string }>(
+async function listByStudioId<T extends { id: string }>(
+  db: Firestore,
+  name: string,
+  studioId: string,
+): Promise<T[]> {
+  const snap = await db.collection(name).where("studioId", "==", studioId).get();
+  return snap.docs.map((d) => {
+    const data = d.data() as Omit<T, "id">;
+    return { ...data, id: d.id } as T;
+  });
+}
+
+async function listAll<T extends { id: string }>(
   db: Firestore,
   name: string,
 ): Promise<T[]> {
@@ -43,12 +63,17 @@ async function listCollection<T extends { id: string }>(
   });
 }
 
-async function writeCollection<T extends { id: string }>(
+/** Write docs for one studio without deleting other tenants' documents. */
+async function writeStudioCollection<T extends { id: string; studioId: string }>(
   db: Firestore,
   name: string,
+  studioId: string,
   items: T[],
 ) {
-  const existing = await db.collection(name).listDocuments();
+  const existingSnap = await db
+    .collection(name)
+    .where("studioId", "==", studioId)
+    .get();
   const keep = new Set(items.map((i) => i.id));
   const batchSize = 400;
   let batch = db.batch();
@@ -60,15 +85,15 @@ async function writeCollection<T extends { id: string }>(
     ops = 0;
   };
 
-  for (const ref of existing) {
-    if (!keep.has(ref.id)) {
-      batch.delete(ref);
+  for (const doc of existingSnap.docs) {
+    if (!keep.has(doc.id)) {
+      batch.delete(doc.ref);
       ops++;
       if (ops >= batchSize) await commit();
     }
   }
   for (const item of items) {
-    const { id, ...rest } = item;
+    const { id, ...rest } = { ...item, studioId };
     batch.set(db.collection(name).doc(id), stripUndefined(rest));
     ops++;
     if (ops >= batchSize) await commit();
@@ -76,67 +101,59 @@ async function writeCollection<T extends { id: string }>(
   await commit();
 }
 
-async function migrateIfNeeded(db: Firestore): Promise<boolean> {
-  if (migrated) return false;
-  const settings = await db.collection(COL.studio).doc(STUDIO_SETTINGS_DOC).get();
-  if (settings.exists) {
-    migrated = true;
-    return false;
-  }
-
-  const legacy = await db.collection(COL.legacy).doc(LEGACY_DATABASE_DOC).get();
-  if (legacy.exists) {
-    const data = normalizeDb(legacy.data() as AuraDatabase);
-    await persistDatabase(db, data);
-    migrated = true;
-    return true;
-  }
-
-  const seed = createSeedDatabase();
-  await persistDatabase(db, seed);
-  migrated = true;
-  return true;
-}
-
-async function persistDatabase(db: Firestore, raw: AuraDatabase) {
+async function persistStudioDatabase(db: Firestore, raw: AuraDatabase) {
   const data = normalizeDb(raw);
+  const studioId = data.studio.id;
   await db
-    .collection(COL.studio)
-    .doc(STUDIO_SETTINGS_DOC)
+    .collection(COL.studios)
+    .doc(studioId)
     .set(stripUndefined(data.studio));
 
-  await writeCollection(db, COL.clients, data.clients);
-  await writeCollection(db, COL.shoots, data.shoots);
-  await writeCollection(db, COL.packageTemplates, data.packageTemplates);
-  await writeCollection(db, COL.proposals, data.proposals);
-  await writeCollection(db, COL.galleries, data.galleries);
-  await writeCollection(db, COL.photos, data.photos);
-  await writeCollection(db, COL.comments, data.comments);
-  await writeCollection(db, COL.subAlbums, data.subAlbums);
-  await writeCollection(db, COL.watermarkPresets, data.watermarkPresets);
-  await writeCollection(db, COL.analyticsEvents, data.analyticsEvents);
-  await writeCollection(
+  await writeStudioCollection(db, COL.clients, studioId, data.clients);
+  await writeStudioCollection(db, COL.shoots, studioId, data.shoots);
+  await writeStudioCollection(
     db,
-    COL.sessions,
-    data.sessions.map((s) => ({ id: s.token, ...s })),
+    COL.packageTemplates,
+    studioId,
+    data.packageTemplates,
   );
-  await writeCollection(db, COL.ideaCards, data.ideaCards);
-  await writeCollection(db, COL.shotListTemplates, data.shotListTemplates);
-  await writeCollection(db, COL.shootPlans, data.shootPlans);
+  await writeStudioCollection(db, COL.proposals, studioId, data.proposals);
+  await writeStudioCollection(db, COL.galleries, studioId, data.galleries);
+  await writeStudioCollection(db, COL.photos, studioId, data.photos);
+  await writeStudioCollection(db, COL.comments, studioId, data.comments);
+  await writeStudioCollection(db, COL.subAlbums, studioId, data.subAlbums);
+  await writeStudioCollection(
+    db,
+    COL.watermarkPresets,
+    studioId,
+    data.watermarkPresets,
+  );
+  await writeStudioCollection(
+    db,
+    COL.analyticsEvents,
+    studioId,
+    data.analyticsEvents.map((e) => ({
+      ...e,
+      studioId: e.studioId || studioId,
+    })),
+  );
+  await writeStudioCollection(db, COL.ideaCards, studioId, data.ideaCards);
+  await writeStudioCollection(
+    db,
+    COL.shotListTemplates,
+    studioId,
+    data.shotListTemplates,
+  );
+  await writeStudioCollection(db, COL.shootPlans, studioId, data.shootPlans);
 }
 
-async function loadDatabase(db: Firestore): Promise<AuraDatabase> {
-  await migrateIfNeeded(db);
-
-  const studioSnap = await db
-    .collection(COL.studio)
-    .doc(STUDIO_SETTINGS_DOC)
-    .get();
-  if (!studioSnap.exists) {
-    const seed = createSeedDatabase();
-    await persistDatabase(db, seed);
-    return seed;
-  }
+async function loadStudioDatabase(
+  db: Firestore,
+  studioId: string,
+): Promise<AuraDatabase | null> {
+  const studioSnap = await db.collection(COL.studios).doc(studioId).get();
+  if (!studioSnap.exists) return null;
+  const studio = { id: studioSnap.id, ...studioSnap.data() } as Studio;
 
   const [
     clients,
@@ -149,32 +166,27 @@ async function loadDatabase(db: Firestore): Promise<AuraDatabase> {
     subAlbums,
     watermarkPresets,
     analyticsEvents,
-    sessionDocs,
     ideaCards,
     shotListTemplates,
     shootPlans,
   ] = await Promise.all([
-    listCollection<Client>(db, COL.clients),
-    listCollection<Shoot>(db, COL.shoots),
-    listCollection<PackageTemplate>(db, COL.packageTemplates),
-    listCollection<Proposal>(db, COL.proposals),
-    listCollection<Gallery>(db, COL.galleries),
-    listCollection<Photo>(db, COL.photos),
-    listCollection<Comment>(db, COL.comments),
-    listCollection<SubAlbum>(db, COL.subAlbums),
-    listCollection<WatermarkPreset>(db, COL.watermarkPresets),
-    listCollection<AnalyticsEvent>(db, COL.analyticsEvents),
-    listCollection<{ id: string; token: string; expiresAt: string }>(
-      db,
-      COL.sessions,
-    ),
-    listCollection<IdeaCard>(db, COL.ideaCards),
-    listCollection<ShotListTemplate>(db, COL.shotListTemplates),
-    listCollection<ShootPlan>(db, COL.shootPlans),
+    listByStudioId<Client>(db, COL.clients, studioId),
+    listByStudioId<Shoot>(db, COL.shoots, studioId),
+    listByStudioId<PackageTemplate>(db, COL.packageTemplates, studioId),
+    listByStudioId<Proposal>(db, COL.proposals, studioId),
+    listByStudioId<Gallery>(db, COL.galleries, studioId),
+    listByStudioId<Photo>(db, COL.photos, studioId),
+    listByStudioId<Comment>(db, COL.comments, studioId),
+    listByStudioId<SubAlbum>(db, COL.subAlbums, studioId),
+    listByStudioId<WatermarkPreset>(db, COL.watermarkPresets, studioId),
+    listByStudioId<AnalyticsEvent>(db, COL.analyticsEvents, studioId),
+    listByStudioId<IdeaCard>(db, COL.ideaCards, studioId),
+    listByStudioId<ShotListTemplate>(db, COL.shotListTemplates, studioId),
+    listByStudioId<ShootPlan>(db, COL.shootPlans, studioId),
   ]);
 
   return normalizeDb({
-    studio: studioSnap.data() as StudioSettings,
+    studio,
     clients,
     shoots,
     packageTemplates,
@@ -185,105 +197,418 @@ async function loadDatabase(db: Firestore): Promise<AuraDatabase> {
     subAlbums,
     watermarkPresets,
     analyticsEvents,
-    sessions: sessionDocs.map((s) => ({
-      token: s.token || s.id,
-      expiresAt: s.expiresAt,
-    })),
     ideaCards,
     shotListTemplates,
     shootPlans,
   });
 }
 
-export async function readDb(): Promise<AuraDatabase> {
-  const { db } = assertFirebaseReady();
-  return loadDatabase(db);
+/** One-time: legacy studio/settings (+ unscoped docs) → studios/{id}. */
+async function migrateToMultiTenant(db: Firestore): Promise<void> {
+  if (multiTenantMigrated) return;
+
+  const studiosSnap = await db.collection(COL.studios).limit(1).get();
+  if (!studiosSnap.empty) {
+    multiTenantMigrated = true;
+    return;
+  }
+
+  // Prefer legacy monolith, then studio/settings.
+  const legacy = await db.collection(COL.legacy).doc(LEGACY_DATABASE_DOC).get();
+  const settingsSnap = await db
+    .collection(COL.studio)
+    .doc(STUDIO_SETTINGS_DOC)
+    .get();
+
+  let studioId = nanoid();
+  let ownerEmail = "";
+  let studioName = "Studio";
+  let brandTagline: string | undefined;
+  let logoUrl: string | undefined;
+  let printPartners: Studio["printPartners"] = [];
+  let defaultWatermarkPresetId: string | undefined;
+
+  if (legacy.exists) {
+    const raw = legacy.data() as {
+      studio?: StudioSettings;
+      clients?: Client[];
+      shoots?: Shoot[];
+      packageTemplates?: PackageTemplate[];
+      proposals?: Proposal[];
+      galleries?: Gallery[];
+      photos?: Photo[];
+      comments?: Comment[];
+      subAlbums?: SubAlbum[];
+      watermarkPresets?: WatermarkPreset[];
+      analyticsEvents?: AnalyticsEvent[];
+      ideaCards?: IdeaCard[];
+      shotListTemplates?: ShotListTemplate[];
+      shootPlans?: ShootPlan[];
+    };
+    const s = raw.studio;
+    ownerEmail = (s?.adminEmail || "").toLowerCase();
+    studioName = s?.name || "Studio";
+    brandTagline = s?.brandTagline;
+    logoUrl = s?.logoUrl;
+    printPartners = s?.printPartners || [];
+    defaultWatermarkPresetId = s?.defaultWatermarkPresetId;
+
+    const studio = createEmptyStudio({
+      id: studioId,
+      name: studioName,
+      ownerEmail: ownerEmail || "owner@example.com",
+    });
+    studio.brandTagline = brandTagline;
+    studio.logoUrl = logoUrl;
+    studio.printPartners = printPartners;
+    studio.defaultWatermarkPresetId = defaultWatermarkPresetId;
+
+    const stamp = <T extends { id: string }>(items: T[] | undefined) =>
+      (items || []).map((item) => ({ ...item, studioId }));
+
+    const data = normalizeDb({
+      studio,
+      clients: stamp(raw.clients),
+      shoots: stamp(raw.shoots),
+      packageTemplates: stamp(raw.packageTemplates),
+      proposals: stamp(raw.proposals),
+      galleries: stamp(raw.galleries),
+      photos: stamp(raw.photos),
+      comments: stamp(raw.comments),
+      subAlbums: stamp(raw.subAlbums),
+      watermarkPresets: stamp(raw.watermarkPresets),
+      analyticsEvents: stamp(raw.analyticsEvents),
+      ideaCards: stamp(raw.ideaCards),
+      shotListTemplates: stamp(raw.shotListTemplates),
+      shootPlans: stamp(raw.shootPlans),
+    });
+    await persistStudioDatabase(db, data);
+  } else if (settingsSnap.exists) {
+    const s = settingsSnap.data() as StudioSettings;
+    ownerEmail = (s.adminEmail || "").toLowerCase();
+    studioName = s.name || "Studio";
+    const studio = createEmptyStudio({
+      id: studioId,
+      name: studioName,
+      ownerEmail: ownerEmail || "owner@example.com",
+    });
+    studio.brandTagline = s.brandTagline;
+    studio.logoUrl = s.logoUrl;
+    studio.printPartners = s.printPartners || [];
+    studio.defaultWatermarkPresetId = s.defaultWatermarkPresetId;
+
+    // Stamp all existing flat collections.
+    for (const colName of TENANT_COLLECTIONS) {
+      const snap = await db.collection(colName).get();
+      const batchSize = 400;
+      let batch = db.batch();
+      let ops = 0;
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        if (data.studioId) continue;
+        batch.set(doc.ref, { ...data, studioId }, { merge: true });
+        ops++;
+        if (ops >= batchSize) {
+          await batch.commit();
+          batch = db.batch();
+          ops = 0;
+        }
+      }
+      if (ops) await batch.commit();
+    }
+    await db.collection(COL.studios).doc(studioId).set(stripUndefined(studio));
+  } else {
+    // Fresh project — no seed studio until someone signs up.
+    multiTenantMigrated = true;
+    return;
+  }
+
+  // Archive legacy settings so we don't re-migrate.
+  if (settingsSnap.exists) {
+    await db
+      .collection(COL.studio)
+      .doc(STUDIO_SETTINGS_DOC)
+      .set(
+        {
+          migratedToStudioId: studioId,
+          migratedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+  }
+
+  multiTenantMigrated = true;
 }
 
-export async function writeDb(data: AuraDatabase): Promise<void> {
+async function ensureMigrated() {
   const { db } = assertFirebaseReady();
-  await persistDatabase(db, data);
+  await migrateToMultiTenant(db);
 }
 
-export async function updateDb<T>(
+export async function readStudioDb(studioId: string): Promise<AuraDatabase> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const data = await loadStudioDatabase(db, studioId);
+  if (!data) {
+    throw new Error(`Studio not found: ${studioId}`);
+  }
+  return data;
+}
+
+export async function updateStudioDb<T>(
+  studioId: string,
   mutator: (db: AuraDatabase) => T | Promise<T>,
 ): Promise<T> {
   let result!: T;
   writeQueue = writeQueue.then(async () => {
+    await ensureMigrated();
     const { db } = assertFirebaseReady();
-    const current = await loadDatabase(db);
+    const current = await loadStudioDatabase(db, studioId);
+    if (!current) throw new Error(`Studio not found: ${studioId}`);
     result = await mutator(current);
-    await persistDatabase(db, current);
+    current.studio.id = studioId;
+    current.studio.updatedAt = new Date().toISOString();
+    await persistStudioDatabase(db, current);
   });
   await writeQueue;
   return result;
 }
 
-/** Scoped reads — prefer these over readDb() for hot paths. */
-export async function getStudio(): Promise<StudioSettings> {
-  const db = await readDb();
-  return db.studio;
+/** Compatibility: session-less callers must not use these. Prefer updateStudioDb. */
+export async function readDb(): Promise<AuraDatabase> {
+  throw new Error("readDb() removed — use readStudioDb(studioId)");
+}
+
+export async function updateDb<T>(
+  _mutator: (db: AuraDatabase) => T | Promise<T>,
+): Promise<T> {
+  throw new Error("updateDb() removed — use updateStudioDb(studioId, mutator)");
+}
+
+export async function getStudioDoc(studioId: string): Promise<Studio | null> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db.collection(COL.studios).doc(studioId).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...snap.data() } as Studio;
+}
+
+export async function createStudioWithDefaults(opts: {
+  name: string;
+  ownerEmail: string;
+  ownerUid: string;
+}): Promise<{ studio: Studio; member: StudioMember }> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const studio = createEmptyStudio({
+    name: opts.name,
+    ownerEmail: opts.ownerEmail,
+  });
+  const workspace = createStudioDatabase(studio);
+  await persistStudioDatabase(db, workspace);
+
+  const member: StudioMember = {
+    uid: opts.ownerUid,
+    email: opts.ownerEmail.toLowerCase(),
+    studioId: studio.id,
+    role: "owner",
+    createdAt: new Date().toISOString(),
+  };
+  await db
+    .collection(COL.studioMembers)
+    .doc(opts.ownerUid)
+    .set(stripUndefined(member));
+
+  return { studio: workspace.studio, member };
+}
+
+export async function getMemberByUid(
+  uid: string,
+): Promise<StudioMember | null> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db.collection(COL.studioMembers).doc(uid).get();
+  if (!snap.exists) return null;
+  return { uid: snap.id, ...snap.data() } as StudioMember;
+}
+
+/** Claim membership for migrated studio owner (matched by email). */
+export async function claimStudioMembership(opts: {
+  uid: string;
+  email: string;
+}): Promise<StudioMember | null> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const email = opts.email.toLowerCase();
+
+  const existing = await getMemberByUid(opts.uid);
+  if (existing) return existing;
+
+  const studios = await listAll<Studio>(db, COL.studios);
+  const match = studios.find((s) => s.ownerEmail?.toLowerCase() === email);
+  if (!match) return null;
+
+  // Only one owner member per studio for v1 — skip if someone else claimed.
+  const membersSnap = await db
+    .collection(COL.studioMembers)
+    .where("studioId", "==", match.id)
+    .limit(1)
+    .get();
+  if (!membersSnap.empty) return null;
+
+  const member: StudioMember = {
+    uid: opts.uid,
+    email,
+    studioId: match.id,
+    role: "owner",
+    createdAt: new Date().toISOString(),
+  };
+  await db
+    .collection(COL.studioMembers)
+    .doc(opts.uid)
+    .set(stripUndefined(member));
+  return member;
+}
+
+export async function createSession(session: Session): Promise<void> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const { token, ...rest } = session;
+  await db.collection(COL.sessions).doc(token).set(stripUndefined(rest));
+}
+
+export async function getSession(token: string): Promise<Session | null> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db.collection(COL.sessions).doc(token).get();
+  if (!snap.exists) return null;
+  const data = snap.data() as Omit<Session, "token">;
+  return { token: snap.id, ...data };
+}
+
+export async function deleteSession(token: string): Promise<void> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  await db.collection(COL.sessions).doc(token).delete();
+}
+
+export async function getStudio(): Promise<Studio> {
+  throw new Error("getStudio() removed — use getStudioDoc(studioId)");
+}
+
+export async function findGalleryByPublicToken(
+  token: string,
+): Promise<Gallery | null> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db
+    .collection(COL.galleries)
+    .where("publicToken", "==", token)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const d = snap.docs[0]!;
+  return { id: d.id, ...d.data() } as Gallery;
+}
+
+export async function findProposalByToken(
+  token: string,
+): Promise<Proposal | null> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db
+    .collection(COL.proposals)
+    .where("token", "==", token)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const d = snap.docs[0]!;
+  return { id: d.id, ...d.data() } as Proposal;
+}
+
+export async function findSubAlbumByToken(
+  token: string,
+): Promise<SubAlbum | null> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db
+    .collection(COL.subAlbums)
+    .where("token", "==", token)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const d = snap.docs[0]!;
+  return { id: d.id, ...d.data() } as SubAlbum;
 }
 
 export async function getGalleryBundle(galleryId: string) {
+  await ensureMigrated();
   const { db } = assertFirebaseReady();
-  await migrateIfNeeded(db);
   const gallerySnap = await db.collection(COL.galleries).doc(galleryId).get();
   if (!gallerySnap.exists) return null;
-  const gallery = { id: gallerySnap.id, ...gallerySnap.data() } as AuraDatabase["galleries"][0];
+  const gallery = {
+    id: gallerySnap.id,
+    ...gallerySnap.data(),
+  } as Gallery;
   const photosSnap = await db
     .collection(COL.photos)
     .where("galleryId", "==", galleryId)
     .get();
   const photos = photosSnap.docs.map(
-    (d) => ({ id: d.id, ...d.data() }) as AuraDatabase["photos"][0],
+    (d) => ({ id: d.id, ...d.data() }) as Photo,
   );
   photos.sort((a, b) => a.sortOrder - b.sortOrder);
   const shootSnap = await db.collection(COL.shoots).doc(gallery.shootId).get();
   const shoot = shootSnap.exists
-    ? ({ id: shootSnap.id, ...shootSnap.data() } as AuraDatabase["shoots"][0])
+    ? ({ id: shootSnap.id, ...shootSnap.data() } as Shoot)
     : null;
-  let client = null as AuraDatabase["clients"][0] | null;
+  let client = null as Client | null;
   if (shoot) {
-    const clientSnap = await db.collection(COL.clients).doc(shoot.clientId).get();
+    const clientSnap = await db
+      .collection(COL.clients)
+      .doc(shoot.clientId)
+      .get();
     if (clientSnap.exists) {
-      client = { id: clientSnap.id, ...clientSnap.data() } as AuraDatabase["clients"][0];
+      client = { id: clientSnap.id, ...clientSnap.data() } as Client;
     }
   }
-  const watermarks = await listCollection(db, COL.watermarkPresets);
-  return { gallery, photos, shoot, client, watermarkPresets: watermarks };
+  const studioId = gallery.studioId;
+  const watermarkPresets = studioId
+    ? await listByStudioId<WatermarkPreset>(db, COL.watermarkPresets, studioId)
+    : [];
+  return { gallery, photos, shoot, client, watermarkPresets };
 }
 
 export async function getClientBundle(clientId: string) {
+  await ensureMigrated();
   const { db } = assertFirebaseReady();
-  await migrateIfNeeded(db);
   const clientSnap = await db.collection(COL.clients).doc(clientId).get();
   if (!clientSnap.exists) return null;
-  const client = { id: clientSnap.id, ...clientSnap.data() } as AuraDatabase["clients"][0];
+  const client = { id: clientSnap.id, ...clientSnap.data() } as Client;
   const shootsSnap = await db
     .collection(COL.shoots)
     .where("clientId", "==", clientId)
     .get();
   const shoots = shootsSnap.docs.map(
-    (d) => ({ id: d.id, ...d.data() }) as AuraDatabase["shoots"][0],
+    (d) => ({ id: d.id, ...d.data() }) as Shoot,
   );
   return { client, shoots };
 }
 
 export async function getShootBundle(shootId: string) {
+  await ensureMigrated();
   const { db } = assertFirebaseReady();
-  await migrateIfNeeded(db);
   const shootSnap = await db.collection(COL.shoots).doc(shootId).get();
   if (!shootSnap.exists) return null;
-  const shoot = { id: shootSnap.id, ...shootSnap.data() } as AuraDatabase["shoots"][0];
+  const shoot = { id: shootSnap.id, ...shootSnap.data() } as Shoot;
   const clientSnap = await db.collection(COL.clients).doc(shoot.clientId).get();
   const client = clientSnap.exists
-    ? ({ id: clientSnap.id, ...clientSnap.data() } as AuraDatabase["clients"][0])
+    ? ({ id: clientSnap.id, ...clientSnap.data() } as Client)
     : null;
-  let gallery = null as AuraDatabase["galleries"][0] | null;
+  let gallery = null as Gallery | null;
   if (shoot.galleryId) {
     const g = await db.collection(COL.galleries).doc(shoot.galleryId).get();
-    if (g.exists) gallery = { id: g.id, ...g.data() } as AuraDatabase["galleries"][0];
+    if (g.exists) gallery = { id: g.id, ...g.data() } as Gallery;
   }
   return { shoot, client, gallery };
 }

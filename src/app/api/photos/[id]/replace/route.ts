@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { processUpload } from "@/lib/images/process";
 
 export async function POST(
@@ -10,7 +10,7 @@ export async function POST(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   const photo = db.photos.find((p) => p.id === id);
   if (!photo) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -33,12 +33,13 @@ export async function POST(
   const processed = await processUpload({
     buffer,
     baseName,
+    studioId: admin.studioId,
     galleryId: photo.galleryId,
     folder: "galleries",
     watermark,
   });
 
-  const updated = await updateDb((d) => {
+  const updated = await updateStudioDb(admin.studioId, (d) => {
     const p = d.photos.find((x) => x.id === id);
     if (!p) return null;
     Object.assign(p, processed, {

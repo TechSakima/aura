@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { readDb } from "@/lib/db/store";
+import { findGalleryByPublicToken } from "@/lib/db/store";
 
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const db = await readDb();
-  const gallery = db.galleries.find((g) => g.publicToken === token);
+  const gallery = await findGalleryByPublicToken(token);
 
   const title = gallery?.title || "Aura Gallery";
   const cover = gallery?.coverPhotoUrl || "/icon-512.png";

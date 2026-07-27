@@ -1,6 +1,9 @@
 /** Top-level Firestore collections for Aura (Admin SDK only). */
 export const COL = {
+  /** @deprecated legacy single-studio doc — migrated into studios/ */
   studio: "studio",
+  studios: "studios",
+  studioMembers: "studioMembers",
   clients: "clients",
   shoots: "shoots",
   packageTemplates: "packageTemplates",
@@ -22,4 +25,19 @@ export const COL = {
 export const STUDIO_SETTINGS_DOC = "settings";
 export const LEGACY_DATABASE_DOC = "database";
 
-export type CollectionKey = Exclude<keyof typeof COL, "legacy" | "studio">;
+/** Collections that carry studioId and are tenant-scoped. */
+export const TENANT_COLLECTIONS = [
+  COL.clients,
+  COL.shoots,
+  COL.packageTemplates,
+  COL.proposals,
+  COL.galleries,
+  COL.photos,
+  COL.comments,
+  COL.subAlbums,
+  COL.watermarkPresets,
+  COL.analyticsEvents,
+  COL.ideaCards,
+  COL.shotListTemplates,
+  COL.shootPlans,
+] as const;

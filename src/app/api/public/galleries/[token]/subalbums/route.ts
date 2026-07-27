@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { updateDb } from "@/lib/db/store";
+import {
+  findGalleryByPublicToken,
+  updateStudioDb,
+} from "@/lib/db/store";
 import { publicToken } from "@/lib/tokens";
 
 export async function POST(
@@ -12,14 +15,23 @@ export async function POST(
   const label = String(body.label || "Shared album").trim();
   const photoIds: string[] = Array.isArray(body.photoIds) ? body.photoIds : [];
   if (!photoIds.length) {
-    return NextResponse.json({ error: "Select at least one photo" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Select at least one photo" },
+      { status: 400 },
+    );
   }
 
-  const sub = await updateDb((db) => {
+  const hit = await findGalleryByPublicToken(token);
+  if (!hit?.studioId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const sub = await updateStudioDb(hit.studioId, (db) => {
     const gallery = db.galleries.find((g) => g.publicToken === token);
     if (!gallery) return null;
     const album = {
       id: nanoid(),
+      studioId: gallery.studioId,
       galleryId: gallery.id,
       token: publicToken(),
       label,

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { readDb, updateDb } from "@/lib/db/store";
+import {
+  findProposalByToken,
+  readStudioDb,
+  updateStudioDb,
+} from "@/lib/db/store";
 import { recordEvent } from "@/lib/analytics";
 import { resolveMediaUrl } from "@/lib/media-url";
 
@@ -8,7 +12,12 @@ export async function GET(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const db = await readDb();
+  const hit = await findProposalByToken(token);
+  if (!hit?.studioId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const db = await readStudioDb(hit.studioId);
   const proposal = db.proposals.find((p) => p.token === token);
   if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const shoot = db.shoots.find((s) => s.id === proposal.shootId);
@@ -16,6 +25,7 @@ export async function GET(
 
   await recordEvent({
     type: "proposal_view",
+    studioId: proposal.studioId,
     proposalId: proposal.id,
     shootId: proposal.shootId,
   });
@@ -23,7 +33,6 @@ export async function GET(
   return NextResponse.json({
     proposal: {
       ...proposal,
-      // never expose internal ids unnecessarily beyond what's needed
     },
     studio: {
       name: db.studio.name,
@@ -42,7 +51,12 @@ export async function POST(
   const body = await req.json();
   const now = new Date().toISOString();
 
-  const result = await updateDb((db) => {
+  const hit = await findProposalByToken(token);
+  if (!hit?.studioId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const result = await updateStudioDb(hit.studioId, (db) => {
     const proposal = db.proposals.find((p) => p.token === token);
     if (!proposal) return null;
     if (proposal.status === "accepted") {
@@ -67,6 +81,7 @@ export async function POST(
   if (!result.already) {
     await recordEvent({
       type: "proposal_accept",
+      studioId: result.proposal.studioId,
       proposalId: result.proposal.id,
       shootId: result.proposal.shootId,
     });

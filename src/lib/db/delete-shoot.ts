@@ -1,4 +1,4 @@
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { deleteStorageObject } from "@/lib/storage/upload";
 
 export async function deletePhotoFiles(storagePath: string) {
@@ -20,15 +20,18 @@ export async function deletePhotoFiles(storagePath: string) {
 }
 
 /** Delete photos by id and clean storage + related comments. */
-export async function deletePhotosByIds(photoIds: string[]): Promise<number> {
+export async function deletePhotosByIds(
+  studioId: string,
+  photoIds: string[],
+): Promise<number> {
   if (!photoIds.length) return 0;
   const idSet = new Set(photoIds);
-  const db = await readDb();
+  const db = await readStudioDb(studioId);
   const photos = db.photos.filter((p) => idSet.has(p.id));
   for (const photo of photos) {
     await deletePhotoFiles(photo.storagePath);
   }
-  await updateDb((d) => {
+  await updateStudioDb(studioId, (d) => {
     d.photos = d.photos.filter((p) => !idSet.has(p.id));
     d.comments = d.comments.filter((c) => !idSet.has(c.photoId));
     for (const g of d.galleries) {
@@ -55,8 +58,11 @@ export async function deletePhotosByIds(photoIds: string[]): Promise<number> {
 }
 
 /** Remove a shoot and related plans, proposals, galleries, photos, comments. */
-export async function deleteShootCascade(shootId: string): Promise<boolean> {
-  const db = await readDb();
+export async function deleteShootCascade(
+  studioId: string,
+  shootId: string,
+): Promise<boolean> {
+  const db = await readStudioDb(studioId);
   const shoot = db.shoots.find((s) => s.id === shootId);
   if (!shoot) return false;
 
@@ -68,7 +74,7 @@ export async function deleteShootCascade(shootId: string): Promise<boolean> {
     await deletePhotoFiles(photo.storagePath);
   }
 
-  await updateDb((d) => {
+  await updateStudioDb(studioId, (d) => {
     d.photos = d.photos.filter((p) => !galleryIds.has(p.galleryId));
     d.comments = d.comments.filter((c) => !galleryIds.has(c.galleryId));
     d.subAlbums = d.subAlbums.filter((a) => !galleryIds.has(a.galleryId));
@@ -89,13 +95,14 @@ export async function deleteShootCascade(shootId: string): Promise<boolean> {
 
 /** Remove a proposal and unlink it from its shoot. */
 export async function deleteProposalCascade(
+  studioId: string,
   proposalId: string,
 ): Promise<boolean> {
-  const db = await readDb();
+  const db = await readStudioDb(studioId);
   const proposal = db.proposals.find((p) => p.id === proposalId);
   if (!proposal) return false;
 
-  await updateDb((d) => {
+  await updateStudioDb(studioId, (d) => {
     d.proposals = d.proposals.filter((p) => p.id !== proposalId);
     d.analyticsEvents = d.analyticsEvents.filter(
       (e) => e.proposalId !== proposalId,

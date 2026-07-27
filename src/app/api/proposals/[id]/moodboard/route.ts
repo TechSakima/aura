@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { updateDb } from "@/lib/db/store";
+import { updateStudioDb } from "@/lib/db/store";
 import { processUpload } from "@/lib/images/process";
 
 export async function POST(
@@ -23,6 +23,7 @@ export async function POST(
     const processed = await processUpload({
       buffer,
       baseName: `mood-${id}-${nanoid(8)}`,
+      studioId: admin.studioId,
       folder: "moodboards",
       watermark: null,
     });
@@ -33,7 +34,7 @@ export async function POST(
     });
   }
 
-  const proposal = await updateDb((db) => {
+  const proposal = await updateStudioDb(admin.studioId, (db) => {
     const p = db.proposals.find((x) => x.id === id);
     if (!p) return null;
     p.moodBoard = [...p.moodBoard, ...items];

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { updateDb } from "@/lib/db/store";
+import { updateStudioDb } from "@/lib/db/store";
 import { reprocessGalleryWatermarks } from "@/lib/images/rewatermark";
 
 export async function POST(
@@ -11,7 +11,7 @@ export async function POST(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
 
-  const result = await updateDb(async (db) => {
+  const result = await updateStudioDb(admin.studioId, async (db) => {
     const gallery = db.galleries.find((g) => g.id === id);
     if (!gallery) return null;
     return reprocessGalleryWatermarks(db, id);

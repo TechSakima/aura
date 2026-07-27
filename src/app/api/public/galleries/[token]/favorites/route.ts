@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { updateDb } from "@/lib/db/store";
+import {
+  findGalleryByPublicToken,
+  updateStudioDb,
+} from "@/lib/db/store";
 import { recordEvent } from "@/lib/analytics";
 
 export async function POST(
@@ -13,12 +16,19 @@ export async function POST(
     return NextResponse.json({ error: "photoId required" }, { status: 400 });
   }
 
-  const result = await updateDb((db) => {
+  const hit = await findGalleryByPublicToken(token);
+  if (!hit?.studioId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const result = await updateStudioDb(hit.studioId, (db) => {
     const gallery = db.galleries.find((g) => g.publicToken === token);
     if (!gallery) return null;
     const has = gallery.favoritePhotoIds.includes(photoId);
     if (has) {
-      gallery.favoritePhotoIds = gallery.favoritePhotoIds.filter((id) => id !== photoId);
+      gallery.favoritePhotoIds = gallery.favoritePhotoIds.filter(
+        (id) => id !== photoId,
+      );
     } else {
       if (
         gallery.selectLimit != null &&
@@ -39,6 +49,7 @@ export async function POST(
 
   await recordEvent({
     type: "favorite_toggle",
+    studioId: result.gallery.studioId,
     galleryId: result.gallery.id,
     photoId,
     meta: { on: Boolean(result.toggledOn) },

@@ -30,7 +30,7 @@ export default function SettingsPage() {
   const uploadSession = useUploadSession();
   const [name, setName] = useState("");
   const [brandTagline, setBrandTagline] = useState("");
-  const [adminEmail, setAdminEmail] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
   const [defaultWatermarkPresetId, setDefaultWatermarkPresetId] = useState("");
   const [printPartners, setPrintPartners] = useState<PrintPartner[]>([]);
   const [presets, setPresets] = useState<WatermarkPreset[]>([]);
@@ -54,7 +54,7 @@ export default function SettingsPage() {
     const data = await res.json();
     setName(data.studio.name);
     setBrandTagline(data.studio.brandTagline || "");
-    setAdminEmail(data.studio.adminEmail);
+    setOwnerEmail(data.studio.ownerEmail || "");
     setLogoUrl(data.studio.logoUrl || "");
     setDefaultWatermarkPresetId(data.studio.defaultWatermarkPresetId || "");
     setPrintPartners(data.studio.printPartners || []);
@@ -93,7 +93,6 @@ export default function SettingsPage() {
       body: JSON.stringify({
         name,
         brandTagline,
-        adminEmail,
         defaultWatermarkPresetId,
         printPartners,
       }),
@@ -222,15 +221,12 @@ export default function SettingsPage() {
                 onChange={(e) => setBrandTagline(e.target.value)}
               />
             </Field>
-            <Field>
-              <Label htmlFor="email">Admin email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-              />
-            </Field>
+            {ownerEmail ? (
+              <Field>
+                <Label htmlFor="email">Owner email</Label>
+                <Input id="email" type="email" value={ownerEmail} disabled />
+              </Field>
+            ) : null}
             <Field>
               <Label>Studio logo</Label>
               {resolveMediaUrl(logoUrl) ? (

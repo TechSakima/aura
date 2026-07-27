@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import type { ShotItem } from "@/lib/types";
 
 export async function GET(
@@ -11,7 +11,7 @@ export async function GET(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   const plan = db.shootPlans.find((p) => p.shootId === id) || null;
   const shoot = db.shoots.find((s) => s.id === id) || null;
   return NextResponse.json({
@@ -31,7 +31,7 @@ export async function POST(
   const body = await req.json();
   const now = new Date().toISOString();
 
-  const plan = await updateDb((db) => {
+  const plan = await updateStudioDb(admin.studioId, (db) => {
     const shoot = db.shoots.find((s) => s.id === id);
     if (!shoot) return null;
     const existing = db.shootPlans.find((p) => p.shootId === id);
@@ -81,6 +81,7 @@ export async function POST(
 
     const next = {
       id: existing?.id || nanoid(),
+      studioId: admin.studioId,
       shootId: id,
       title: String(body.title || `${shoot.type} plan`),
       templateId: template?.id,
@@ -112,7 +113,7 @@ export async function PATCH(
   const { id } = await ctx.params;
   const body = await req.json();
 
-  const plan = await updateDb((db) => {
+  const plan = await updateStudioDb(admin.studioId, (db) => {
     const p = db.shootPlans.find((x) => x.shootId === id);
     if (!p) return null;
     if (body.title != null) p.title = String(body.title);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { deleteShootCascade } from "@/lib/db/delete-shoot";
-import { getShootBundle, updateDb } from "@/lib/db/store";
+import { getShootBundle, updateStudioDb } from "@/lib/db/store";
 import type { ShootStatus } from "@/lib/types";
 
 export async function GET(
@@ -12,7 +12,9 @@ export async function GET(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const bundle = await getShootBundle(id);
-  if (!bundle) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!bundle || bundle.shoot.studioId !== admin.studioId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const gallery = bundle.gallery
     ? (() => {
         const { downloadPinHash: _, ...safe } = bundle.gallery;
@@ -34,7 +36,7 @@ export async function PATCH(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const body = await req.json();
-  const shoot = await updateDb((db) => {
+  const shoot = await updateStudioDb(admin.studioId, (db) => {
     const s = db.shoots.find((x) => x.id === id);
     if (!s) return null;
     if (body.type != null) s.type = String(body.type);
@@ -65,7 +67,7 @@ export async function DELETE(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const ok = await deleteShootCascade(id);
+  const ok = await deleteShootCascade(admin.studioId, id);
   if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

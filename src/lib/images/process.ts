@@ -128,12 +128,14 @@ async function loadWatermarkMark(
 export async function processUpload(opts: {
   buffer: Buffer;
   baseName: string;
+  studioId: string;
   galleryId?: string;
   folder?: "galleries" | "ideas" | "brand" | "moodboards" | "watermarks";
   watermark?: WatermarkPreset | null;
 }): Promise<ProcessedImage> {
   const folder = opts.folder ?? "galleries";
   const gallerySegment = opts.galleryId ?? "shared";
+  const studioId = opts.studioId || "shared";
   const id = opts.baseName;
 
   const image = sharp(opts.buffer).rotate();
@@ -162,8 +164,8 @@ export async function processUpload(opts: {
 
   const base =
     folder === "galleries"
-      ? storageObjectPath("galleries", gallerySegment)
-      : storageObjectPath(folder);
+      ? storageObjectPath(studioId, "galleries", gallerySegment)
+      : storageObjectPath(studioId, folder);
 
   const originalPath = `${base}/originals/${id}.jpg`;
   const thumbPath = `${base}/derivatives/${id}-thumb.webp`;
@@ -252,9 +254,10 @@ export async function reprocessWatermarkedDerivative(opts: {
 export async function saveWatermarkAsset(
   buffer: Buffer,
   filename: string,
+  studioId: string,
 ): Promise<string> {
   const safe = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const objectPath = storageObjectPath("watermarks", safe);
+  const objectPath = storageObjectPath(studioId, "watermarks", safe);
   await uploadBuffer({
     buffer,
     objectPath,
@@ -264,7 +267,10 @@ export async function saveWatermarkAsset(
   return objectPath;
 }
 
-export async function saveBrandLogo(buffer: Buffer): Promise<string> {
+export async function saveBrandLogo(
+  buffer: Buffer,
+  studioId: string,
+): Promise<string> {
   let out: Buffer;
   let contentType = "image/webp";
   let ext = "webp";
@@ -280,7 +286,11 @@ export async function saveBrandLogo(buffer: Buffer): Promise<string> {
     contentType = "application/octet-stream";
     ext = "bin";
   }
-  const objectPath = storageObjectPath("brand", `logo-${Date.now()}.${ext}`);
+  const objectPath = storageObjectPath(
+    studioId,
+    "brand",
+    `logo-${Date.now()}.${ext}`,
+  );
   // Serve via /api/media — Firebase “public” object ACLs are often blocked.
   const uploaded = await uploadBuffer({
     buffer: out,

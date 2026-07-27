@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { readDb, updateDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { publicToken } from "@/lib/tokens";
 
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   return NextResponse.json({
     proposals: db.proposals,
     shoots: db.shoots,
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "shootId required" }, { status: 400 });
   }
 
-  const db = await readDb();
+  const db = await readStudioDb(admin.studioId);
   const shoot = db.shoots.find((s) => s.id === body.shootId);
   if (!shoot) return NextResponse.json({ error: "Shoot not found" }, { status: 404 });
 
@@ -35,6 +35,7 @@ export async function POST(req: Request) {
   const now = new Date().toISOString();
   const proposal = {
     id: nanoid(),
+    studioId: admin.studioId,
     token: publicToken(),
     shootId: shoot.id,
     packageTemplateId: pkg?.id,
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
     updatedAt: now,
   };
 
-  await updateDb((d) => {
+  await updateStudioDb(admin.studioId, (d) => {
     // Replace any existing proposal for this shoot (change package)
     d.proposals = d.proposals.filter((p) => p.shootId !== shoot.id);
     d.proposals.unshift(proposal);

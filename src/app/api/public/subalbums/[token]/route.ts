@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { readDb } from "@/lib/db/store";
+import {
+  findSubAlbumByToken,
+  readStudioDb,
+} from "@/lib/db/store";
 import { recordEvent } from "@/lib/analytics";
 
 export async function GET(
@@ -7,9 +10,12 @@ export async function GET(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const db = await readDb();
-  const album = db.subAlbums.find((s) => s.token === token);
-  if (!album) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const album = await findSubAlbumByToken(token);
+  if (!album?.studioId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const db = await readStudioDb(album.studioId);
   const gallery = db.galleries.find((g) => g.id === album.galleryId);
   if (!gallery) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -24,6 +30,7 @@ export async function GET(
 
   await recordEvent({
     type: "subalbum_view",
+    studioId: gallery.studioId,
     galleryId: gallery.id,
     shootId: gallery.shootId,
     meta: { subAlbumId: album.id },
