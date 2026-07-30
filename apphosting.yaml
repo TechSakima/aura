@@ -67,22 +67,19 @@ env:
     secret: RESEND_API_KEY
     availability:
       - RUNTIME
-  # Inbound receiving host (docs/RESEND.md Tier 3). Webhook/cron secrets:
-  #   npx firebase apphosting:secrets:set RESEND_WEBHOOK_SECRET
-  #   npx firebase apphosting:secrets:set CRON_SECRET
-  # then grant to the backend and uncomment the secret blocks below.
+  # Inbound receiving (docs/RESEND.md Tier 3) + outbox cron (Tier 2)
   - variable: RESEND_INBOUND_DOMAIN
     value: inbound.aura.stroburm.app
     availability:
       - RUNTIME
-  # - variable: RESEND_WEBHOOK_SECRET
-  #   secret: RESEND_WEBHOOK_SECRET
-  #   availability:
-  #     - RUNTIME
-  # - variable: CRON_SECRET
-  #   secret: CRON_SECRET
-  #   availability:
-  #     - RUNTIME
+  - variable: RESEND_WEBHOOK_SECRET
+    secret: RESEND_WEBHOOK_SECRET
+    availability:
+      - RUNTIME
+  - variable: CRON_SECRET
+    secret: CRON_SECRET
+    availability:
+      - RUNTIME
   - variable: STRIPE_SECRET_KEY
     secret: STRIPE_SECRET_KEY
     availability:
