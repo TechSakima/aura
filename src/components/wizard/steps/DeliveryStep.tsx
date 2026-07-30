@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Button,
+  ButtonLink,
   EmptyState,
   Field,
   FileUploadButton,
@@ -15,13 +16,21 @@ import {
   useUploadSession,
 } from "@/components/ui";
 import { GalleryDesignPanel } from "@/components/admin/GalleryDesignPanel";
+import { DeliveryPublishChecklist } from "@/components/wizard/DeliveryPublishChecklist";
 import { cn } from "@/lib/cn";
-import type { Shoot, WatermarkPreset } from "@/lib/types";
+import { deliveryPublishItems } from "@/lib/delivery-publish";
+import type {
+  DownloadPinPolicy,
+  Shoot,
+  StudioTheme,
+  WatermarkPreset,
+} from "@/lib/types";
 import type { WizardGallery, WizardPhoto } from "@/components/wizard/useShootWizard";
 
 export function DeliveryStep({
   shoot,
   clientName,
+  projectEmail,
   gallery,
   photos,
   watermarkPresets,
@@ -29,6 +38,7 @@ export function DeliveryStep({
 }: {
   shoot: Shoot;
   clientName: string;
+  projectEmail?: string;
   gallery: WizardGallery | null;
   photos: WizardPhoto[];
   watermarkPresets: WatermarkPreset[];
@@ -40,10 +50,33 @@ export function DeliveryStep({
   const [title, setTitle] = useState(`${clientName} gallery`);
   const [pin, setPin] = useState("");
   const [resetPin, setResetPin] = useState("");
+  const [pinPolicy, setPinPolicy] = useState<DownloadPinPolicy>("required");
+  const [studioTheme, setStudioTheme] = useState<StudioTheme | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [tab, setTab] = useState<"photos" | "design">("photos");
   const [goingLive, setGoingLive] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadStudio() {
+      const res = await fetch("/api/studio");
+      if (!res.ok || cancelled) return;
+      const data = await res.json();
+      const policy = data.studio?.deliveryDefaults?.downloadPinPolicy;
+      if (policy === "optional" || policy === "required") {
+        setPinPolicy(policy);
+      }
+      if (data.studio?.theme) {
+        setStudioTheme(data.studio.theme as StudioTheme);
+      }
+    }
+    void loadStudio();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const peekPhotos = useMemo(
     () => photos.filter((p) => p.kind === "peek"),
@@ -63,8 +96,13 @@ export function DeliveryStep({
 
   async function createGallery(e: FormEvent) {
     e.preventDefault();
-    if (!/^\d{4}$/.test(pin)) {
+    const pinRequired = pinPolicy === "required";
+    if (pinRequired && !/^\d{4}$/.test(pin)) {
       push("Choose a 4-digit download PIN", "danger");
+      return;
+    }
+    if (pin && !/^\d{4}$/.test(pin)) {
+      push("PIN must be 4 digits", "danger");
       return;
     }
     const res = await fetch("/api/galleries", {
@@ -73,7 +111,7 @@ export function DeliveryStep({
       body: JSON.stringify({
         shootId: shoot.id,
         title,
-        pin,
+        ...(pin ? { pin } : {}),
         goLive: false,
       }),
     });
@@ -97,17 +135,12 @@ export function DeliveryStep({
             : "Uploading photos",
       files,
       uploadFile: async (file) => {
-        const form = new FormData();
-        form.set("kind", kind);
-        form.append("files", file);
-        const res = await fetch(`/api/galleries/${gallery.id}/upload`, {
-          method: "POST",
-          body: form,
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Upload failed");
-        }
+        // Unified: every file goes direct → R2 (presigned or multipart).
+        // Photos get Sharp derivatives on complete; video registers only.
+        const { uploadGalleryFileDirect } = await import(
+          "@/lib/client/direct-upload"
+        );
+        await uploadGalleryFileDirect(gallery.id, file, kind);
       },
     });
     await onChanged();
@@ -137,6 +170,47 @@ export function DeliveryStep({
     await patch({ goLive: true });
     setGoingLive(false);
     push("Gallery is live", "success");
+  }
+
+  function galleryPublicUrl() {
+    if (typeof window === "undefined" || !gallery) return "";
+    return `${window.location.origin}/g/${gallery.publicToken}`;
+  }
+
+  async function copyGalleryLink() {
+    try {
+      await navigator.clipboard.writeText(galleryPublicUrl());
+      push("Gallery link copied", "success");
+    } catch {
+      push("Could not copy", "danger");
+    }
+  }
+
+  async function emailGalleryLink() {
+    if (!gallery) return;
+    const to = shoot.projectId
+      ? (await fetch(`/api/clients/${shoot.projectId}`).then((r) =>
+          r.ok ? r.json() : null,
+        ).then((d) => (d?.project || d?.client)?.email)) || ""
+      : "";
+    if (!to) {
+      push("Add project email on the project", "danger");
+      return;
+    }
+    setEmailBusy(true);
+    const res = await fetch(`/api/galleries/${gallery.id}/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to }),
+    });
+    setEmailBusy(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      push(String(data.error || "Could not email gallery"), "danger");
+      return;
+    }
+    push(data.emailed === false ? "Email skipped" : "Gallery link emailed", "success");
+    if (data.emailed !== false) await onChanged();
   }
 
   async function refreshWatermarks() {
@@ -220,7 +294,9 @@ export function DeliveryStep({
             />
           </Field>
           <Field>
-            <Label htmlFor="gallery-pin">Download PIN</Label>
+            <Label htmlFor="gallery-pin">
+              Download PIN{pinPolicy === "optional" ? " (optional)" : ""}
+            </Label>
             <Input
               id="gallery-pin"
               inputMode="numeric"
@@ -231,7 +307,7 @@ export function DeliveryStep({
                 setPin(e.target.value.replace(/\D/g, "").slice(0, 4))
               }
               placeholder="4 digits"
-              required
+              required={pinPolicy === "required"}
             />
           </Field>
           <Button type="submit" className="min-h-11 w-full sm:w-auto">
@@ -243,6 +319,41 @@ export function DeliveryStep({
   }
 
   const isDraft = gallery.status === "draft";
+  const publishItems = deliveryPublishItems({
+    gallery,
+    photoCount: mainPhotos.length,
+    pinPolicy,
+    projectEmail,
+  });
+
+  function onPublishAction(
+    action: "photos" | "design" | "live" | "email" | "pin",
+  ) {
+    if (action === "design") {
+      setTab("design");
+      return;
+    }
+    if (action === "photos" || action === "pin") {
+      setTab("photos");
+      if (action === "pin") {
+        window.setTimeout(() => {
+          document.getElementById("delivery-pin")?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }, 50);
+      }
+      return;
+    }
+    if (action === "live") {
+      if (isDraft) void goLive();
+      else push("Gallery already published", "neutral");
+      return;
+    }
+    if (action === "email") {
+      void emailGalleryLink();
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -266,6 +377,24 @@ export function DeliveryStep({
           >
             Preview
           </a>
+          <Button
+            type="button"
+            tone="neutral"
+            className="min-h-11"
+            onClick={() => void copyGalleryLink()}
+          >
+            Copy link
+          </Button>
+          <Button
+            type="button"
+            tone="neutral"
+            className="min-h-11"
+            pending={emailBusy}
+            pendingLabel="Sending…"
+            onClick={() => void emailGalleryLink()}
+          >
+            Email link
+          </Button>
           {isDraft ? (
             <Button
               className="min-h-11"
@@ -278,6 +407,11 @@ export function DeliveryStep({
           ) : null}
         </div>
       </header>
+
+      <DeliveryPublishChecklist
+        items={publishItems}
+        onAction={onPublishAction}
+      />
 
       <div
         role="tablist"
@@ -311,8 +445,8 @@ export function DeliveryStep({
       {tab === "design" ? (
         <GalleryDesignPanel
           design={gallery.design}
-          showOnHomepage={gallery.showOnHomepage}
           coverPhotoUrl={gallery.coverPhotoUrl}
+          studioTheme={studioTheme}
           onSave={async (body) => {
             await patch(body);
             push("Design saved", "success");
@@ -323,38 +457,39 @@ export function DeliveryStep({
       {tab === "photos" ? (
         <div className="space-y-8">
           {photos.length === 0 ? (
-            <div className="space-y-6 py-6 text-center sm:py-10">
-              <EmptyState
-                title="No photos yet"
-                description="Upload the gallery, then sneak peek or video if needed."
-              />
-              <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                <FileUploadButton
-                  label="Upload gallery"
-                  multiple
-                  className="min-h-11"
-                  disabled={uploadSession.busy}
-                  onFiles={(files) => void uploadFiles("main", files)}
-                />
-                <FileUploadButton
-                  label="Sneak peek"
-                  multiple
-                  tone="ghost"
-                  className="min-h-11"
-                  disabled={uploadSession.busy}
-                  onFiles={(files) => void uploadFiles("peek", files)}
-                />
-                <FileUploadButton
-                  label="Video"
-                  accept="video/*"
-                  multiple
-                  tone="ghost"
-                  className="min-h-11"
-                  disabled={uploadSession.busy}
-                  onFiles={(files) => void uploadFiles("video", files)}
-                />
-              </div>
-            </div>
+            <EmptyState
+              variant="centered"
+              title="No photos yet"
+              description="Upload the gallery, then sneak peek or video if needed."
+              action={
+                <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                  <FileUploadButton
+                    label="Upload gallery"
+                    multiple
+                    className="min-h-11"
+                    disabled={uploadSession.busy}
+                    onFiles={(files) => void uploadFiles("main", files)}
+                  />
+                  <FileUploadButton
+                    label="Sneak peek"
+                    multiple
+                    tone="ghost"
+                    className="min-h-11"
+                    disabled={uploadSession.busy}
+                    onFiles={(files) => void uploadFiles("peek", files)}
+                  />
+                  <FileUploadButton
+                    label="Video"
+                    accept="video/*"
+                    multiple
+                    tone="ghost"
+                    className="min-h-11"
+                    disabled={uploadSession.busy}
+                    onFiles={(files) => void uploadFiles("video", files)}
+                  />
+                </div>
+              }
+            />
           ) : (
             <>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -481,48 +616,130 @@ export function DeliveryStep({
                         </option>
                       ))}
                     </Select>
-                    <Button
-                      type="button"
-                      tone="ghost"
-                      size="sm"
-                      className="mt-2 min-h-11"
-                      onClick={() => void refreshWatermarks()}
-                    >
-                      Refresh watermarks
-                    </Button>
+                    <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                      <ButtonLink
+                        href="/admin/settings/delivery"
+                        tone="ghost"
+                        size="sm"
+                        className="min-h-11 w-full sm:w-auto"
+                      >
+                        Delivery settings
+                      </ButtonLink>
+                      <Button
+                        type="button"
+                        tone="ghost"
+                        size="sm"
+                        className="min-h-11 w-full sm:w-auto"
+                        onClick={() => void refreshWatermarks()}
+                      >
+                        Refresh watermarks
+                      </Button>
+                    </div>
                   </Field>
                 ) : null}
               </div>
-              <Field>
-                <Label htmlFor="reset-pin">Download PIN</Label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    id="reset-pin"
-                    value={resetPin}
-                    maxLength={4}
-                    inputMode="numeric"
-                    placeholder="New 4-digit PIN"
-                    onChange={(e) =>
-                      setResetPin(e.target.value.replace(/\D/g, "").slice(0, 4))
-                    }
-                  />
-                  <Button
-                    tone="neutral"
-                    className="min-h-11 shrink-0"
-                    onClick={async () => {
-                      if (!/^\d{4}$/.test(resetPin)) {
-                        push("PIN must be 4 digits", "danger");
-                        return;
+              <div id="delivery-pin" className="space-y-4 scroll-mt-24">
+                <Field>
+                  <Label htmlFor="reset-pin">Download PIN</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="reset-pin"
+                      value={resetPin}
+                      maxLength={4}
+                      inputMode="numeric"
+                      placeholder="New 4-digit PIN"
+                      onChange={(e) =>
+                        setResetPin(e.target.value.replace(/\D/g, "").slice(0, 4))
                       }
-                      await patch({ pin: resetPin });
-                      setResetPin("");
-                      push("PIN updated", "success");
-                    }}
+                    />
+                    <Button
+                      tone="neutral"
+                      className="min-h-11 shrink-0"
+                      onClick={async () => {
+                        if (!/^\d{4}$/.test(resetPin)) {
+                          push("PIN must be 4 digits", "danger");
+                          return;
+                        }
+                        await patch({ pin: resetPin });
+                        setResetPin("");
+                        push("PIN updated", "success");
+                      }}
+                    >
+                      Update PIN
+                    </Button>
+                  </div>
+                </Field>
+                <Field>
+                  <Label htmlFor="select-limit">Selection limit</Label>
+                  <Select
+                    id="select-limit"
+                    value={gallery.selectLimit != null ? String(gallery.selectLimit) : ""}
+                    onChange={(e) =>
+                      void patch({
+                        selectLimit: e.target.value === "" ? "" : Number(e.target.value),
+                      })
+                    }
                   >
-                    Update PIN
-                  </Button>
+                    <option value="">No limit</option>
+                    {[10, 25, 50, 100].map((n) => (
+                      <option key={n} value={n}>
+                        {n} photos
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <div className="space-y-2 border-t border-line pt-4">
+                  <p className="text-sm text-muted">
+                    Expires{" "}
+                    {new Date(gallery.expiresAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      tone="neutral"
+                      size="sm"
+                      className="min-h-11"
+                      onClick={() => void patch({ extendDays: 7 })}
+                    >
+                      Extend 7 days
+                    </Button>
+                    <Button
+                      type="button"
+                      tone="neutral"
+                      size="sm"
+                      className="min-h-11"
+                      onClick={() => void patch({ extendDays: 30 })}
+                    >
+                      Extend 30 days
+                    </Button>
+                    {gallery.status === "live" ? (
+                      <Button
+                        type="button"
+                        tone="danger"
+                        size="sm"
+                        className="min-h-11"
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: "Expire gallery now?",
+                            message: "Clients will no longer be able to view or download.",
+                            confirmLabel: "Expire now",
+                            tone: "danger",
+                          });
+                          if (!ok) return;
+                          await patch({ expireEarly: true });
+                          push("Gallery expired", "success");
+                        }}
+                      >
+                        Expire now
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-              </Field>
+              </div>
             </div>
           </section>
         </div>
@@ -582,7 +799,7 @@ function PhotoGroup({
             >
               <button
                 type="button"
-                className="absolute left-2 top-2 z-10 flex size-8 items-center justify-center border border-line bg-surface/95 text-sm"
+                className="absolute left-2 top-2 z-10 flex h-11 w-11 items-center justify-center border border-line bg-surface/95 text-sm"
                 aria-label={on ? "Deselect" : "Select"}
                 onClick={() => onToggle(p.id)}
               >
@@ -597,10 +814,11 @@ function PhotoGroup({
                   on && "opacity-75",
                 )}
               />
-              <div className="absolute inset-x-0 bottom-0 flex justify-end bg-gradient-to-t from-ink/70 to-transparent p-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+              <div className="absolute inset-x-0 bottom-0 flex justify-end bg-gradient-to-t from-ink/70 to-transparent p-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                 <Button
                   size="sm"
                   tone="danger"
+                  className="min-h-11"
                   disabled={deleting}
                   onClick={() => onDeleteOne(p.id)}
                 >

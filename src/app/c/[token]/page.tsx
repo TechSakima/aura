@@ -105,9 +105,31 @@ export default function SignContractPage() {
             </dl>
           </div>
         ) : (
+          <>
+            {/* Sticky bottom sign CTA on small screens (AURA-044) */}
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden">
+              <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
+                <p className="truncate text-sm text-muted">
+                  {acknowledged ? "Ready to sign" : "Read & agree below"}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busy || !acknowledged}
+                  onClick={() =>
+                    document
+                      .getElementById("sign-contract-form")
+                      ?.scrollIntoView({ behavior: "smooth", block: "end" })
+                  }
+                >
+                  Sign
+                </Button>
+              </div>
+            </div>
           <form
+            id="sign-contract-form"
             onSubmit={onSubmit}
-            className="mt-10 space-y-5 border-t border-line pt-8"
+            className="mt-10 space-y-5 border-t border-line pt-8 pb-24 sm:pb-0"
           >
             <Field>
               <Label htmlFor="signed-date">Date</Label>
@@ -139,8 +161,7 @@ export default function SignContractPage() {
                 className="mt-1"
               />
               <span>
-                I have read this agreement and agree to its terms, including
-                editing restrictions and portfolio use.
+                I have read this agreement and agree to its terms.
               </span>
             </label>
             {error ? <p className="text-sm text-danger">{error}</p> : null}
@@ -148,6 +169,7 @@ export default function SignContractPage() {
               {busy ? "Signing…" : "Sign agreement"}
             </Button>
           </form>
+          </>
         )}
       </div>
     </PublicShell>

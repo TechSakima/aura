@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  defaultSessionEndsAt,
+  pushSessionToGoogleCalendar,
+} from "@/lib/google-calendar";
 import type { ProjectSession, ShootStatus } from "@/lib/types";
 
 export async function GET() {
@@ -37,13 +41,18 @@ export async function POST(req: Request) {
     : body.shootDate
       ? String(body.shootDate)
       : undefined;
+  const endsAt = body.endsAt
+    ? String(body.endsAt)
+    : startsAt
+      ? defaultSessionEndsAt(startsAt)
+      : undefined;
   const session: ProjectSession = {
     id: nanoid(),
     studioId: admin.studioId,
     projectId,
     type: String(body.type),
     startsAt,
-    endsAt: body.endsAt ? String(body.endsAt) : undefined,
+    endsAt,
     status: (body.status as ShootStatus) || "inquiry",
     createdAt: now,
     updatedAt: now,
@@ -51,10 +60,33 @@ export async function POST(req: Request) {
   await updateStudioDb(admin.studioId, (db) => {
     db.sessions.unshift(session);
   });
+
+  let calendarSyncFailed = false;
+  if (startsAt && endsAt) {
+    const pushed = await pushSessionToGoogleCalendar({
+      studioId: admin.studioId,
+      title: session.type,
+      startsAt,
+      endsAt,
+    });
+    if (pushed.eventId) {
+      session.googleEventId = pushed.eventId;
+      await updateStudioDb(admin.studioId, (db) => {
+        const s = db.sessions.find((x) => x.id === session.id);
+        if (s) s.googleEventId = pushed.eventId!;
+      });
+    }
+    if (pushed.failed) calendarSyncFailed = true;
+  }
+
   const shoot = {
     ...session,
     clientId: session.projectId,
     shootDate: session.startsAt,
   };
-  return NextResponse.json({ shoot, session });
+  return NextResponse.json({
+    shoot,
+    session,
+    calendarSyncFailed: calendarSyncFailed || undefined,
+  });
 }

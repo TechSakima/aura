@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
+import {
+  galleryExpiryFromNow,
+  studioDeliveryDefaults,
+} from "@/lib/delivery-defaults";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  designFromPreset,
+  normalizeGalleryDesign,
+} from "@/lib/gallery-design";
 import { hashPin, PinValidationError } from "@/lib/pin";
 import { publicToken } from "@/lib/tokens";
 
@@ -29,48 +37,79 @@ export async function POST(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
-  if (!body.shootId || !body.title || !body.pin) {
+  const sessionId = String(body.sessionId || body.shootId || "");
+  if (!sessionId || !body.title) {
     return NextResponse.json(
-      { error: "shootId, title, and a 4-digit pin are required" },
+      { error: "sessionId and title are required" },
       { status: 400 },
     );
   }
 
   try {
-    const pinHash = await hashPin(String(body.pin));
+    const db = await readStudioDb(admin.studioId);
+    const defaults = studioDeliveryDefaults(db.studio);
+    const pinRaw = body.pin != null ? String(body.pin).trim() : "";
+    const pinRequired = defaults.downloadPinPolicy === "required";
+    if (pinRequired && !pinRaw) {
+      return NextResponse.json(
+        { error: "A 4-digit download PIN is required" },
+        { status: 400 },
+      );
+    }
+    const pinHash = pinRaw ? await hashPin(pinRaw) : "";
+
     const now = new Date();
     const live = body.goLive !== false;
     const liveAt = live ? now.toISOString() : undefined;
-    const expiresAt = new Date(
-      now.getTime() + 60 * 24 * 60 * 60 * 1000,
-    ).toISOString();
+    const expiresAt = galleryExpiryFromNow(defaults.expiryDays, now);
 
-    const sessionId = String(body.shootId);
+    const commentsEnabled =
+      body.commentsEnabled != null
+        ? Boolean(body.commentsEnabled)
+        : defaults.commentsEnabled;
+    const watermarkEnabled =
+      body.watermarkEnabled != null
+        ? body.watermarkEnabled !== false
+        : defaults.watermarkEnabled;
+    const watermarkPresetId =
+      body.watermarkPresetId != null
+        ? String(body.watermarkPresetId || "") || undefined
+        : db.studio.defaultWatermarkPresetId;
+    const selectLimit =
+      body.selectLimit != null
+        ? body.selectLimit === "" || body.selectLimit === null
+          ? undefined
+          : Number(body.selectLimit)
+        : defaults.selectLimit;
+
     const gallery = {
       id: nanoid(),
       studioId: admin.studioId,
       projectId: "",
       sessionId,
-      shootId: sessionId,
       publicToken: publicToken(),
       title: String(body.title),
       downloadPinHash: pinHash,
-      commentsEnabled: Boolean(body.commentsEnabled),
-      watermarkEnabled: body.watermarkEnabled !== false,
-      watermarkPresetId: body.watermarkPresetId,
-      selectLimit: body.selectLimit != null ? Number(body.selectLimit) : undefined,
+      commentsEnabled,
+      watermarkEnabled,
+      watermarkPresetId,
+      selectLimit,
       expiresAt,
       liveAt,
       status: live ? ("live" as const) : ("draft" as const),
       favoritePhotoIds: [] as string[],
+      design: normalizeGalleryDesign({
+        ...designFromPreset(defaults.themeId),
+        coverStyle: defaults.coverStyle,
+        gridMode: defaults.gridMode,
+      }),
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
 
-    const db = await readStudioDb(admin.studioId);
     const session = db.sessions.find((s) => s.id === sessionId);
     if (!session) {
-      return NextResponse.json({ error: "Shoot not found" }, { status: 400 });
+      return NextResponse.json({ error: "Session not found" }, { status: 400 });
     }
     gallery.projectId = session.projectId;
 
@@ -85,7 +124,12 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      gallery: { ...gallery, downloadPinHash: undefined, pin: String(body.pin) },
+      gallery: {
+        ...gallery,
+        downloadPinHash: undefined,
+        pin: pinRaw || undefined,
+        hasDownloadPin: Boolean(pinHash),
+      },
     });
   } catch (e) {
     if (e instanceof PinValidationError) {

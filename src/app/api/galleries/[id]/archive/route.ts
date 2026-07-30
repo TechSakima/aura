@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
-import JSZip from "jszip";
 import { requireAdmin } from "@/lib/auth";
-import { readStudioDb, updateStudioDb } from "@/lib/db/store";
-import { deleteStorageObject, downloadStorageBuffer } from "@/lib/storage/upload";
+import { COL } from "@/lib/db/collections";
 import {
-  downloadFilename,
-  uniqueZipName,
-} from "@/lib/images/download-filename";
+  deleteStudioDocs,
+  patchStudioDoc,
+  readStudioDb,
+  updateStudioDoc,
+} from "@/lib/db/store";
+import { deleteStorageObject, getSignedMediaDownloadUrl } from "@/lib/storage/upload";
+import { downloadFilename } from "@/lib/images/download-filename";
+import type { Project, ProjectSession } from "@/lib/types";
+import { deleteFavoritesForGalleries } from "@/lib/gallery-favorites";
 
+const ARCHIVE_TTL_SEC = 60 * 30;
+
+/** Admin archive: signed URLs for client zip; server deletes photos + marks archived. No App Hosting buffer (AURA-366). */
 export async function POST(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -31,7 +38,27 @@ export async function POST(
     : null;
   const photos = db.photos.filter((p) => p.galleryId === id);
 
-  const zip = new JSZip();
+  const items: { url: string; filename: string }[] = [];
+  const failed: string[] = [];
+  for (const photo of photos) {
+    if (!photo.storagePath?.startsWith("studios/")) continue;
+    try {
+      const ext = photo.kind === "video" ? "mp4" : "jpg";
+      const filename = downloadFilename(
+        photo.originalFilename,
+        `${photo.kind}-${photo.id}`,
+        ext,
+      );
+      const url = await getSignedMediaDownloadUrl(photo.storagePath, {
+        expiresInSec: ARCHIVE_TTL_SEC,
+        filename,
+      });
+      items.push({ url, filename });
+    } catch {
+      failed.push(photo.id);
+    }
+  }
+
   const details = [
     `Gallery: ${gallery.title}`,
     `Client: ${project?.name || "—"}`,
@@ -46,29 +73,6 @@ export async function POST(
     "",
     `Archived at: ${new Date().toISOString()}`,
   ].join("\n");
-  zip.file("client-details.txt", details);
-
-  const usedNames = new Set<string>();
-  for (const photo of photos) {
-    try {
-      if (photo.storagePath.startsWith("studios/")) {
-        const data = await downloadStorageBuffer(photo.storagePath);
-        const name = uniqueZipName(
-          usedNames,
-          downloadFilename(
-            photo.originalFilename,
-            `${photo.kind}-${photo.id}`,
-            photo.kind === "video" ? "mp4" : "jpg",
-          ),
-        );
-        zip.file(`photos/${name}`, data);
-      }
-    } catch {
-      // skip missing
-    }
-  }
-
-  const archiveBuffer = await zip.generateAsync({ type: "nodebuffer" });
 
   for (const photo of photos) {
     if (!photo.storagePath.startsWith("studios/")) continue;
@@ -82,27 +86,39 @@ export async function POST(
     ]);
   }
 
-  await updateStudioDb(admin.studioId, (d) => {
-    const g = d.galleries.find((x) => x.id === id);
-    if (g) {
-      g.status = "archived";
-      g.coverPhotoUrl = undefined;
-      g.updatedAt = new Date().toISOString();
-    }
-    d.photos = d.photos.filter((p) => p.galleryId !== id);
-    const linked = d.sessions.find(
-      (x) => x.id === (gallery.sessionId || gallery.shootId),
-    );
-    if (linked) {
-      linked.status = "archived";
-      linked.updatedAt = new Date().toISOString();
-    }
+  await deleteStudioDocs(
+    COL.photos,
+    photos.map((p) => p.id),
+  );
+  await deleteFavoritesForGalleries([id]);
+  await patchStudioDoc(COL.galleries, id, {
+    status: "archived",
+    coverPhotoUrl: null,
+    updatedAt: new Date().toISOString(),
   });
+  const linkedId = gallery.sessionId || gallery.shootId;
+  if (linkedId) {
+    await updateStudioDoc<ProjectSession>(COL.projectSessions, linkedId, (s) => {
+      s.status = "archived";
+      s.updatedAt = new Date().toISOString();
+      return s;
+    });
+  }
+  if (project && project.studioId === admin.studioId) {
+    await updateStudioDoc<Project>(COL.projects, project.id, (p) => {
+      if (p.stage !== "canceled" && p.stage !== "archived") {
+        p.stage = "completed";
+      }
+      p.updatedAt = new Date().toISOString();
+      return p;
+    });
+  }
 
-  return new NextResponse(new Uint8Array(archiveBuffer), {
-    headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="archive-${gallery.title.replace(/\s+/g, "-")}.zip"`,
-    },
+  return NextResponse.json({
+    urls: items,
+    detailsText: details,
+    expiresInSec: ARCHIVE_TTL_SEC,
+    failed: failed.length ? failed : undefined,
+    galleryTitle: gallery.title,
   });
 }

@@ -6,8 +6,10 @@ import {
   storageObjectPath,
   uploadBuffer,
 } from "@/lib/storage/upload";
+import { mediaProxyUrl } from "@/lib/storage/paths";
 import { readImageDimensions } from "@/lib/images/dimensions";
 import type { WatermarkPreset } from "@/lib/types";
+import { DEFAULT_WATERMARK_SCALE } from "@/lib/watermark-scale";
 
 type SharpFn = typeof import("sharp");
 
@@ -79,6 +81,7 @@ async function processUploadRaw(opts: {
   studioId: string;
   galleryId?: string;
   folder?: "galleries" | "ideas" | "brand" | "moodboards" | "watermarks";
+  watermark?: WatermarkPreset | null;
 }): Promise<ProcessedImage> {
   const folder = opts.folder ?? "galleries";
   const gallerySegment = opts.galleryId ?? "shared";
@@ -134,6 +137,7 @@ async function processUploadRaw(opts: {
     width,
     height,
     aspect: width / height,
+    watermarkUnprotected: Boolean(opts.watermark),
   };
 }
 
@@ -145,6 +149,8 @@ export type ProcessedImage = {
   width: number;
   height: number;
   aspect: number;
+  /** True when Sharp was unavailable and “watermarked” is the unprotected original (AURA-078). */
+  watermarkUnprotected?: boolean;
 };
 
 function svgTextMark(text: string, imageMinSide: number, opacity: number) {
@@ -239,7 +245,7 @@ async function loadWatermarkMark(
   w: number,
 ): Promise<Buffer | null> {
   if (watermark.mode !== "image" || !watermark.imagePath) return null;
-  const scale = watermark.scale ?? 0.14;
+  const scale = watermark.scale ?? DEFAULT_WATERMARK_SCALE;
   let markBuf: Buffer;
   if (watermark.imagePath.startsWith("studios/")) {
     markBuf = await downloadStorageBuffer(watermark.imagePath);
@@ -399,6 +405,129 @@ export async function reprocessWatermarkedDerivative(opts: {
   return { watermarkedUrl: uploaded.url };
 }
 
+/**
+ * Derive thumb/web/watermark from an original already stored in R2 (AURA-361).
+ * Used when photos bypass the buffered FormData upload (direct presigned PUT).
+ * Stores derivatives under `/derivatives/` next to the original path.
+ */
+export async function processDerivativesFromOriginal(opts: {
+  storagePath: string;
+  /** Base id used when deriving paths (matches upload complete row). */
+  baseId: string;
+  watermark?: WatermarkPreset | null;
+}): Promise<{
+  thumbUrl: string;
+  webUrl: string;
+  watermarkedUrl: string;
+  width: number;
+  height: number;
+  aspect: number;
+}> {
+  const buffer = await downloadStorageBuffer(opts.storagePath);
+  const sharp = await tryLoadSharp();
+  const id = opts.baseId;
+  const dir = path.posix.dirname(opts.storagePath);
+  const parent = dir.replace(/\/originals$/, "");
+  const derivDir = parent.endsWith("/derivatives")
+    ? parent
+    : `${parent}/derivatives`;
+
+  const thumbPath = `${derivDir}/${id}-thumb.webp`;
+  const webPath = `${derivDir}/${id}-web.webp`;
+  const wmPath = `${derivDir}/${id}-wm.webp`;
+
+  if (!sharp) {
+    if (opts.watermark) {
+      throw new Error(
+        "Image engine unavailable (sharp) — cannot apply watermark; refusing to store unprotected derivative",
+      );
+    }
+    const url = mediaProxyUrl(opts.storagePath);
+    const dims = readImageDimensions(buffer);
+    const width = dims?.width ?? 1;
+    const height = dims?.height ?? 1;
+    return {
+      thumbUrl: url,
+      webUrl: url,
+      watermarkedUrl: url,
+      width,
+      height,
+      aspect: width / Math.max(height, 1),
+    };
+  }
+
+  let width = 1;
+  let height = 1;
+  let thumbBuf: Buffer;
+  let webBuf: Buffer;
+  let wmBuf: Buffer;
+
+  try {
+    const meta = await sharp(buffer).rotate().metadata();
+    width = meta.width ?? 1;
+    height = meta.height ?? 1;
+    thumbBuf = await sharp(buffer)
+      .rotate()
+      .resize({ width: 480, withoutEnlargement: true })
+      .webp({ quality: 75 })
+      .toBuffer();
+    webBuf = await sharp(buffer)
+      .rotate()
+      .resize({ width: 1800, withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+    wmBuf = opts.watermark
+      ? await applyWatermarkComposite(webBuf, opts.watermark)
+      : await sharp(webBuf).webp({ quality: 82 }).toBuffer();
+    } catch (e) {
+      console.error("[images] derivatives-from-original failed:", e);
+      if (opts.watermark) {
+        throw new Error(
+          e instanceof Error ? e.message : "Could not derive watermarked image",
+        );
+      }
+      const url = mediaProxyUrl(opts.storagePath);
+      return {
+        thumbUrl: url,
+        webUrl: url,
+        watermarkedUrl: url,
+        width: 1,
+        height: 1,
+        aspect: 1,
+      };
+    }
+
+  const [thumb, web, wm] = await Promise.all([
+    uploadBuffer({
+      buffer: thumbBuf,
+      objectPath: thumbPath,
+      contentType: "image/webp",
+      makePublic: false,
+    }),
+    uploadBuffer({
+      buffer: webBuf,
+      objectPath: webPath,
+      contentType: "image/webp",
+      makePublic: false,
+    }),
+    uploadBuffer({
+      buffer: wmBuf,
+      objectPath: wmPath,
+      contentType: "image/webp",
+      makePublic: false,
+    }),
+  ]);
+
+  return {
+    thumbUrl: thumb.url,
+    webUrl: web.url,
+    watermarkedUrl: wm.url,
+    width,
+    height,
+    aspect: width / Math.max(height, 1),
+  };
+}
+
 export async function saveWatermarkAsset(
   buffer: Buffer,
   filename: string,
@@ -415,18 +544,28 @@ export async function saveWatermarkAsset(
   return objectPath;
 }
 
+export type BrandImageKind =
+  | "logo"
+  | "mark"
+  | "wordmark"
+  | "lockup"
+  | "cover"
+  | "og";
+
 export async function saveBrandLogo(
   buffer: Buffer,
   studioId: string,
+  kind: BrandImageKind = "logo",
 ): Promise<string> {
   let out: Buffer;
   let contentType = "image/webp";
   let ext = "webp";
+  const maxWidth = kind === "og" ? 1200 : 800;
   try {
     const sharp = await loadSharp();
     out = await sharp(buffer)
       .rotate()
-      .resize({ width: 800, withoutEnlargement: true })
+      .resize({ width: maxWidth, withoutEnlargement: true })
       .webp({ quality: 85 })
       .toBuffer();
   } catch {
@@ -435,10 +574,22 @@ export async function saveBrandLogo(
     contentType = "application/octet-stream";
     ext = "bin";
   }
+  const prefix =
+    kind === "cover"
+      ? "cover"
+      : kind === "og"
+        ? "og"
+        : kind === "mark"
+          ? "mark"
+          : kind === "wordmark"
+            ? "wordmark"
+            : kind === "lockup"
+              ? "lockup"
+              : "logo";
   const objectPath = storageObjectPath(
     studioId,
     "brand",
-    `logo-${Date.now()}.${ext}`,
+    `${prefix}-${Date.now()}.${ext}`,
   );
   const uploaded = await uploadBuffer({
     buffer: out,

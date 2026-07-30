@@ -1,8 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, type CSSProperties } from "react";
+
 import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
+import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
+import { PublicSuccess } from "@/components/public/PublicSuccess";
 import { PublicShell } from "@/components/shells/PublicShell";
 import {
   Button,
@@ -13,39 +16,66 @@ import {
   SectionIntro,
   Select,
   Textarea,
+  useToast,
 } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import type { IntakeQuestion, PackageTier, Proposal } from "@/lib/types";
+import {
+  resolveStudioThemePreset,
+  studioThemeCssVars,
+} from "@/lib/themes";
+import type {
+  IntakeQuestion,
+  PackageTier,
+  Proposal,
+  StudioTheme,
+} from "@/lib/types";
+import type { QuoteAcceptNext } from "@/lib/workflow/quote-next";
 
 type ProposalPayload = {
   proposal: Proposal;
-  studio: { name: string; logoUrl?: string; brandTagline?: string };
+  studio: {
+    name: string;
+    logoUrl?: string;
+    brandTagline?: string;
+    theme?: StudioTheme;
+  };
   clientName?: string;
+  projectName?: string;
+  next?: QuoteAcceptNext;
 };
 
 export default function PublicProposalPage() {
   const params = useParams<{ token: string }>();
   const token = params.token;
+  const { push } = useToast();
   const [data, setData] = useState<ProposalPayload | null>(null);
   const [selectedTierId, setSelectedTierId] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [accepted, setAccepted] = useState(false);
+  const [next, setNext] = useState<QuoteAcceptNext | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     fetch(`/api/public/proposals/${token}`)
-      .then((r) => r.json())
-      .then((json: ProposalPayload) => {
-        setData(json);
+      .then(async (r) => {
+        const json = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          setError(String(json.error || "Quote not found"));
+          return;
+        }
+        const payload = json as ProposalPayload;
+        setData(payload);
         setSelectedTierId(
-          json.proposal.selectedTierId ||
-            json.proposal.tiers.find((t) => t.highlighted)?.id ||
-            json.proposal.tiers[0]?.id ||
+          payload.proposal.selectedTierId ||
+            payload.proposal.tiers.find((t) => t.highlighted)?.id ||
+            payload.proposal.tiers[0]?.id ||
             "",
         );
-        setAccepted(json.proposal.status === "accepted");
+        setAccepted(payload.proposal.status === "accepted");
+        setNext(payload.next || null);
       })
-      .catch(() => undefined);
+      .catch(() => setError("Could not load quote"));
   }, [token]);
 
   function setAnswer(id: string, value: string) {
@@ -60,14 +90,25 @@ export default function PublicProposalPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ selectedTierId, intakeAnswers: answers }),
     });
-    if (res.ok) {
-      setAccepted(true);
-      const json = await res.json();
-      setData((prev) =>
-        prev ? { ...prev, proposal: json.proposal } : prev,
-      );
-    }
+    const json = await res.json().catch(() => ({}));
     setBusy(false);
+    if (!res.ok) {
+      push(String(json.error || "Could not accept quote"), "danger");
+      return;
+    }
+    setAccepted(true);
+    setData((prev) =>
+      prev ? { ...prev, proposal: json.proposal } : prev,
+    );
+    setNext(json.next || null);
+  }
+
+  if (error) {
+    return (
+      <PublicShell>
+        <p className="text-center text-danger">{error}</p>
+      </PublicShell>
+    );
   }
 
   if (!data) {
@@ -78,12 +119,19 @@ export default function PublicProposalPage() {
     );
   }
 
-  const { proposal, studio, clientName } = data;
+  const { proposal, studio, clientName: rawName, projectName } = data;
+  const clientName = projectName || rawName;
   const selectedTier = proposal.tiers.find((t) => t.id === selectedTierId);
+  const declined = proposal.status === "declined";
+  const themeStyle = studioThemeCssVars(
+    resolveStudioThemePreset(studio.theme),
+    { fontPreset: studio.theme?.fontPreset },
+  ) as CSSProperties;
 
   return (
     <PublicShell
       bare
+      style={themeStyle}
       footer={
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-medium text-ink">{studio.name}</p>
@@ -93,7 +141,8 @@ export default function PublicProposalPage() {
     >
       <section className="relative overflow-hidden bg-ink text-surface">
         <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink to-accent/35" />
-        <div className="relative shell-pad mx-auto max-w-[var(--shell-max)] py-14 sm:py-20">
+        <div className="relative shell-pad mx-auto max-w-[var(--public-max)] py-14 sm:py-20">
+
           <div className="max-w-2xl animate-enter">
             <StudioMark
               logoUrl={studio.logoUrl}
@@ -113,7 +162,7 @@ export default function PublicProposalPage() {
         </div>
       </section>
 
-      <div className="shell-pad mx-auto max-w-[var(--shell-max)] space-y-16 py-12 sm:py-16">
+      <div className="shell-pad mx-auto max-w-[var(--public-max)] space-y-16 py-12 sm:py-16">
         {proposal.moodBoard.length > 0 ? (
           <section className="space-y-6">
             <SectionIntro eyebrow="Inspiration" title="Mood board" />
@@ -127,7 +176,7 @@ export default function PublicProposalPage() {
                   <img
                     src={item.url}
                     alt={item.caption || ""}
-                    className="aspect-square w-full object-cover transition-transform duration-700 hover:scale-[1.02]"
+                    className="aspect-square w-full object-cover transition-transform duration-emphasis hover:scale-[1.02]"
                   />
                 </figure>
               ))}
@@ -148,7 +197,7 @@ export default function PublicProposalPage() {
                 <button
                   key={tier.id}
                   type="button"
-                  disabled={accepted}
+                  disabled={accepted || declined}
                   onClick={() => setSelectedTierId(tier.id)}
                   className={cn(
                     "group flex flex-col rounded-md border p-5 text-left transition-colors",
@@ -182,7 +231,7 @@ export default function PublicProposalPage() {
                   >
                     {tier.description}
                   </p>
-                  {!accepted ? (
+                  {!accepted && !declined ? (
                     <span
                       className={cn(
                         "mt-5 text-sm font-medium",
@@ -223,21 +272,68 @@ export default function PublicProposalPage() {
           </section>
         ) : null}
 
-        {accepted ? (
-          <section className="rounded-md bg-ink px-6 py-10 text-center text-surface sm:px-10">
-            <p className="text-xs uppercase tracking-[0.18em] text-surface/60">
-              Confirmed
-            </p>
-            <h2 className="mt-3 font-display text-3xl">Quote accepted</h2>
-            <p className="mx-auto mt-3 max-w-md text-surface/75">
+        {declined ? (
+          <section className="space-y-4 border-t border-line pt-12">
+            <SectionIntro
+              eyebrow="Quote"
+              title="This quote isn’t available"
+            />
+            <div className="mx-auto flex max-w-lg justify-center">
+              <PublicSoftFailureContact
+                studioName={studio.name}
+                source="other"
+                proposalToken={token}
+                context={proposal.title || "Quote"}
+              />
+            </div>
+          </section>
+        ) : accepted ? (
+          <PublicSuccess title="Quote accepted">
+            <p>
               Thank you
               {clientName ? `, ${clientName}` : ""}.
-              {selectedTier
-                ? ` You’re set with ${selectedTier.name}.`
-                : ""}{" "}
-              We’ll be in touch with next steps.
+              {selectedTier ? ` You’re set with ${selectedTier.name}.` : ""}
             </p>
-          </section>
+            <p className="text-sm">
+              {next?.nextStep === "deposit"
+                ? "Next: deposit"
+                : "Next: contract, then deposit"}
+            </p>
+            {(next?.contractHref || next?.depositHref) && (
+              <div className="mt-6 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center">
+                {next.contractHref ? (
+                  <a
+                    href={next.contractHref}
+                    className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-5 text-sm font-medium text-accent-ink no-underline"
+                  >
+                    Sign contract
+                  </a>
+                ) : null}
+                {next.depositHref ? (
+                  <a
+                    href={next.depositHref}
+                    className={
+                      next.contractHref
+                        ? "inline-flex min-h-11 items-center justify-center rounded-md border border-line bg-surface px-5 text-sm font-medium text-ink no-underline"
+                        : "inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-5 text-sm font-medium text-accent-ink no-underline"
+                    }
+                  >
+                    Pay deposit
+                  </a>
+                ) : null}
+              </div>
+            )}
+            {!next?.contractHref && !next?.depositHref ? (
+              <div className="mx-auto flex max-w-md justify-center">
+                <PublicSoftFailureContact
+                  studioName={studio.name}
+                  source="other"
+                  proposalToken={token}
+                  context={proposal.title || "Quote accepted"}
+                />
+              </div>
+            ) : null}
+          </PublicSuccess>
         ) : (
           <section className="space-y-6 border-t border-line pt-12">
             <SectionIntro

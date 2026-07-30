@@ -4,6 +4,7 @@ import {
   findGalleryByPublicToken,
   updateStudioDb,
 } from "@/lib/db/store";
+import { assertPublicGalleryAccess } from "@/lib/public-access";
 import { publicToken } from "@/lib/tokens";
 
 export async function POST(
@@ -24,6 +25,14 @@ export async function POST(
   const hit = await findGalleryByPublicToken(token);
   if (!hit?.studioId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const access = await assertPublicGalleryAccess(hit, { mutate: true });
+  if (!access.ok) {
+    return NextResponse.json(
+      { error: access.error },
+      { status: access.status },
+    );
   }
 
   const sub = await updateStudioDb(hit.studioId, (db) => {

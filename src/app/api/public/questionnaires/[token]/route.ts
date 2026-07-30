@@ -3,6 +3,7 @@ import { COL } from "@/lib/db/collections";
 import { assertFirebaseReady } from "@/lib/db/require-firebase";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { notifyStudio } from "@/lib/notify/send";
+import { resolveBrowseMediaUrl } from "@/lib/media-url-server";
 import type { QuestionnaireResponse } from "@/lib/types";
 
 async function findByToken(token: string): Promise<{
@@ -51,7 +52,11 @@ export async function GET(
       submittedAt: hit.response.submittedAt,
       answers: hit.response.submittedAt ? hit.response.answers : {},
     },
-    studio: { name: studioDb.studio.name, logoUrl: studioDb.studio.logoUrl },
+    studio: {
+      name: studioDb.studio.name,
+      logoUrl: await resolveBrowseMediaUrl(studioDb.studio.logoUrl),
+      brandTagline: studioDb.studio.brandTagline,
+    },
   });
 }
 
@@ -70,6 +75,12 @@ export async function POST(
     body.answers && typeof body.answers === "object"
       ? (body.answers as Record<string, string>)
       : {};
+  if (!hit.response.questions.length) {
+    return NextResponse.json(
+      { error: "This questionnaire has no questions" },
+      { status: 400 },
+    );
+  }
   const now = new Date().toISOString();
 
   await updateStudioDb(hit.studioId, (db) => {

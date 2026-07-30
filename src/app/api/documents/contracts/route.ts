@@ -5,6 +5,7 @@ import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { publicToken } from "@/lib/tokens";
 import type { CancelPolicy, Contract, ContractTemplate } from "@/lib/types";
 import { defaultContractBody } from "@/lib/contracts/defaults";
+import { resolveDefaultContractTemplate } from "@/lib/legal-defaults";
 import {
   absoluteUrl,
   emailContractToSign,
@@ -94,10 +95,6 @@ export async function POST(req: Request) {
   }
 
   const projectId = String(body.projectId || "");
-  const title = String(body.title || "Photography agreement").trim();
-  const contractBody =
-    String(body.body || "").trim() || defaultContractBody();
-  const templateId = body.templateId ? String(body.templateId) : undefined;
   if (!projectId) {
     return NextResponse.json(
       { error: "projectId required" },
@@ -106,9 +103,18 @@ export async function POST(req: Request) {
   }
 
   const db0 = await readStudioDb(admin.studioId);
+  const templateId = body.templateId ? String(body.templateId) : undefined;
   const fromTemplate = templateId
     ? db0.contractTemplates.find((t) => t.id === templateId)
-    : undefined;
+    : resolveDefaultContractTemplate(db0);
+  const title =
+    String(body.title || "").trim() ||
+    fromTemplate?.name ||
+    "Photography agreement";
+  const contractBody =
+    String(body.body || "").trim() ||
+    fromTemplate?.body ||
+    defaultContractBody();
   const policy = cancelPolicy || fromTemplate?.cancelPolicy;
 
   const contract: Contract = {

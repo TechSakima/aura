@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Button, Field, Label, Select, Textarea, useToast } from "@/components/ui";
+import {
+  Button,
+  Field,
+  Label,
+  Select,
+  Textarea,
+  useConfirm,
+  useToast,
+} from "@/components/ui";
 import type { Shoot, ShootPlan } from "@/lib/types";
 
 export function PrepStep({
@@ -17,6 +25,7 @@ export function PrepStep({
   onChanged: () => Promise<unknown>;
 }) {
   const { push } = useToast();
+  const { confirm } = useConfirm();
   const defaultTemplate =
     templates.find((t) => t.shootType === shoot.type)?.id || templates[0]?.id || "";
   const [templateId, setTemplateId] = useState(defaultTemplate);
@@ -27,6 +36,16 @@ export function PrepStep({
     if (!templateId) {
       push("Add a shot list template in Prep first", "danger");
       return;
+    }
+    if (plan) {
+      const ok = await confirm({
+        title: "Refresh plan from template?",
+        message:
+          "This replaces the current list. Checked-off progress on shoot day will be lost.",
+        confirmLabel: "Refresh plan",
+        tone: "danger",
+      });
+      if (!ok) return;
     }
     setBusy(true);
     const res = await fetch(`/api/shoots/${shoot.id}/plan`, {

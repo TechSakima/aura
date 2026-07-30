@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { publicToken } from "@/lib/tokens";
 import type { Project } from "@/lib/types";
 
 export async function GET() {
@@ -18,9 +19,9 @@ export async function POST(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
-  if (!body.name || !body.email) {
+  if (!body.name) {
     return NextResponse.json(
-      { error: "Name and email required" },
+      { error: "Name required" },
       { status: 400 },
     );
   }
@@ -29,13 +30,14 @@ export async function POST(req: Request) {
     id: nanoid(),
     studioId: admin.studioId,
     name: String(body.name),
-    email: String(body.email),
+    email: body.email ? String(body.email) : "",
     phone: body.phone ? String(body.phone) : undefined,
     notes: body.notes ? String(body.notes) : undefined,
     type: body.type ? String(body.type) : "Session",
     stage: body.stage || "inquiry",
     projectDate: body.projectDate ? String(body.projectDate) : undefined,
     paidAmount: typeof body.paidAmount === "number" ? body.paidAmount : 0,
+    cancelToken: publicToken(24),
     createdAt: now,
     updatedAt: now,
   };

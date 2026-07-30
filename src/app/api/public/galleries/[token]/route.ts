@@ -1,100 +1,164 @@
 import { NextResponse } from "next/server";
+import { COL } from "@/lib/db/collections";
 import {
   findGalleryByPublicToken,
-  readStudioDb,
-  updateStudioDb,
+  getProjectById,
+  getSessionById,
+  getStudioDoc,
+  listCommentsByGalleryId,
+  listPhotosByGalleryId,
+  listSubAlbumsByGalleryId,
+  patchStudioDoc,
 } from "@/lib/db/store";
 import { recordEvent } from "@/lib/analytics";
-import { resolveMediaUrl } from "@/lib/media-url";
+import { resolveBrowseMediaUrl } from "@/lib/media-url-server";
+import { assertPublicGalleryAccess } from "@/lib/public-access";
+import {
+  publicGalleryUnavailablePayload,
+  publicStudioContact,
+} from "@/lib/public-gallery-guest";
+import {
+  mapPublicGalleryPhotos,
+  parsePublicPhotoPage,
+} from "@/lib/public-gallery-photos";
+import { publicPrintPartners } from "@/lib/print-partners";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const galleryHit = await findGalleryByPublicToken(token);
-  if (!galleryHit?.studioId) {
+  const gallery = await findGalleryByPublicToken(token);
+  if (!gallery?.studioId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const db = await readStudioDb(galleryHit.studioId);
-  const gallery = db.galleries.find((g) => g.publicToken === token);
-  if (!gallery) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const studio = await getStudioDoc(gallery.studioId);
+  if (!studio) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const access = await assertPublicGalleryAccess(gallery);
+  if (!access.ok) {
+    if (gallery.status === "draft" || gallery.status === "archived") {
+      return NextResponse.json(
+        await publicGalleryUnavailablePayload(
+          gallery,
+          studio,
+          gallery.status,
+        ),
+      );
+    }
+    return NextResponse.json(
+      { error: access.error },
+      { status: access.status },
+    );
+  }
 
   if (gallery.status === "live" && new Date(gallery.expiresAt) < new Date()) {
-    await updateStudioDb(gallery.studioId, (d) => {
-      const g = d.galleries.find((x) => x.id === gallery.id);
-      if (g) g.status = "expired";
+    await patchStudioDoc(COL.galleries, gallery.id, {
+      status: "expired",
+      updatedAt: new Date().toISOString(),
     });
     gallery.status = "expired";
   }
 
-  const photos = db.photos
-    .filter((p) => p.galleryId === gallery.id)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((p) => ({
-      id: p.id,
-      kind: p.kind,
-      thumbUrl: resolveMediaUrl(p.thumbUrl),
-      url: resolveMediaUrl(
-        p.kind === "video"
-          ? p.videoUrl || p.webUrl
-          : gallery.watermarkEnabled
-            ? p.watermarkedUrl
-            : p.webUrl,
-      ),
-      videoUrl: resolveMediaUrl(p.videoUrl),
-      aspect: p.aspect,
-      version: p.version,
-    }));
+  const { offset, limit } = parsePublicPhotoPage(new URL(req.url));
+  const isPhotosPage = offset > 0;
+
+  const allPhotos =
+    gallery.status === "expired"
+      ? []
+      : await listPhotosByGalleryId(gallery.id);
+  const photoTotal = allPhotos.length;
+  const pagePhotos = allPhotos.slice(offset, offset + limit);
+  const photos = await mapPublicGalleryPhotos(pagePhotos, gallery);
+  const hasMore = offset + photos.length < photoTotal;
+
+  // Photos-only pages: skip meta/analytics (client progressive load).
+  if (isPhotosPage) {
+    return NextResponse.json({
+      photos,
+      photoTotal,
+      photoOffset: offset,
+      photoLimit: limit,
+      hasMore,
+    });
+  }
 
   const sessionId = gallery.sessionId || gallery.shootId;
-  const session = sessionId
-    ? db.sessions.find((s) => s.id === sessionId)
-    : null;
+  const [session, rawSubAlbums, comments] = await Promise.all([
+    sessionId ? getSessionById(sessionId) : Promise.resolve(null),
+    listSubAlbumsByGalleryId(gallery.id),
+    gallery.commentsEnabled
+      ? listCommentsByGalleryId(gallery.id)
+      : Promise.resolve([]),
+  ]);
   const project = session
-    ? db.projects.find((c) => c.id === session.projectId)
-    : null;
+    ? await getProjectById(session.projectId)
+    : gallery.projectId
+      ? await getProjectById(gallery.projectId)
+      : null;
 
-  const photoById = new Map(photos.map((p) => [p.id, p]));
-  const subAlbums = db.subAlbums
-    .filter((s) => s.galleryId === gallery.id)
-    .map((s) => {
-      const cover = s.photoIds.map((id) => photoById.get(id)).find(Boolean);
-      return {
-        id: s.id,
-        token: s.token,
-        label: s.label,
-        count: s.photoIds.length,
-        coverUrl: resolveMediaUrl(cover?.thumbUrl || cover?.url),
-      };
-    });
+  const coverIds = rawSubAlbums
+    .map((s) => s.photoIds.find((id) => allPhotos.some((p) => p.id === id)))
+    .filter((id): id is string => Boolean(id));
+  const coverPhotos = allPhotos.filter((p) => coverIds.includes(p.id));
+  const signedCovers = await mapPublicGalleryPhotos(coverPhotos, gallery);
+  const coverById = new Map(signedCovers.map((p) => [p.id, p]));
 
-  await recordEvent({
-    type: "gallery_view",
-    studioId: gallery.studioId,
-    galleryId: gallery.id,
-    shootId: gallery.shootId,
+  const subAlbums = rawSubAlbums.map((s) => {
+    const coverId = s.photoIds.find((id) => coverById.has(id));
+    const cover = coverId ? coverById.get(coverId) : undefined;
+    return {
+      id: s.id,
+      token: s.token,
+      label: s.label,
+      count: s.photoIds.length,
+      coverUrl: cover?.thumbUrl || cover?.url,
+    };
   });
 
-  const { downloadPinHash: _, ...safe } = gallery;
+  if (!access.preview) {
+    await recordEvent({
+      type: "gallery_view",
+      studioId: gallery.studioId,
+      galleryId: gallery.id,
+      sessionId: gallery.sessionId || gallery.shootId,
+      projectId: session?.projectId || project?.id,
+    });
+  }
+
+  const { downloadPinHash: _, favoritePhotoIds: _fav, ...safe } = gallery;
+  const [coverPhotoUrl, studioContact] = await Promise.all([
+    gallery.status === "expired"
+      ? Promise.resolve(undefined)
+      : resolveBrowseMediaUrl(safe.coverPhotoUrl),
+    publicStudioContact(studio),
+  ]);
 
   return NextResponse.json({
     gallery: {
       ...safe,
-      coverPhotoUrl: resolveMediaUrl(safe.coverPhotoUrl),
+      // Per-visitor hearts — client loads via GET /favorites (AURA-005).
+      favoritePhotoIds: [] as string[],
+      coverPhotoUrl,
+      hasDownloadPin: Boolean(gallery.downloadPinHash),
     },
     photos,
+    photoTotal,
+    photoOffset: offset,
+    photoLimit: limit,
+    hasMore,
     clientName: project?.name || null,
+    projectName: project?.name || null,
     subAlbums,
     studio: {
-      name: db.studio.name,
-      logoUrl: resolveMediaUrl(db.studio.logoUrl),
-      brandTagline: db.studio.brandTagline,
-      printPartners: db.studio.printPartners,
+      ...studioContact,
+      brandTagline: studio.brandTagline,
+      printPartners: publicPrintPartners(studio.printPartners),
     },
-    comments: gallery.commentsEnabled
-      ? db.comments.filter((c) => c.galleryId === gallery.id)
-      : [],
+    comments,
+    preview: access.preview || undefined,
   });
 }

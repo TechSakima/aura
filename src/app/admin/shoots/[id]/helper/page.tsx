@@ -7,6 +7,7 @@ import {
   Badge,
   Button,
   Card,
+  Dialog,
   Field,
   Label,
   PageHeader,
@@ -14,9 +15,8 @@ import {
   Textarea,
   useToast,
 } from "@/components/ui";
-import type { Shoot, ShootPlan, ShotItem, ShotListTemplate } from "@/lib/types";
 
-const STORAGE_KEY = (id: string) => `aura-shoot-plan-${id}`;
+import type { Shoot, ShootPlan, ShotItem, ShotListTemplate } from "@/lib/types";
 
 function shotCategory(item: ShotItem) {
   return item.category || item.section || "Detail";
@@ -45,18 +45,6 @@ export default function ShootHelperPage() {
     setShoot(data.shoot || null);
     setTemplates(data.templates || []);
     if (!templateId && data.templates?.[0]) setTemplateId(data.templates[0].id);
-    if (data.plan) {
-      localStorage.setItem(STORAGE_KEY(id), JSON.stringify(data.plan));
-    } else {
-      const cached = localStorage.getItem(STORAGE_KEY(id));
-      if (cached) {
-        try {
-          setPlan(JSON.parse(cached) as ShootPlan);
-        } catch {
-          // ignore
-        }
-      }
-    }
   }
 
   useEffect(() => {
@@ -116,12 +104,15 @@ export default function ShootHelperPage() {
       ),
     };
     setPlan(optimistic);
-    localStorage.setItem(STORAGE_KEY(id), JSON.stringify(optimistic));
-    await fetch(`/api/shoots/${id}/plan`, {
+    const res = await fetch(`/api/shoots/${id}/plan`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ itemId, done: doneNext }),
     });
+    if (!res.ok) {
+      push("Could not save — reload to sync", "danger");
+      await load();
+    }
   }
 
   async function saveNotes(dayNotes: string) {
@@ -306,11 +297,15 @@ export default function ShootHelperPage() {
         </>
       )}
 
-      {preview ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-4 sm:items-center">
-          <Card className="relative max-h-[85vh] w-full max-w-lg overflow-auto p-5">
-            <h2 className="font-display text-2xl">{preview.label}</h2>
-            <p className="mt-1 text-sm text-muted">{shotCategory(preview)}</p>
+      <Dialog
+        open={Boolean(preview)}
+        onClose={() => setPreview(null)}
+        title={preview?.label || "Shot"}
+        className="max-h-[85vh] overflow-auto"
+      >
+        {preview ? (
+          <>
+            <p className="text-sm text-muted">{shotCategory(preview)}</p>
             {preview.note ? (
               <p className="mt-4 whitespace-pre-wrap">{preview.note}</p>
             ) : null}
@@ -325,9 +320,9 @@ export default function ShootHelperPage() {
             <Button className="mt-4 w-full" onClick={() => setPreview(null)}>
               Close
             </Button>
-          </Card>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </Dialog>
     </div>
   );
 }

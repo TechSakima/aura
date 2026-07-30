@@ -1,60 +1,71 @@
 "use client";
 
-import Link from "next/link";
-import { FormEvent, useEffect, useState, type CSSProperties } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useParams } from "next/navigation";
-import { Button, Field, Input, Label } from "@/components/ui";
-import { cn } from "@/lib/cn";
-import { displayHost } from "@/lib/urls";
+import { StudioMark } from "@/components/brand/StudioMark";
+import { StudioHomepageView } from "@/components/public/StudioHomepageView";
+import { PublicShell } from "@/components/shells/PublicShell";
+import { Button, EmptyState, Field, Input, Label } from "@/components/ui";
+import type { HomepagePayload } from "@/lib/homepage-payload";
 import {
   resolveStudioThemePreset,
   studioThemeCssVars,
 } from "@/lib/themes";
+import type { StudioTheme } from "@/lib/types";
 
-type HomePayload = {
-  studio: {
-    name: string;
-    logoUrl?: string;
-    biography?: string;
-    website?: string;
-    email?: string;
-    phone?: string;
-    address?: string;
-    socialLinks?: { label: string; url: string }[];
-    theme?: {
-      presetId?: string;
-      background?: string;
-      accent?: string;
-      fontPreset?: string;
-    };
-    showBooking?: boolean;
-    layout?: "masonry" | "grid" | "list";
-    bookingHref?: string;
-  };
-  galleries: { title: string; token: string; coverPhotoUrl?: string }[];
+type GateBrand = {
+  name: string;
+  logoUrl?: string;
+  theme?: StudioTheme;
 };
 
 export default function GalleryHomepagePage() {
   const params = useParams<{ slug: string }>();
-  const [data, setData] = useState<HomePayload | null>(null);
+  const [data, setData] = useState<HomepagePayload | null>(null);
+  const [gate, setGate] = useState<GateBrand | null>(null);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  async function load(pw?: string) {
-    const q = pw ? `?password=${encodeURIComponent(pw)}` : "";
-    const res = await fetch(`/api/public/homepage/${params.slug}${q}`);
-    const json = await res.json();
+  const themeStyle = useMemo(() => {
+    const theme = data?.studio.theme || gate?.theme;
+    const preset = resolveStudioThemePreset(theme);
+    return studioThemeCssVars(preset, {
+      fontPreset: theme?.fontPreset,
+    }) as CSSProperties;
+  }, [data?.studio.theme, gate?.theme]);
+
+  async function load() {
+    setLoading(true);
+    const res = await fetch(`/api/public/homepage/${params.slug}`, {
+      credentials: "same-origin",
+    });
+    const json = await res.json().catch(() => ({}));
     if (res.status === 401 && json.needsPassword) {
       setNeedsPassword(true);
+      setGate(json.gate || null);
+      setData(null);
+      setLoading(false);
       return;
     }
     if (!res.ok) {
-      setError(json.error || "Not found");
+      setError(String(json.error || "Not found"));
+      setLoading(false);
       return;
     }
     setNeedsPassword(false);
-    setData(json);
+    setGate(null);
+    setData(json as HomepagePayload);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -63,181 +74,89 @@ export default function GalleryHomepagePage() {
 
   async function onPassword(e: FormEvent) {
     e.preventDefault();
-    await load(password);
+    setPasswordError("");
+    setPending(true);
+    const verify = await fetch(`/api/public/homepage/${params.slug}`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    const j = await verify.json().catch(() => ({}));
+    setPending(false);
+    if (!verify.ok) {
+      if (j.gate) setGate(j.gate);
+      setPasswordError(String(j.error || "Wrong password"));
+      return;
+    }
+    setPassword("");
+    setNeedsPassword(false);
+    setGate(null);
+    setData(j as HomepagePayload);
   }
 
   if (error && !data) {
-    return <p className="shell-pad py-20 text-center text-muted">{error}</p>;
-  }
-
-  if (needsPassword && !data) {
     return (
-      <form
-        onSubmit={onPassword}
-        className="shell-pad mx-auto max-w-sm space-y-4 py-20"
-      >
-        <h1 className="font-display text-3xl">Enter password</h1>
-        <Field>
-          <Label htmlFor="pw">Homepage password</Label>
-          <Input
-            id="pw"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </Field>
-        <Button type="submit" className="min-h-11 w-full">
-          Continue
-        </Button>
-      </form>
+      <PublicShell style={themeStyle}>
+        <EmptyState variant="error" title={error} />
+      </PublicShell>
     );
   }
 
-  if (!data) {
-    return <p className="shell-pad py-20 text-center text-muted">Loading…</p>;
+  if (needsPassword && !data) {
+    const name = gate?.name || "Studio";
+    return (
+      <PublicShell style={themeStyle}>
+        <form
+          onSubmit={onPassword}
+          className="mx-auto max-w-sm space-y-5 py-10 sm:py-16"
+        >
+          <StudioMark
+            name={name}
+            logoUrl={gate?.logoUrl}
+            tone="dark"
+            className="mb-2"
+          />
+          <h1 className="font-display text-3xl tracking-tight sm:text-4xl">
+            Private site
+          </h1>
+          <p className="text-sm text-muted">Enter the password to continue.</p>
+          <Field>
+            <Label htmlFor="pw">Password</Label>
+            <Input
+              id="pw"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="min-h-11"
+            />
+          </Field>
+          {passwordError ? (
+            <p className="text-sm text-danger" role="alert">
+              {passwordError}
+            </p>
+          ) : null}
+          <Button
+            type="submit"
+            className="min-h-11 w-full"
+            pending={pending}
+            pendingLabel="Checking…"
+          >
+            Continue
+          </Button>
+        </form>
+      </PublicShell>
+    );
   }
 
-  const contactBits = [
-    data.studio.email,
-    data.studio.address,
-    data.studio.phone,
-  ].filter(Boolean);
-  const layout = data.studio.layout || "masonry";
-  const themePreset = resolveStudioThemePreset(data.studio.theme);
-  const themeStyle = studioThemeCssVars(themePreset) as CSSProperties;
+  if (loading || !data) {
+    return (
+      <PublicShell style={themeStyle}>
+        <EmptyState variant="loading" title="Loading…" />
+      </PublicShell>
+    );
+  }
 
-  return (
-    <div className="min-h-full bg-canvas text-ink" style={themeStyle}>
-      <header className="shell-pad mx-auto max-w-5xl py-14 text-center sm:py-20">
-        {data.studio.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={data.studio.logoUrl}
-            alt=""
-            className="mx-auto mb-6 h-14 w-auto object-contain"
-          />
-        ) : null}
-        <h1 className="font-sans text-4xl font-semibold uppercase tracking-[0.14em] sm:text-5xl">
-          {data.studio.name}
-        </h1>
-        {data.studio.biography ? (
-          <p className="mx-auto mt-5 max-w-xl text-muted">
-            {data.studio.biography}
-          </p>
-        ) : null}
-        {contactBits.length > 0 ? (
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-muted">
-            {data.studio.email ? <span>{data.studio.email}</span> : null}
-            {data.studio.address ? <span>{data.studio.address}</span> : null}
-            {data.studio.phone ? <span>{data.studio.phone}</span> : null}
-          </div>
-        ) : null}
-        {data.studio.website ? (
-          <p className="mt-3 text-sm">
-            <a
-              href={data.studio.website}
-              className="text-accent"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {displayHost(data.studio.website)}
-            </a>
-          </p>
-        ) : null}
-        {data.studio.socialLinks && data.studio.socialLinks.length > 0 ? (
-          <ul className="mt-4 flex flex-wrap justify-center gap-4 text-sm">
-            {data.studio.socialLinks.map((s) => (
-              <li key={`${s.label}-${s.url}`}>
-                <a
-                  href={s.url}
-                  className="text-accent"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {s.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {data.studio.showBooking && data.studio.bookingHref ? (
-          <div className="mt-8">
-            <Link href={data.studio.bookingHref}>
-              <Button className="min-h-11">Book a session</Button>
-            </Link>
-          </div>
-        ) : null}
-      </header>
-
-      <main className="shell-pad mx-auto max-w-5xl pb-20">
-        {layout === "list" ? (
-          <ul className="divide-y divide-line border-y border-line">
-            {data.galleries.map((g) => (
-              <li key={g.token}>
-                <Link
-                  href={`/g/${g.token}`}
-                  className="flex items-center gap-4 py-4 no-underline"
-                >
-                  <div className="h-16 w-16 shrink-0 overflow-hidden bg-line sm:h-20 sm:w-20">
-                    {g.coverPhotoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={g.coverPhotoUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : null}
-                  </div>
-                  <p className="font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
-                    {g.title}
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div
-            className={cn(
-              layout === "grid"
-                ? "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3"
-                : "columns-1 gap-4 sm:columns-2 sm:gap-5 lg:columns-3",
-            )}
-          >
-            {data.galleries.map((g) => (
-              <Link
-                key={g.token}
-                href={`/g/${g.token}`}
-                className={cn(
-                  "block break-inside-avoid no-underline",
-                  layout === "masonry" ? "mb-4 sm:mb-5" : "",
-                )}
-              >
-                <div className="overflow-hidden bg-line">
-                  {g.coverPhotoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={g.coverPhotoUrl}
-                      alt=""
-                      className={cn(
-                        "w-full object-cover transition duration-500 hover:scale-[1.02]",
-                        layout === "grid" ? "aspect-[4/5]" : "h-auto",
-                      )}
-                    />
-                  ) : (
-                    <div className="aspect-[4/5] bg-line" />
-                  )}
-                </div>
-                <p className="mt-3 font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
-                  {g.title}
-                </p>
-              </Link>
-            ))}
-          </div>
-        )}
-        {data.galleries.length === 0 ? (
-          <p className="text-center text-muted">No collections yet.</p>
-        ) : null}
-      </main>
-    </div>
-  );
+  return <StudioHomepageView data={data} />;
 }

@@ -2,15 +2,42 @@ import { nanoid } from "nanoid";
 import { normalizeShotCategory } from "@/lib/shots";
 import type {
   AuraDatabase,
-  GalleryDesign,
   Project,
   ProjectSession,
   ProjectStage,
+  ProjectWorkflowStep,
   ShotItem,
   ShotListTemplateItem,
   Studio,
 } from "@/lib/types";
-import { DEFAULT_GALLERY_DESIGN, DEFAULT_STUDIO_THEME } from "@/lib/types";
+import { ensureStudioBrandKit } from "@/lib/brand-kit";
+import { normalizeBookingDefaults } from "@/lib/booking-defaults";
+import { normalizeDeliveryDefaults } from "@/lib/delivery-defaults";
+import { normalizeContactPrefs } from "@/lib/contact-prefs";
+import { normalizeGalleryDesign } from "@/lib/gallery-design";
+import { ensureHomepageModules } from "@/lib/homepage-modules";
+import { normalizeLegalDefaults } from "@/lib/legal-defaults";
+import { normalizePaymentDefaults } from "@/lib/payment-defaults";
+import { DEFAULT_STUDIO_THEME } from "@/lib/types";
+import { DEFAULT_WATERMARK_SCALE } from "@/lib/watermark-scale";
+
+const PROJECT_WORKFLOW_STEPS = new Set<string>([
+  "inquiry",
+  "questionnaire",
+  "pricing",
+  "contract",
+  "deposit",
+  "prep",
+  "delivery",
+]);
+
+function coerceWorkflowStep(raw: unknown): ProjectWorkflowStep | undefined {
+  if (raw == null || raw === "") return undefined;
+  const step = String(raw);
+  return PROJECT_WORKFLOW_STEPS.has(step)
+    ? (step as ProjectWorkflowStep)
+    : undefined;
+}
 
 function normalizeTemplateItem(item: ShotListTemplateItem): ShotListTemplateItem {
   const category = normalizeShotCategory(item.category || item.section);
@@ -50,6 +77,8 @@ function stageFromShootStatus(status?: string): ProjectStage {
 
 function coerceProject(raw: Record<string, unknown>, studioId: string): Project {
   const now = new Date().toISOString();
+  const workflowStep = coerceWorkflowStep(raw.workflowStep);
+  const cancelToken = raw.cancelToken ? String(raw.cancelToken) : undefined;
   return {
     id: String(raw.id || nanoid()),
     studioId: String(raw.studioId || studioId),
@@ -61,9 +90,30 @@ function coerceProject(raw: Record<string, unknown>, studioId: string): Project 
     stage: (raw.stage as ProjectStage) || "inquiry",
     projectDate: raw.projectDate ? String(raw.projectDate) : undefined,
     paidAmount: typeof raw.paidAmount === "number" ? raw.paidAmount : 0,
+    workflowStep,
+    cancelToken,
     createdAt: String(raw.createdAt || now),
     updatedAt: String(raw.updatedAt || now),
   };
+}
+
+/** Exported for regression checks: coerce must keep workflowStep + cancelToken. */
+export function projectRoundTripPreserved(
+  raw: Record<string, unknown>,
+  studioId = "studio_test",
+): boolean {
+  const out = coerceProject(raw, studioId);
+  if (
+    raw.workflowStep != null &&
+    PROJECT_WORKFLOW_STEPS.has(String(raw.workflowStep)) &&
+    out.workflowStep !== String(raw.workflowStep)
+  ) {
+    return false;
+  }
+  if (raw.cancelToken != null && out.cancelToken !== String(raw.cancelToken)) {
+    return false;
+  }
+  return true;
 }
 
 function coerceSession(
@@ -77,6 +127,12 @@ function coerceSession(
     : raw.shootDate
       ? String(raw.shootDate)
       : undefined;
+  const intakeAnswers =
+    raw.intakeAnswers &&
+    typeof raw.intakeAnswers === "object" &&
+    !Array.isArray(raw.intakeAnswers)
+      ? (raw.intakeAnswers as Record<string, string>)
+      : undefined;
   return {
     id: String(raw.id || nanoid()),
     studioId: String(raw.studioId || studioId),
@@ -87,14 +143,64 @@ function coerceSession(
     status: (raw.status as ProjectSession["status"]) || "inquiry",
     proposalId: raw.proposalId ? String(raw.proposalId) : undefined,
     galleryId: raw.galleryId ? String(raw.galleryId) : undefined,
-    intakeAnswers: (raw.intakeAnswers as Record<string, string>) || undefined,
-    wizardSkippedProposal: Boolean(raw.wizardSkippedProposal),
-    wizardSkippedPrep: Boolean(raw.wizardSkippedPrep),
-    wizardAdvancedPastShootDay: Boolean(raw.wizardAdvancedPastShootDay),
+    intakeAnswers,
+    wizardSkippedProposal:
+      raw.wizardSkippedProposal != null
+        ? Boolean(raw.wizardSkippedProposal)
+        : undefined,
+    wizardSkippedPrep:
+      raw.wizardSkippedPrep != null ? Boolean(raw.wizardSkippedPrep) : undefined,
+    wizardAdvancedPastShootDay:
+      raw.wizardAdvancedPastShootDay != null
+        ? Boolean(raw.wizardAdvancedPastShootDay)
+        : undefined,
     googleEventId: raw.googleEventId ? String(raw.googleEventId) : undefined,
     createdAt: String(raw.createdAt || now),
     updatedAt: String(raw.updatedAt || now),
   };
+}
+
+/** Exported for regression checks: session fields must survive coerce. */
+export function sessionRoundTripPreserved(
+  raw: Record<string, unknown>,
+  studioId = "studio_test",
+): boolean {
+  const out = coerceSession(raw, studioId);
+  const checks: Array<[unknown, unknown]> = [
+    [raw.endsAt, out.endsAt],
+    [raw.proposalId, out.proposalId],
+    [raw.galleryId, out.galleryId],
+    [raw.googleEventId, out.googleEventId],
+  ];
+  for (const [src, dst] of checks) {
+    if (src != null && String(src) !== String(dst)) return false;
+  }
+  if (raw.startsAt != null && out.startsAt !== String(raw.startsAt)) return false;
+  if (
+    raw.startsAt == null &&
+    raw.shootDate != null &&
+    out.startsAt !== String(raw.shootDate)
+  ) {
+    return false;
+  }
+  if (raw.wizardSkippedProposal != null && out.wizardSkippedProposal !== Boolean(raw.wizardSkippedProposal)) {
+    return false;
+  }
+  if (raw.wizardSkippedPrep != null && out.wizardSkippedPrep !== Boolean(raw.wizardSkippedPrep)) {
+    return false;
+  }
+  if (
+    raw.wizardAdvancedPastShootDay != null &&
+    out.wizardAdvancedPastShootDay !== Boolean(raw.wizardAdvancedPastShootDay)
+  ) {
+    return false;
+  }
+  if (raw.intakeAnswers != null) {
+    if (JSON.stringify(out.intakeAnswers) !== JSON.stringify(raw.intakeAnswers)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function normalizeStudio(studio: Studio): Studio {
@@ -103,7 +209,7 @@ function normalizeStudio(studio: Studio): Studio {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 40) || "studio";
-  return {
+  const next: Studio = {
     ...studio,
     printPartners: studio.printPartners || [],
     ownerEmail: studio.ownerEmail || "",
@@ -120,6 +226,7 @@ function normalizeStudio(studio: Studio): Studio {
       showPhone: true,
       showAddress: false,
       showBooking: true,
+      showContactForm: false,
       layout: "masonry",
       sortOrder: "created_desc",
       ...(studio.homepage || {}),
@@ -128,14 +235,23 @@ function normalizeStudio(studio: Studio): Studio {
       emailQuoteAccepted: true,
       emailPaymentReceived: true,
       emailBookingSubmitted: true,
+      emailContactMessage: true,
       emailClientQuote: true,
       emailClientGallery: true,
       emailClientPayment: true,
       emailClientBooking: true,
       ...studio.notificationPrefs,
     },
+    deliveryDefaults: normalizeDeliveryDefaults(studio.deliveryDefaults),
+    bookingDefaults: normalizeBookingDefaults(studio.bookingDefaults),
+    paymentDefaults: normalizePaymentDefaults(studio.paymentDefaults),
+    contactPrefs: normalizeContactPrefs(studio.contactPrefs),
+    legalDefaults: normalizeLegalDefaults(studio.legalDefaults),
     socialLinks: studio.socialLinks || [],
   };
+  ensureStudioBrandKit(next);
+  if (next.homepage) ensureHomepageModules(next.homepage);
+  return next;
 }
 
 /** Ensure older data gains new fields / collections. */
@@ -216,16 +332,12 @@ export function normalizeDb(db: AuraDatabase): AuraDatabase {
       g.projectId ||
       db.sessions.find((s) => s.id === sessionId)?.projectId ||
       "";
-    const design: GalleryDesign = {
-      ...DEFAULT_GALLERY_DESIGN,
-      ...(g.design || {}),
-    };
     return {
       ...g,
       projectId,
       sessionId,
       shootId: g.shootId || sessionId,
-      design,
+      design: normalizeGalleryDesign(g.design),
       showOnHomepage: Boolean(g.showOnHomepage),
     };
   });
@@ -248,7 +360,12 @@ export function normalizeDb(db: AuraDatabase): AuraDatabase {
     db.questionnaireResponses || [],
     studioId,
   );
-  db.sessionTypes = stampStudioId(db.sessionTypes || [], studioId);
+  db.sessionTypes = stampStudioId(db.sessionTypes || [], studioId).map(
+    (t) => ({
+      ...t,
+      active: t.active !== false,
+    }),
+  );
   db.bookingRequests = stampStudioId(db.bookingRequests || [], studioId);
 
   delete (db as { emailJobs?: unknown }).emailJobs;
@@ -272,7 +389,7 @@ export function normalizeDb(db: AuraDatabase): AuraDatabase {
   }
   for (const w of db.watermarkPresets) {
     if (!w.position || w.position === "center") w.position = "bottom-right";
-    if (w.scale == null) w.scale = 0.14;
+    if (w.scale == null) w.scale = DEFAULT_WATERMARK_SCALE;
   }
   return db;
 }

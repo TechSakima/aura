@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import {
+  deleteGoogleCalendarEvent,
   getBusyIntervals,
   overlapsBusy,
   pushSessionToGoogleCalendar,
@@ -53,13 +54,24 @@ export async function PATCH(req: Request) {
       session0.endsAt,
       st0?.bufferMinutes || 0,
     );
-    const busy = await getBusyIntervals({
+    const busyResult = await getBusyIntervals({
       studioId: admin.studioId,
       timeMin: window.start,
       timeMax: window.end,
     });
+    if (busyResult.syncFailed) {
+      return NextResponse.json(
+        {
+          error:
+            busyResult.syncError ||
+            "Google Calendar sync failed. Reconnect Calendar, then try again.",
+          calendarSyncFailed: true,
+        },
+        { status: 503 },
+      );
+    }
     // Ignore this session's own block
-    conflicts = busy.filter(
+    conflicts = busyResult.busy.filter(
       (b) =>
         !(
           b.start === session0.startsAt &&
@@ -87,6 +99,7 @@ export async function PATCH(req: Request) {
   let questionnaireTemplateId: string | undefined;
   let pricingMode = st0?.pricingMode || "after_intake";
   let nextStep: ProjectWorkflowStep = "questionnaire";
+  let googleEventIdToDelete: string | undefined;
 
   try {
     await updateStudioDb(admin.studioId, (db) => {
@@ -131,6 +144,8 @@ export async function PATCH(req: Request) {
           if (status === "confirmed") {
             session.status = "booked";
           } else {
+            googleEventIdToDelete = session.googleEventId;
+            session.googleEventId = undefined;
             session.status = "archived";
             session.startsAt = undefined;
             session.endsAt = undefined;
@@ -142,6 +157,9 @@ export async function PATCH(req: Request) {
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  let calendarPushFailed = false;
+  let calendarPushError: string | undefined;
 
   if (status === "confirmed" && clientEmail && startsAt) {
     const cancelHref = cancelToken
@@ -199,37 +217,50 @@ export async function PATCH(req: Request) {
       }
     }
 
-    // GCal push
+    // GCal push (same connection as conflict check; surface failure)
     if (session0?.startsAt && session0?.endsAt) {
-      const eventId = await pushSessionToGoogleCalendar({
+      const pushed = await pushSessionToGoogleCalendar({
         studioId: admin.studioId,
         title: `${clientName || "Session"} · ${sessionTypeName}`,
         startsAt: session0.startsAt,
         endsAt: session0.endsAt,
       });
-      if (eventId && req0.sessionId) {
+      if (pushed.eventId && req0.sessionId) {
         await updateStudioDb(admin.studioId, (d) => {
           const s = d.sessions.find((x) => x.id === req0.sessionId);
-          if (s) s.googleEventId = eventId;
+          if (s) s.googleEventId = pushed.eventId!;
         });
       }
+      if (pushed.failed) {
+        calendarPushFailed = true;
+        calendarPushError = pushed.error;
+      }
     }
-  } else if (status === "declined" && clientEmail) {
-    await emailBookingDeclined({
-      studioId: admin.studioId,
-      to: clientEmail,
-      clientName: clientName || "there",
-      sessionTypeName,
-      reason: declineReason,
-    });
-    await notifyStudio({
-      studioId: admin.studioId,
-      type: "booking_declined",
-      title: "Booking declined",
-      body: `${clientName || "Guest"} · ${sessionTypeName}`,
-      href: "/admin/bookings",
-      emailStudio: false,
-    });
+  } else if (status === "declined") {
+    if (googleEventIdToDelete) {
+      await deleteGoogleCalendarEvent({
+        studioId: admin.studioId,
+        eventId: googleEventIdToDelete,
+      });
+    }
+    if (clientEmail) {
+      await emailBookingDeclined({
+        studioId: admin.studioId,
+        to: clientEmail,
+        clientName: clientName || "there",
+        sessionTypeName,
+        reason: declineReason,
+        requestId: id,
+      });
+      await notifyStudio({
+        studioId: admin.studioId,
+        type: "booking_declined",
+        title: "Booking declined",
+        body: `${clientName || "Guest"} · ${sessionTypeName}`,
+        href: "/admin/bookings",
+        emailStudio: false,
+      });
+    }
   }
 
   return NextResponse.json({
@@ -238,5 +269,7 @@ export async function PATCH(req: Request) {
     projectHref: projectId ? `/admin/projects/${projectId}` : undefined,
     workflowStep: status === "confirmed" ? nextStep : undefined,
     conflicts: conflicts.length ? conflicts : undefined,
+    calendarPushFailed: calendarPushFailed || undefined,
+    calendarPushError: calendarPushError || undefined,
   });
 }

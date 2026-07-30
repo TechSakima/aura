@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from "react";
 import {
+  Button,
   Card,
+  EmptyState,
   Field,
   Label,
+  MetricTile,
   PageHeader,
   SectionIntro,
   Select,
 } from "@/components/ui";
+
+
 
 type Financials = {
   collectedNet: number;
@@ -43,23 +48,52 @@ function money(n: number) {
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
-  const [shoots, setShoots] = useState<{ id: string; type: string }[]>([]);
-  const [shootId, setShootId] = useState("");
+  const [error, setError] = useState("");
+  const [sessions, setSessions] = useState<{ id: string; type: string }[]>([]);
+  const [sessionId, setSessionId] = useState("");
 
   useEffect(() => {
-    void fetch("/api/shoots")
+    void fetch("/api/sessions")
       .then((r) => r.json())
-      .then((d) => setShoots(d.shoots || []));
+      .then((d) => setSessions(d.sessions || []));
   }, []);
 
-  useEffect(() => {
-    const q = shootId ? `?shootId=${encodeURIComponent(shootId)}` : "";
-    void fetch(`/api/analytics${q}`)
-      .then((r) => r.json())
-      .then(setData);
-  }, [shootId]);
+  async function loadAnalytics() {
+    setError("");
+    try {
+      const q = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+      const r = await fetch(`/api/analytics${q}`);
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(String(json.error || "Could not load analytics"));
+        setData(null);
+        return;
+      }
+      setData(json as Analytics);
+    } catch {
+      setError("Could not load analytics");
+      setData(null);
+    }
+  }
 
-  if (!data) return <p className="text-muted">Loading analytics…</p>;
+  useEffect(() => {
+    void loadAnalytics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  if (error && !data) {
+    return (
+      <EmptyState
+        variant="error"
+        title={error}
+        action={<Button onClick={() => void loadAnalytics()}>Retry</Button>}
+      />
+    );
+  }
+
+  if (!data) {
+    return <EmptyState variant="loading" title="Loading analytics…" />;
+  }
 
   const f = data.financials ?? {
     collectedNet: 0,
@@ -81,14 +115,14 @@ export default function AnalyticsPage() {
         description="Engagement and payments across your studio."
       />
       <Field className="mb-6 max-w-sm">
-        <Label htmlFor="shoot">Filter by shoot</Label>
+        <Label htmlFor="session">Filter by session</Label>
         <Select
-          id="shoot"
-          value={shootId}
-          onChange={(e) => setShootId(e.target.value)}
+          id="session"
+          value={sessionId}
+          onChange={(e) => setSessionId(e.target.value)}
         >
-          <option value="">All shoots</option>
-          {shoots.map((s) => (
+          <option value="">All sessions</option>
+          {sessions.map((s) => (
             <option key={s.id} value={s.id}>
               {s.type} ({s.id.slice(0, 6)})
             </option>
@@ -98,29 +132,25 @@ export default function AnalyticsPage() {
 
       <section className="mb-10 space-y-5">
         <SectionIntro title="Financials" />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="p-4">
-            <p className="text-sm text-muted">Collected (net)</p>
-            <p className="font-display text-3xl">{money(f.collectedNet)}</p>
-            <p className="mt-1 text-xs text-muted">
-              {f.transactionCount} payment{f.transactionCount === 1 ? "" : "s"}
-            </p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm text-muted">Client paid (gross)</p>
-            <p className="font-display text-3xl">{money(f.collectedGross)}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm text-muted">Processing fees</p>
-            <p className="font-display text-3xl">{money(f.processingFees)}</p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm text-muted">Open invoices</p>
-            <p className="font-display text-3xl">{money(f.openInvoiceNet)}</p>
-            <p className="mt-1 text-xs text-muted">
-              {f.openInvoiceCount} outstanding
-            </p>
-          </Card>
+        <div className="grid gap-6 border-b border-line pb-8 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricTile
+            label="Collected (net)"
+            value={money(f.collectedNet)}
+            hint={`${f.transactionCount} payment${f.transactionCount === 1 ? "" : "s"}`}
+          />
+          <MetricTile
+            label="Client paid (gross)"
+            value={money(f.collectedGross)}
+          />
+          <MetricTile
+            label="Processing fees"
+            value={money(f.processingFees)}
+          />
+          <MetricTile
+            label="Open invoices"
+            value={money(f.openInvoiceNet)}
+            hint={`${f.openInvoiceCount} outstanding`}
+          />
         </div>
 
         <div className="grid gap-8 lg:grid-cols-2">
@@ -129,9 +159,11 @@ export default function AnalyticsPage() {
               Revenue by day
             </h3>
             {Object.keys(f.byDay).length === 0 ? (
-              <p className="border-y border-line py-4 text-sm text-muted">
-                No payments yet.
-              </p>
+              <EmptyState
+                variant="inline"
+                title="No payments yet."
+                className="border-y border-line py-4"
+              />
             ) : (
               <ul className="space-y-2">
                 {Object.entries(f.byDay)
@@ -153,9 +185,11 @@ export default function AnalyticsPage() {
               Recent payments
             </h3>
             {f.recent.length === 0 ? (
-              <p className="border-y border-line py-4 text-sm text-muted">
-                No payments yet.
-              </p>
+              <EmptyState
+                variant="inline"
+                title="No payments yet."
+                className="border-y border-line py-4"
+              />
             ) : (
               <ul className="space-y-2">
                 {f.recent.map((t) => (
@@ -189,15 +223,20 @@ export default function AnalyticsPage() {
 
       <SectionIntro title="Engagement" className="mb-5" />
 
-      <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-8 grid gap-6 border-b border-line pb-8 sm:grid-cols-2 lg:grid-cols-4">
         {Object.entries(data.totals).map(([key, value]) => (
-          <Card key={key} className="p-4">
-            <p className="text-sm text-muted">{key.replace(/_/g, " ")}</p>
-            <p className="font-display text-3xl">{value}</p>
-          </Card>
+          <MetricTile
+            key={key}
+            label={key.replace(/_/g, " ")}
+            value={value}
+          />
         ))}
         {Object.keys(data.totals).length === 0 ? (
-          <p className="text-sm text-muted sm:col-span-2">No engagement yet.</p>
+          <EmptyState
+            variant="inline"
+            title="No engagement yet."
+            className="sm:col-span-2"
+          />
         ) : null}
       </div>
 

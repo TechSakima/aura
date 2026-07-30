@@ -25,21 +25,21 @@ import type {
   QuestionnaireResponse,
 } from "@/lib/types";
 import { defaultContractBody } from "@/lib/contracts/defaults";
-
-const STEPS: { id: ProjectWorkflowStep; label: string }[] = [
-  { id: "inquiry", label: "Inquiry" },
-  { id: "questionnaire", label: "Questionnaire" },
-  { id: "pricing", label: "Pricing" },
-  { id: "contract", label: "Contract" },
-  { id: "deposit", label: "Deposit" },
-  { id: "prep", label: "Prep" },
-  { id: "delivery", label: "Delivery" },
-];
-
-function stepIndex(step?: ProjectWorkflowStep) {
-  const i = STEPS.findIndex((s) => s.id === step);
-  return i >= 0 ? i : 0;
-}
+import {
+  isBalanceInvoiceTitle,
+  isDepositInvoiceTitle,
+  projectQuotedTotal,
+  projectRemainingBalance,
+} from "@/lib/payments/project-balance";
+import {
+  BOOK_STEPS,
+  HANDOFF_COPY,
+  PROJECT_PATH_STEPS,
+  SESSION_STEPS,
+  nextProjectPathStep,
+  previousProjectPathStep,
+  projectPathIndex,
+} from "@/lib/workflow/path";
 
 function absoluteUrl(path: string) {
   if (typeof window === "undefined") return path;
@@ -49,6 +49,9 @@ function absoluteUrl(path: string) {
 type SessionHint = Pick<ProjectSession, "id" | "type" | "status" | "startsAt"> & {
   currentStep?: string;
   galleryToken?: string;
+  galleryStatus?: string;
+  prepComplete?: boolean;
+  deliveryComplete?: boolean;
 };
 
 export function ProjectWorkflowPanel({
@@ -71,7 +74,13 @@ export function ProjectWorkflowPanel({
   >([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [paymentLinks, setPaymentLinks] = useState<
-    { id: string; projectId?: string; publicUrl?: string; title: string }[]
+    {
+      id: string;
+      projectId?: string;
+      publicUrl?: string;
+      title: string;
+      archived?: boolean;
+    }[]
   >([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [packages, setPackages] = useState<
@@ -88,10 +97,10 @@ export function ProjectWorkflowPanel({
   const [contractTemplateId, setContractTemplateId] = useState("");
   const [toolSessionId, setToolSessionId] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
+  const [balanceAmount, setBalanceAmount] = useState("");
 
   const primarySession = sessions[0];
   const current = project.workflowStep || "inquiry";
-  const currentIdx = stepIndex(current);
   const latestSubmitted = useMemo(
     () => questionnaires.find((r) => Boolean(r.submittedAt)),
     [questionnaires],
@@ -115,45 +124,73 @@ export function ProjectWorkflowPanel({
     );
   }, [proposals, project.id, activeSessionId]);
 
-  const projectDepositLink = paymentLinks.find(
-    (l) => l.projectId === project.id,
+  const projectDepositLink =
+    paymentLinks.find(
+      (l) =>
+        l.projectId === project.id &&
+        !l.archived &&
+        isDepositInvoiceTitle(l.title),
+    ) ||
+    paymentLinks.find(
+      (l) =>
+        l.projectId === project.id &&
+        !l.archived &&
+        !isBalanceInvoiceTitle(l.title),
+    );
+  const projectBalanceLink = paymentLinks.find(
+    (l) =>
+      l.projectId === project.id &&
+      !l.archived &&
+      isBalanceInvoiceTitle(l.title),
   );
 
   async function loadRelated() {
-    const [qs, docs, pay, props] = await Promise.all([
-      fetch("/api/documents/questionnaires"),
-      fetch("/api/documents/contracts"),
-      fetch("/api/payments/links"),
-      fetch("/api/proposals"),
-    ]);
-    if (qs.ok) {
-      const data = await qs.json();
-      const all = (data.responses || []) as QuestionnaireResponse[];
-      setQuestionnaires(all.filter((r) => r.projectId === project.id));
-      const tmpls = (data.templates || []) as { id: string; name: string }[];
-      setQTemplates(tmpls.map((t) => ({ id: t.id, name: t.name })));
-      if (!sendTemplateId && tmpls[0]) setSendTemplateId(tmpls[0].id);
+    const res = await fetch(`/api/projects/${project.id}/related`);
+    if (!res.ok) {
+      push("Could not load workflow data — retry from refresh", "danger");
+      return;
     }
-    if (docs.ok) {
-      const data = await docs.json();
-      const all = (data.contracts || []) as Contract[];
-      setContracts(all.filter((c) => c.projectId === project.id));
-      const tmpls = (data.templates || []) as ContractTemplate[];
-      setContractTemplates(tmpls);
-      if (!contractTemplateId && tmpls[0]) setContractTemplateId(tmpls[0].id);
+    const data = await res.json();
+    setQuestionnaires((data.questionnaires || []) as QuestionnaireResponse[]);
+    setQTemplates(
+      ((data.questionnaireTemplates || []) as { id: string; name: string }[]).map(
+        (t) => ({ id: t.id, name: t.name }),
+      ),
+    );
+    if (!sendTemplateId && data.questionnaireTemplates?.[0]) {
+      setSendTemplateId(data.questionnaireTemplates[0].id);
     }
-    if (pay.ok) {
-      const data = await pay.json();
-      const all = (data.invoices || []) as Invoice[];
-      setInvoices(all.filter((i) => i.projectId === project.id));
-      setPaymentLinks(data.paymentLinks || []);
+    setContracts((data.contracts || []) as Contract[]);
+    setContractTemplates((data.contractTemplates || []) as ContractTemplate[]);
+    if (!contractTemplateId && data.contractTemplates?.length) {
+      const preferred = (
+        data.legalDefaults as { defaultContractTemplateId?: string } | undefined
+      )?.defaultContractTemplateId;
+      const match = preferred
+        ? (data.contractTemplates as ContractTemplate[]).find(
+            (t) => t.id === preferred,
+          )
+        : undefined;
+      setContractTemplateId(
+        match?.id || data.contractTemplates[0].id,
+      );
     }
-    if (props.ok) {
-      const data = await props.json();
-      setProposals((data.proposals || []) as Proposal[]);
-      const pkgs = (data.packages || []) as PackageTemplate[];
-      setPackages(pkgs.map((p) => ({ id: p.id, name: p.name })));
-      if (!packageId && pkgs[0]) setPackageId(pkgs[0].id);
+    setInvoices((data.invoices || []) as Invoice[]);
+    setPaymentLinks(data.paymentLinks || []);
+    setProposals((data.proposals || []) as Proposal[]);
+    const pkgs = (data.packages || []) as PackageTemplate[];
+    setPackages(pkgs.map((p) => ({ id: p.id, name: p.name })));
+    if (!packageId && pkgs[0]) setPackageId(pkgs[0].id);
+    const defaultDeposit = (
+      data.paymentDefaults as { defaultDepositAmount?: number } | undefined
+    )?.defaultDepositAmount;
+    if (
+      !depositAmount &&
+      defaultDeposit != null &&
+      Number.isFinite(defaultDeposit) &&
+      defaultDeposit > 0
+    ) {
+      setDepositAmount(String(defaultDeposit));
     }
   }
 
@@ -183,9 +220,31 @@ export function ProjectWorkflowPanel({
       p.projectId === project.id && p.depositStatus === "received",
   );
   const depositPaid =
-    (project.paidAmount || 0) > 0 ||
-    invoices.some((i) => i.status === "paid") ||
-    depositReceived;
+    invoices.some(
+      (i) => i.status === "paid" && isDepositInvoiceTitle(i.title),
+    ) ||
+    depositReceived ||
+    invoices.some(
+      (i) => i.status === "paid" && !isBalanceInvoiceTitle(i.title),
+    );
+
+  const quotedTotal = projectQuotedTotal(proposals, project.id);
+  const remainingBalance = projectRemainingBalance({
+    quotedTotal,
+    paidAmount: project.paidAmount,
+  });
+  const balancePaid =
+    remainingBalance === 0 ||
+    invoices.some(
+      (i) => i.status === "paid" && isBalanceInvoiceTitle(i.title),
+    );
+
+  useEffect(() => {
+    if (balanceAmount) return;
+    if (remainingBalance != null && remainingBalance > 0) {
+      setBalanceAmount(String(Math.round(remainingBalance)));
+    }
+  }, [remainingBalance, balanceAmount]);
 
   const prepHref = toolSession
     ? `/admin/projects/${project.id}/sessions/${toolSession.id}?step=prep`
@@ -194,39 +253,90 @@ export function ProjectWorkflowPanel({
     ? `/admin/projects/${project.id}/sessions/${toolSession.id}?step=delivery`
     : undefined;
 
-  const pricingDone =
-    quoteAccepted || currentIdx > stepIndex("pricing");
+  const sessionUnlocked = depositPaid;
+  const nextStep = nextProjectPathStep(current);
+  const prevStep = previousProjectPathStep(current);
 
   const statusByStep = useMemo(() => {
+    const prepReady = Boolean(
+      toolSession?.prepComplete ||
+        toolSession?.currentStep === "shoot-day" ||
+        toolSession?.currentStep === "delivery" ||
+        toolSession?.currentStep === "wrap",
+    );
+    const deliveryReady = Boolean(
+      toolSession?.deliveryComplete ||
+        toolSession?.status === "delivered" ||
+        toolSession?.status === "archived" ||
+        toolSession?.galleryStatus === "live" ||
+        toolSession?.galleryStatus === "archived",
+    );
+
     return {
       inquiry: "done" as const,
       questionnaire: qDone ? "done" : qSent ? "active" : "todo",
-      pricing: pricingDone ? "done" : quoteExists ? "active" : "todo",
+      pricing: quoteAccepted ? "done" : quoteExists ? "active" : "todo",
       contract: contractSigned ? "done" : contractSent ? "active" : "todo",
       deposit: depositPaid ? "done" : "todo",
-      prep:
-        toolSession?.currentStep === "shoot-day" ||
-        toolSession?.currentStep === "delivery" ||
-        toolSession?.currentStep === "wrap"
+      prep: !sessionUnlocked
+        ? "todo"
+        : prepReady
           ? "done"
-          : "todo",
-      delivery:
-        toolSession?.status === "delivered" ||
-        toolSession?.status === "archived" ||
-        Boolean(toolSession?.galleryToken)
+          : current === "prep"
+            ? "active"
+            : "todo",
+      delivery: !sessionUnlocked
+        ? "todo"
+        : deliveryReady
           ? "done"
-          : "todo",
+          : current === "delivery"
+            ? "active"
+            : "todo",
     } satisfies Record<ProjectWorkflowStep, "done" | "active" | "todo">;
   }, [
     qDone,
     qSent,
-    pricingDone,
+    quoteAccepted,
     quoteExists,
     contractSigned,
     contractSent,
     depositPaid,
+    sessionUnlocked,
     toolSession,
+    current,
   ]);
+
+  async function setWorkflowStep(step: ProjectWorkflowStep) {
+    setBusy("workflow");
+    const res = await fetch(`/api/clients/${project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workflowStep: step }),
+    });
+    setBusy(null);
+    if (!res.ok) {
+      push("Could not update workflow", "danger");
+      return;
+    }
+    push("Workflow updated", "success");
+    await refresh();
+  }
+
+  async function advanceWorkflow() {
+    if (!nextStep) return;
+    await setWorkflowStep(nextStep);
+  }
+
+  async function reopenStep(step: ProjectWorkflowStep) {
+    const ok = await confirm({
+      title: "Reopen step?",
+      message: `Set current step to ${PROJECT_PATH_STEPS.find((s) => s.id === step)?.label || step}.`,
+      confirmLabel: "Reopen",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await setWorkflowStep(step);
+  }
 
   async function refresh() {
     await loadRelated();
@@ -334,6 +444,14 @@ export function ProjectWorkflowPanel({
 
   async function markQuoteAccepted() {
     if (!proposal) return;
+    const ok = await confirm({
+      title: "Mark quote accepted?",
+      message:
+        "Skips the client accepting the quote link. Moves the project to Contract, then Deposit.",
+      confirmLabel: "Mark accepted",
+      tone: "neutral",
+    });
+    if (!ok) return;
     setBusy("pricing");
     const res = await fetch(`/api/proposals/${proposal.id}`, {
       method: "PATCH",
@@ -345,8 +463,14 @@ export function ProjectWorkflowPanel({
       push("Could not mark accepted", "danger");
       return;
     }
-    push("Quote accepted", "success");
+    push("Quote accepted · continue with Contract", "success");
     await refresh();
+    if (typeof document !== "undefined") {
+      document.getElementById("workflow")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
   }
 
   async function sendContract() {
@@ -482,6 +606,85 @@ export function ProjectWorkflowPanel({
     );
   }
 
+  async function createBalance() {
+    setBusy("balance");
+    const res = await fetch(`/api/projects/${project.id}/balance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: balanceAmount ? Number(balanceAmount) : undefined,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) {
+      push(String(data.error || "Could not create balance"), "danger");
+      return;
+    }
+    const url = (data.payUrl || data.checkoutUrl) as string | undefined;
+    if (url) {
+      try {
+        await navigator.clipboard.writeText(url);
+        push("Balance link copied", "success");
+      } catch {
+        push("Balance created", "success");
+      }
+    } else {
+      push("Balance created", "success");
+    }
+    await refresh();
+  }
+
+  async function copyBalanceLink() {
+    const url =
+      projectBalanceLink?.publicUrl ||
+      (projectBalanceLink
+        ? absoluteUrl(`/pay/${projectBalanceLink.id}`)
+        : undefined);
+    if (!url) {
+      push("Create a balance link first", "danger");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      push("Balance link copied", "success");
+    } catch {
+      push("Could not copy", "danger");
+    }
+  }
+
+  async function emailBalanceLink() {
+    if (!projectBalanceLink) {
+      push("Create a balance link first", "danger");
+      return;
+    }
+    const to = project.email?.trim();
+    if (!to) {
+      push("Add project email in Contact", "danger");
+      return;
+    }
+    setBusy("balance");
+    const res = await fetch("/api/payments/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "email",
+        id: projectBalanceLink.id,
+        email: to,
+      }),
+    });
+    setBusy(null);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      push(String(data.error || "Could not email pay link"), "danger");
+      return;
+    }
+    push(
+      data.emailed === false ? "Email skipped" : "Pay link emailed",
+      data.emailed === false ? "neutral" : "success",
+    );
+  }
+
   async function createGallery() {
     const session = toolSession || primarySession;
     if (!session) {
@@ -506,7 +709,12 @@ export function ProjectWorkflowPanel({
       push(String(data.error || "Could not create gallery"), "danger");
       return;
     }
-    push("Gallery draft created", "success");
+    try {
+      await navigator.clipboard.writeText(pin);
+      push(`Gallery created · PIN ${pin} copied`, "success");
+    } catch {
+      push(`Gallery created · PIN ${pin}`, "success");
+    }
     onChanged?.();
     window.location.href = `/admin/projects/${project.id}/sessions/${session.id}?step=delivery`;
   }
@@ -520,7 +728,17 @@ export function ProjectWorkflowPanel({
     return "neutral";
   }
 
-  function badgeLabel(state: "done" | "active" | "todo", isCurrent: boolean) {
+  function badgeLabel(
+    state: "done" | "active" | "todo",
+    isCurrent: boolean,
+    stepId: ProjectWorkflowStep,
+  ) {
+    if (
+      !sessionUnlocked &&
+      (stepId === "prep" || stepId === "delivery")
+    ) {
+      return "After deposit";
+    }
     if (state === "done") return "Done";
     if (isCurrent) return "Current";
     if (state === "active") return "In progress";
@@ -533,13 +751,40 @@ export function ProjectWorkflowPanel({
   }
 
   return (
-    <Card className="space-y-5 p-5">
+    <Card id="workflow" className="space-y-5 p-5 scroll-mt-24">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 className="font-display text-2xl">Workflow</h2>
           <p className="mt-1 text-sm text-muted">
-            Current step: {STEPS.find((s) => s.id === current)?.label || "Inquiry"}
+            Book the job, then run the session ·{" "}
+            {PROJECT_PATH_STEPS.find((s) => s.id === current)?.label ||
+              "Inquiry"}
           </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {nextStep ? (
+              <Button
+                type="button"
+                tone="neutral"
+                className="min-h-11"
+                pending={busy === "workflow"}
+                pendingLabel="Updating…"
+                onClick={() => void advanceWorkflow()}
+              >
+                Advance
+              </Button>
+            ) : null}
+            {prevStep ? (
+              <Button
+                type="button"
+                tone="ghost"
+                className="min-h-11"
+                pending={busy === "workflow"}
+                onClick={() => void reopenStep(prevStep)}
+              >
+                Reopen previous
+              </Button>
+            ) : null}
+          </div>
         </div>
         {project.cancelToken ? (
           <div className="flex min-w-0 flex-col gap-2 sm:items-end">
@@ -562,7 +807,10 @@ export function ProjectWorkflowPanel({
       </div>
 
       <ol className="space-y-3">
-        {STEPS.map((step, idx) => {
+        <li className="pt-1">
+          <p className="text-xs uppercase tracking-[0.14em] text-muted">Book</p>
+        </li>
+        {BOOK_STEPS.map((step, idx) => {
           const state = statusByStep[step.id];
           const isCurrent = step.id === current;
           return (
@@ -577,7 +825,7 @@ export function ProjectWorkflowPanel({
                   </span>
                   <p className="font-medium">{step.label}</p>
                   <Badge tone={badgeTone(state, isCurrent)}>
-                    {badgeLabel(state, isCurrent)}
+                    {badgeLabel(state, isCurrent, step.id)}
                   </Badge>
                 </div>
 
@@ -750,7 +998,22 @@ export function ProjectWorkflowPanel({
                           >
                             Mark accepted
                           </Button>
-                        ) : null}
+                        ) : (
+                          <Button
+                            tone="neutral"
+                            className="min-h-11"
+                            onClick={() => {
+                              document
+                                .getElementById("workflow")
+                                ?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                            }}
+                          >
+                            Continue with Contract
+                          </Button>
+                        )}
                         <a
                           className="text-sm text-accent"
                           href={`/p/${proposal.token}`}
@@ -821,7 +1084,7 @@ export function ProjectWorkflowPanel({
                           step="1"
                           value={depositAmount}
                           onChange={(e) => setDepositAmount(e.target.value)}
-                          placeholder="Optional if set on session type"
+                          placeholder="Optional if set on session type or defaults"
                         />
                       </Field>
                     ) : null}
@@ -854,12 +1117,93 @@ export function ProjectWorkflowPanel({
                             Email pay link
                           </Button>
                         ) : null}
+                        <Link href="/admin/payments">
+                          <Button tone="ghost" className="min-h-11">
+                            View in Payments
+                          </Button>
+                        </Link>
                       </>
+                    ) : null}
+                    {depositPaid && prepHref ? (
+                      <Link href={prepHref}>
+                        <Button className="min-h-11 w-full">
+                          Continue to prep
+                        </Button>
+                      </Link>
                     ) : null}
                   </>
                 ) : null}
+                {!isCurrent &&
+                projectPathIndex(step.id) < projectPathIndex(current) ? (
+                  <Button
+                    type="button"
+                    tone="ghost"
+                    className="min-h-11"
+                    pending={busy === "workflow"}
+                    onClick={() => void reopenStep(step.id)}
+                  >
+                    Reopen
+                  </Button>
+                ) : null}
+                {isCurrent && nextStep ? (
+                  <Button
+                    type="button"
+                    tone="ghost"
+                    className="min-h-11"
+                    pending={busy === "workflow"}
+                    pendingLabel="Updating…"
+                    onClick={() => void advanceWorkflow()}
+                  >
+                    Mark complete
+                  </Button>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
 
-                {step.id === "prep" ? (
+        <li className="border border-dashed border-line bg-surface px-4 py-3">
+          <p className="text-sm text-ink">{HANDOFF_COPY}</p>
+          <p className="mt-1 text-sm text-muted">
+            Session tools unlock when the deposit is paid.
+          </p>
+        </li>
+
+        <li className="pt-1">
+          <p className="text-xs uppercase tracking-[0.14em] text-muted">
+            Session
+          </p>
+        </li>
+        {SESSION_STEPS.map((step, idx) => {
+          const state = statusByStep[step.id];
+          const isCurrent = step.id === current;
+          const pathIdx = BOOK_STEPS.length + idx;
+          return (
+            <li
+              key={step.id}
+              className="border border-line bg-canvas p-4 sm:flex sm:items-start sm:justify-between sm:gap-4"
+            >
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs uppercase tracking-[0.14em] text-muted">
+                    {pathIdx + 1}
+                  </span>
+                  <p className="font-medium">{step.label}</p>
+                  <Badge tone={badgeTone(state, isCurrent)}>
+                    {badgeLabel(state, isCurrent, step.id)}
+                  </Badge>
+                </div>
+                {!sessionUnlocked ? (
+                  <p className="text-sm text-muted">{HANDOFF_COPY}.</p>
+                ) : step.id === "prep" ? (
+                  <p className="text-sm text-muted">
+                    Continues as prep → shoot day → delivery → wrap
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="mt-3 flex w-full flex-col gap-2 sm:mt-0 sm:max-w-xs sm:items-stretch">
+                {step.id === "prep" && sessionUnlocked ? (
                   <>
                     {sessions.length > 1 ? (
                       <Field>
@@ -886,7 +1230,7 @@ export function ProjectWorkflowPanel({
                   </>
                 ) : null}
 
-                {step.id === "delivery" ? (
+                {step.id === "delivery" && sessionUnlocked ? (
                   <>
                     {sessions.length > 1 ? (
                       <Field>
@@ -930,7 +1274,98 @@ export function ProjectWorkflowPanel({
                         Open gallery
                       </a>
                     )}
+                    <div className="border-t border-line pt-3">
+                      <p className="mb-2 text-sm text-muted">
+                        {balancePaid
+                          ? "Balance paid"
+                          : remainingBalance != null
+                            ? `Remaining $${Math.round(remainingBalance)}`
+                            : "Remaining balance"}
+                        {quotedTotal != null
+                          ? ` · quote $${Math.round(quotedTotal)}`
+                          : ""}
+                      </p>
+                      {!balancePaid ? (
+                        <Field className="mb-2">
+                          <Label htmlFor={`bal-${project.id}`}>
+                            Balance ($)
+                          </Label>
+                          <Input
+                            id={`bal-${project.id}`}
+                            type="number"
+                            min={1}
+                            step="1"
+                            value={balanceAmount}
+                            onChange={(e) => setBalanceAmount(e.target.value)}
+                            placeholder={
+                              remainingBalance != null
+                                ? String(Math.round(remainingBalance))
+                                : "Amount"
+                            }
+                          />
+                        </Field>
+                      ) : null}
+                      <Button
+                        className="min-h-11 w-full"
+                        pending={busy === "balance"}
+                        pendingLabel="Creating…"
+                        disabled={balancePaid}
+                        onClick={() => void createBalance()}
+                      >
+                        {balancePaid
+                          ? "Paid"
+                          : projectBalanceLink
+                            ? "Create again"
+                            : "Create balance link"}
+                      </Button>
+                      {projectBalanceLink ? (
+                        <>
+                          <Button
+                            tone="neutral"
+                            className="mt-2 min-h-11 w-full"
+                            onClick={() => void copyBalanceLink()}
+                          >
+                            Copy balance link
+                          </Button>
+                          {!balancePaid ? (
+                            <Button
+                              tone="neutral"
+                              className="mt-2 min-h-11 w-full"
+                              pending={busy === "balance"}
+                              pendingLabel="Sending…"
+                              onClick={() => void emailBalanceLink()}
+                            >
+                              Email balance link
+                            </Button>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
                   </>
+                ) : null}
+                {!isCurrent &&
+                projectPathIndex(step.id) < projectPathIndex(current) ? (
+                  <Button
+                    type="button"
+                    tone="ghost"
+                    className="min-h-11"
+                    pending={busy === "workflow"}
+                    onClick={() => void reopenStep(step.id)}
+                  >
+                    Reopen
+                  </Button>
+                ) : null}
+                {isCurrent && nextStep ? (
+                  <Button
+                    type="button"
+                    tone="ghost"
+                    className="min-h-11"
+                    pending={busy === "workflow"}
+                    pendingLabel="Updating…"
+                    onClick={() => void advanceWorkflow()}
+                  >
+                    Mark complete
+                  </Button>
                 ) : null}
               </div>
             </li>

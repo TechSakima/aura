@@ -17,9 +17,17 @@ import {
   startOfWeek,
   startOfDay,
 } from "date-fns";
-import { Button, Select } from "@/components/ui";
+import {
+  Button,
+  ButtonLink,
+  Chip,
+  type ChipTone,
+  Panel,
+  Select,
+} from "@/components/ui";
 import { cn } from "@/lib/cn";
-import type { ProjectSession } from "@/lib/types";
+import type { ProjectSession, SessionStatus } from "@/lib/types";
+
 
 export type CalendarSession = ProjectSession & {
   projectName?: string;
@@ -106,21 +114,21 @@ function MonthGrid({
   );
 }
 
+function sessionChipTone(status?: SessionStatus | string): ChipTone {
+  if (status === "delivered") return "success";
+  if (status === "archived") return "neutral";
+  return "accent";
+}
+
 function EventChip({ s }: { s: CalendarSession }) {
   const href =
     s.projectHref ||
     (s.projectId ? `/admin/projects/${s.projectId}` : undefined);
   const label = `${s.projectName || s.type} · ${sessionTimeLabel(s.startsAt)}`;
-  const inner = (
-    <span className="block truncate rounded-sm bg-ink px-1.5 py-0.5 text-[10px] leading-tight text-surface sm:text-[11px]">
-      {label}
-    </span>
-  );
-  if (!href) return inner;
   return (
-    <Link href={href} className="block no-underline hover:opacity-90">
-      {inner}
-    </Link>
+    <Chip href={href} tone={sessionChipTone(s.status)} className="w-full">
+      {label}
+    </Chip>
   );
 }
 
@@ -196,17 +204,22 @@ export function SessionsCalendar({
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <h2 className="font-display text-2xl">Calendar</h2>
           <p className="mt-1 text-sm text-muted">{title}</p>
+          <p className="mt-1 text-xs text-muted">
+            {gcalConnected
+              ? "Google Calendar sync on"
+              : "Google Calendar not connected"}
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/admin/settings">
-            <Button tone="neutral" className="min-h-11">
-              {gcalConnected ? "Calendar sync" : "Connect calendar"}
-            </Button>
-          </Link>
-        </div>
+        <ButtonLink
+          href="/admin/settings/integrations"
+          tone="ghost"
+          className="min-h-11 w-full sm:w-auto"
+        >
+          Manage in Settings
+        </ButtonLink>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -287,10 +300,7 @@ export function SessionsCalendar({
           {weekDays.map((day) => {
             const items = sessionsOnDay(dated, day);
             return (
-              <div
-                key={day.toISOString()}
-                className="rounded-md border border-line bg-surface p-3"
-              >
+              <Panel key={day.toISOString()} className="p-3">
                 <p className="text-xs uppercase tracking-[0.14em] text-muted">
                   {format(day, "EEE MMM d")}
                   {isToday(day) ? " · Today" : ""}
@@ -306,7 +316,7 @@ export function SessionsCalendar({
                     ))}
                   </ul>
                 )}
-              </div>
+              </Panel>
             );
           })}
         </div>
@@ -345,7 +355,7 @@ export function SessionsCalendar({
       ) : null}
 
       {view === "day" ? (
-        <div className="rounded-md border border-line bg-surface p-4">
+        <Panel>
           <p className="text-xs uppercase tracking-[0.14em] text-muted">
             {format(cursor, "EEEE, MMMM d")}
           </p>
@@ -385,7 +395,7 @@ export function SessionsCalendar({
               ))}
             </ul>
           )}
-        </div>
+        </Panel>
       ) : null}
     </section>
   );

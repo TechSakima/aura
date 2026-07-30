@@ -7,11 +7,13 @@ export function Switch({
   onCheckedChange,
   id,
   label,
+  disabled,
 }: {
   checked: boolean;
   onCheckedChange: (next: boolean) => void;
   id?: string;
   label?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -20,10 +22,15 @@ export function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      onClick={() => onCheckedChange(!checked)}
+      disabled={disabled}
+      onClick={() => {
+        if (disabled) return;
+        onCheckedChange(!checked);
+      }}
       className={cn(
         "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors",
         checked ? "bg-accent" : "bg-line",
+        disabled && "cursor-not-allowed opacity-40",
       )}
     >
       <span

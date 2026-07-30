@@ -13,19 +13,24 @@ import {
   Label,
   PageHeader,
   SectionIntro,
+  StatusBadge,
   Textarea,
   useConfirm,
   useToast,
 } from "@/components/ui";
+
 import type { Project, ProjectSession } from "@/lib/types";
 import { deriveWizardProgress } from "@/lib/wizard/steps";
+import { sessionToolsUnlocked } from "@/lib/workflow/path";
 
 type SessionRow = ProjectSession & {
   currentStep?: string;
   label?: string;
   quoteToken?: string;
   galleryToken?: string;
-  shootDate?: string;
+  galleryStatus?: string;
+  prepComplete?: boolean;
+  deliveryComplete?: boolean;
   type: string;
   status: string;
 };
@@ -37,6 +42,7 @@ export default function ProjectDetailPage() {
   const { confirm } = useConfirm();
   const [project, setProject] = useState<Project | null>(null);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [loadError, setLoadError] = useState("");
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -46,52 +52,83 @@ export default function ProjectDetailPage() {
   const [sessionDate, setSessionDate] = useState("");
 
   async function load() {
-    const res = await fetch(`/api/clients/${id}`);
+    setLoadError("");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    let res: Response;
+    try {
+      res = await fetch(`/api/projects/${id}`, { signal: controller.signal });
+    } catch (e) {
+      window.clearTimeout(timeout);
+      setLoadError(
+        e instanceof Error && e.name === "AbortError"
+          ? "Taking too long — check your connection and retry."
+          : "Could not load project.",
+      );
+      return;
+    }
+    window.clearTimeout(timeout);
     if (!res.ok) {
       push("Project not found", "danger");
       router.push("/admin/projects");
       return;
     }
     const data = await res.json();
-    const p = (data.project || data.client) as Project;
+    const p = data.project as Project;
     setProject(p);
     setName(p.name);
     setEmail(p.email);
     setPhone(p.phone || "");
     setNotes(p.notes || "");
 
-    const rows: SessionRow[] = [];
-    for (const shoot of (data.shoots || data.sessions || []) as ProjectSession[]) {
-      const wiz = await fetch(`/api/shoots/${shoot.id}/wizard`);
-      if (wiz.ok) {
-        const w = await wiz.json();
-        const progress = deriveWizardProgress({
-          shoot: w.shoot,
-          proposal: w.proposal,
-          plan: w.plan,
-          gallery: w.gallery,
-          photoCount: w.photoCount,
-        });
-        rows.push({
-          ...shoot,
-          type: shoot.type,
-          status: shoot.status,
-          shootDate: shoot.startsAt?.slice(0, 10),
-          currentStep: progress.currentStep,
-          label: progress.currentStep.replace("-", " "),
-          quoteToken: w.proposal?.token,
-          galleryToken: w.gallery?.publicToken,
-        });
-      } else {
-        rows.push({
-          ...shoot,
-          type: shoot.type,
-          status: shoot.status,
-          shootDate: shoot.startsAt?.slice(0, 10),
-        });
-      }
+    const summaries = (data.sessions || []) as SessionRow[];
+    if (summaries.some((s) => s.currentStep != null)) {
+      setSessions(summaries);
+      return;
     }
-    setSessions(rows);
+
+    const rows = await Promise.all(
+      summaries.map(async (shoot): Promise<SessionRow> => {
+        try {
+          const wiz = await fetch(`/api/shoots/${shoot.id}/wizard`);
+          if (!wiz.ok) {
+            return {
+              ...shoot,
+              type: shoot.type,
+              status: shoot.status,
+            };
+          }
+          const w = await wiz.json();
+          const progress = deriveWizardProgress({
+            shoot: w.session || w.shoot,
+            proposal: w.proposal,
+            plan: w.plan,
+            gallery: w.gallery,
+            photoCount: w.photoCount,
+          });
+          return {
+            ...shoot,
+            type: shoot.type,
+            status: shoot.status,
+            currentStep: progress.currentStep,
+            label: progress.currentStep.replace("-", " "),
+            quoteToken: w.proposal?.token,
+            galleryToken: w.gallery?.publicToken,
+            galleryStatus: w.gallery?.status,
+            prepComplete: progress.completed.includes("prep"),
+            deliveryComplete: progress.completed.includes("delivery"),
+          };
+        } catch {
+          return {
+            ...shoot,
+            type: shoot.type,
+            status: shoot.status,
+          };
+        }
+      },
+    ),
+  );
+  setSessions(rows);
   }
 
   useEffect(() => {
@@ -100,7 +137,7 @@ export default function ProjectDetailPage() {
 
   async function saveProject(e: FormEvent) {
     e.preventDefault();
-    const res = await fetch(`/api/clients/${id}`, {
+    const res = await fetch(`/api/projects/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email, phone, notes }),
@@ -110,21 +147,20 @@ export default function ProjectDetailPage() {
       return;
     }
     const data = await res.json();
-    setProject(data.project || data.client);
+    setProject(data.project as Project);
     setEditing(false);
     push("Project updated", "success");
   }
 
   async function createSession(e: FormEvent) {
     e.preventDefault();
-    const res = await fetch("/api/shoots", {
+    const res = await fetch("/api/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        clientId: id,
         projectId: id,
         type: sessionType,
-        shootDate: sessionDate || undefined,
+        startsAt: sessionDate || undefined,
       }),
     });
     if (!res.ok) {
@@ -132,11 +168,35 @@ export default function ProjectDetailPage() {
       return;
     }
     const data = await res.json();
-    const session = data.session || data.shoot;
-    push("Session created", "success");
-    router.push(
-      `/admin/projects/${id}/sessions/${session.id}?step=prep`,
-    );
+    const session = data.session as ProjectSession;
+    const prepHref = `/admin/projects/${id}/sessions/${session.id}?step=prep`;
+
+    if (data.calendarSyncFailed) {
+      push("Session created · calendar not updated", "danger");
+    }
+
+    if (sessionToolsUnlocked(project?.workflowStep)) {
+      if (!data.calendarSyncFailed) push("Session created", "success");
+      router.push(prepHref);
+      return;
+    }
+
+    const openPrep = await confirm({
+      title: "Open prep?",
+      message:
+        "Booking steps aren’t finished yet. Stay on the project workflow, or open prep for this session.",
+      confirmLabel: "Open prep",
+      cancelLabel: "Stay on project",
+      tone: "neutral",
+    });
+    if (!data.calendarSyncFailed) push("Session created", "success");
+    if (openPrep) {
+      router.push(prepHref);
+      return;
+    }
+    setSessionType("Wedding");
+    setSessionDate("");
+    await load();
   }
 
   async function archiveProjectAction() {
@@ -150,7 +210,7 @@ export default function ProjectDetailPage() {
       confirmLabel: archiving ? "Archive" : "Unarchive",
     });
     if (!ok) return;
-    const res = await fetch(`/api/clients/${id}`, {
+    const res = await fetch(`/api/projects/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
@@ -174,7 +234,7 @@ export default function ProjectDetailPage() {
       tone: "danger",
     });
     if (!ok) return;
-    const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
     if (!res.ok) {
       push("Could not delete project", "danger");
       return;
@@ -184,7 +244,7 @@ export default function ProjectDetailPage() {
   }
 
   async function deleteSession(session: SessionRow) {
-    const label = [session.type, session.shootDate].filter(Boolean).join(" · ");
+    const label = [session.type, session.startsAt?.slice(0, 10)].filter(Boolean).join(" · ");
     const ok = await confirm({
       title: "Delete session?",
       message: `“${label}” and its quote, plan, and gallery photos will be removed.`,
@@ -192,7 +252,7 @@ export default function ProjectDetailPage() {
       tone: "danger",
     });
     if (!ok) return;
-    const res = await fetch(`/api/shoots/${session.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/sessions/${session.id}`, { method: "DELETE" });
     if (!res.ok) {
       push("Could not delete session", "danger");
       return;
@@ -201,14 +261,34 @@ export default function ProjectDetailPage() {
     setSessions((prev) => prev.filter((s) => s.id !== session.id));
   }
 
-  if (!project) return <p className="text-muted">Loading…</p>;
+  if (loadError && !project) {
+    return (
+      <EmptyState
+        variant="error"
+        title={loadError}
+        action={<Button onClick={() => void load()}>Retry</Button>}
+      />
+    );
+  }
+
+  if (!project) {
+    return <EmptyState variant="loading" title="Loading project…" />;
+  }
 
   return (
     <div className="space-y-10 sm:space-y-12">
       <PageHeader
         eyebrow="Project"
         title={project.name}
-        description={`${project.type || "Project"} · ${project.stage || "inquiry"}`}
+        description={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <span>{project.type || "Project"}</span>
+            <StatusBadge
+              domain="projectStage"
+              value={project.stage || "inquiry"}
+            />
+          </span>
+        }
         actions={
           <div className="flex flex-wrap gap-2">
             <Button tone="ghost" onClick={() => void archiveProjectAction()}>
@@ -285,7 +365,7 @@ export default function ProjectDetailPage() {
       <section className="space-y-5">
         <SectionIntro
           title="New session"
-          description="Add a dated occurrence — prep, shoot day, and gallery."
+          description="Add a dated occurrence. Prep opens after deposit, or when you choose."
         />
         <form
           onSubmit={createSession}
@@ -331,9 +411,10 @@ export default function ProjectDetailPage() {
               >
                 <div className="min-w-0">
                   <p className="font-display text-xl">{s.type}</p>
-                  <p className="text-sm text-muted">
-                    {s.shootDate || "Date TBD"} · {s.status}
-                    {s.label ? ` · Next: ${s.label}` : ""}
+                  <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
+                    <span>{s.startsAt?.slice(0, 10) || "Date TBD"}</span>
+                    <StatusBadge domain="sessionStatus" value={s.status} />
+                    {s.label ? <span>· Next: {s.label}</span> : null}
                   </p>
                   <ShootPublicLinks
                     className="mt-3"

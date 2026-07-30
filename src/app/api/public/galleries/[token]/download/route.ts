@@ -1,17 +1,53 @@
 import { NextResponse } from "next/server";
-import JSZip from "jszip";
 import {
   findGalleryByPublicToken,
   readStudioDb,
 } from "@/lib/db/store";
 import {
   downloadFilename,
-  uniqueZipName,
 } from "@/lib/images/download-filename";
 import { verifyPin } from "@/lib/pin";
 import { recordEvent } from "@/lib/analytics";
 import { rateLimit } from "@/lib/rate-limit";
-import { downloadStorageBuffer } from "@/lib/storage/upload";
+import { getSignedMediaDownloadUrl } from "@/lib/storage/upload";
+import {
+  getVisitorFavorites,
+  parseVisitorIdFromCookieHeader,
+} from "@/lib/gallery-favorites";
+import { assertPublicGalleryAccess } from "@/lib/public-access";
+import type { Photo } from "@/lib/types";
+
+const SIGNED_TTL_SEC = 60 * 15;
+
+/** Original-extension from stored filename or storage path (not hardcoded jpg). */
+function originalExtension(photo: Photo): string {
+  const raw = photo.originalFilename?.trim() || photo.storagePath || "";
+  const base = raw.replace(/^.*[\\/]/, "").split("?")[0] || "";
+  const m = /\.([a-z0-9]{2,5})$/i.exec(base);
+  return m ? m[1].toLowerCase() : "jpg";
+}
+
+async function signedOriginal(photo: Photo): Promise<{
+  url: string;
+  filename: string;
+  photoId: string;
+} | null> {
+  if (!photo.storagePath?.startsWith("studios/")) return null;
+  const filename = downloadFilename(
+    photo.originalFilename,
+    photo.id,
+    originalExtension(photo),
+  );
+  try {
+    const url = await getSignedMediaDownloadUrl(photo.storagePath, {
+      expiresInSec: SIGNED_TTL_SEC,
+      filename,
+    });
+    return { url, filename, photoId: photo.id };
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(
   req: Request,
@@ -32,7 +68,16 @@ export async function POST(
 
   const body = await req.json();
   const pin = String(body.pin || "");
-  const mode = body.mode === "favorites" ? "favorites" : body.photoId ? "single" : "all";
+  const mode =
+    body.mode === "favorites" ? "favorites" : body.photoId ? "single" : "all";
+  const maxUrls =
+    typeof body.maxUrls === "number" && body.maxUrls > 0
+      ? Math.min(Math.floor(body.maxUrls), 200)
+      : undefined;
+  const startIndex =
+    typeof body.startIndex === "number" && body.startIndex >= 0
+      ? Math.floor(body.startIndex)
+      : 0;
 
   const galleryHit = await findGalleryByPublicToken(token);
   if (!galleryHit?.studioId) {
@@ -42,87 +87,128 @@ export async function POST(
   const db = await readStudioDb(galleryHit.studioId);
   const gallery = db.galleries.find((g) => g.publicToken === token);
   if (!gallery) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (gallery.status === "archived" || gallery.status === "expired") {
-    return NextResponse.json({ error: "Gallery unavailable" }, { status: 403 });
+
+  const access = await assertPublicGalleryAccess(gallery, { mutate: true });
+  if (!access.ok) {
+    return NextResponse.json(
+      { error: access.error },
+      { status: access.status },
+    );
   }
 
-  const ok = await verifyPin(pin, gallery.downloadPinHash);
-  if (!ok) return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
+  if (gallery.downloadPinHash) {
+    const ok = await verifyPin(pin, gallery.downloadPinHash);
+    if (!ok) {
+      return NextResponse.json({ error: "Invalid PIN" }, { status: 401 });
+    }
+  }
 
   let photos = db.photos.filter(
-    (p) => p.galleryId === gallery.id && p.kind === "main",
+    (p) =>
+      p.galleryId === gallery.id &&
+      (p.kind === "main" || p.kind === "peek" || p.kind === "video"),
   );
   if (mode === "single") {
     photos = photos.filter((p) => p.id === body.photoId);
   } else if (mode === "favorites") {
-    photos = photos.filter((p) => gallery.favoritePhotoIds.includes(p.id));
+    const visitorId = parseVisitorIdFromCookieHeader(req.headers.get("cookie"));
+    const favIds = visitorId
+      ? await getVisitorFavorites(gallery.id, visitorId)
+      : [];
+    photos = photos.filter((p) => favIds.includes(p.id));
+  } else if (Array.isArray(body.photoIds) && body.photoIds.length) {
+    /* Album-scoped download — inherits parent gallery PIN (AURA-247) */
+    const allowed = new Set(
+      body.photoIds.map((id: unknown) => String(id)).filter(Boolean),
+    );
+    photos = photos.filter((p) => allowed.has(p.id));
   }
+  const excludedVideoIds =
+    mode === "single"
+      ? []
+      : photos.filter((p) => p.kind === "video").map((p) => p.id);
 
   if (!photos.length) {
     return NextResponse.json({ error: "No photos to download" }, { status: 400 });
   }
 
-  async function loadOriginal(storagePath: string) {
-    if (storagePath.startsWith("studios/")) {
-      return downloadStorageBuffer(storagePath);
-    }
-    throw new Error("Missing storage object");
-  }
-
   if (mode === "single" && photos[0]) {
-    try {
-      const data = await loadOriginal(photos[0].storagePath);
-      const filename = downloadFilename(
-        photos[0].originalFilename,
-        photos[0].id,
-        "jpg",
-      );
-      await recordEvent({
-        type: "download_single",
-        studioId: gallery.studioId,
-        galleryId: gallery.id,
-        photoId: photos[0].id,
-        shootId: gallery.shootId,
-      });
-      return new NextResponse(new Uint8Array(data), {
-        headers: {
-          "Content-Type": "image/jpeg",
-          "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+    const signed = await signedOriginal(photos[0]);
+    if (!signed) {
+      return NextResponse.json(
+        {
+          error: photos[0].storagePath
+            ? "Original file missing from storage"
+            : "Original not available for this photo",
         },
-      });
-    } catch {
-      return NextResponse.json({ error: "File missing" }, { status: 404 });
+        { status: 404 },
+      );
     }
+    await recordEvent({
+      type: "download_single",
+      studioId: gallery.studioId,
+      galleryId: gallery.id,
+      photoId: photos[0].id,
+      sessionId: gallery.sessionId || gallery.shootId,
+      projectId: gallery.projectId || undefined,
+    });
+    return NextResponse.json({
+      url: signed.url,
+      filename: signed.filename,
+      expiresInSec: SIGNED_TTL_SEC,
+    });
   }
 
-  const zip = new JSZip();
-  const used = new Set<string>();
-  for (const photo of photos) {
-    try {
-      const data = await loadOriginal(photo.storagePath);
-      const name = uniqueZipName(
-        used,
-        downloadFilename(photo.originalFilename, photo.id, "jpg"),
-      );
-      zip.file(name, data);
-    } catch {
-      // skip missing
-    }
+  const urls: { url: string; filename: string; photoId: string }[] = [];
+  const skipped: string[] = [];
+  const included = photos.filter((p) => p.kind !== "video" || mode === "single");
+  const batch =
+    maxUrls != null ? included.slice(startIndex, startIndex + maxUrls) : included;
+  for (const photo of batch) {
+    const signed = await signedOriginal(photo);
+    if (signed) urls.push(signed);
+    else skipped.push(photo.id);
   }
-  const buffer = await zip.generateAsync({ type: "nodebuffer" });
+
+  if (!urls.length) {
+    return NextResponse.json(
+      {
+        error:
+          "No downloadable originals found. Publish the gallery or re-upload photos.",
+      },
+      { status: 400 },
+    );
+  }
+
   await recordEvent({
     type: "download_bulk",
     studioId: gallery.studioId,
     galleryId: gallery.id,
-    shootId: gallery.shootId,
-    meta: { count: photos.length, mode },
+    sessionId: gallery.sessionId || gallery.shootId,
+    projectId: gallery.projectId || undefined,
+    meta: {
+      count: urls.length,
+      mode,
+      signed: true,
+      skipped: skipped.length,
+      videosExcluded: excludedVideoIds.length,
+      ...(maxUrls != null ? { batch: true, startIndex } : {}),
+    },
   });
 
-  const zipName = `${gallery.title.replace(/\s+/g, "-") || "gallery"}.zip`;
-  return new NextResponse(new Uint8Array(buffer), {
-    headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${zipName.replace(/"/g, "")}"`,
-    },
+  const totalIncluded = included.length;
+  const nextIndex =
+    maxUrls != null && startIndex + urls.length < totalIncluded
+      ? startIndex + urls.length
+      : undefined;
+
+  return NextResponse.json({
+    urls,
+    expiresInSec: SIGNED_TTL_SEC,
+    mode,
+    skipped: skipped.length ? skipped : undefined,
+    videosExcluded: excludedVideoIds.length ? excludedVideoIds : undefined,
+    totalIncluded,
+    nextIndex,
   });
 }

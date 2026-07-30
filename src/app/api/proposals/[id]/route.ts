@@ -13,6 +13,9 @@ export async function PATCH(
   const { id } = await ctx.params;
   const body = await req.json();
 
+  let workflowStep: string | undefined;
+  let projectHref: string | undefined;
+
   const proposal = await updateStudioDb(admin.studioId, (db) => {
     const p = db.proposals.find((x) => x.id === id);
     if (!p) return null;
@@ -33,6 +36,8 @@ export async function PATCH(
         project.stage = "booked";
         project.workflowStep = "contract";
         project.updatedAt = p.updatedAt;
+        workflowStep = "contract";
+        projectHref = `/admin/projects/${project.id}`;
       }
       const session = db.sessions.find(
         (s) => s.id === (p.sessionId || p.shootId),
@@ -52,7 +57,11 @@ export async function PATCH(
   });
 
   if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ proposal });
+  return NextResponse.json({
+    proposal,
+    workflowStep,
+    projectHref,
+  });
 }
 
 export async function DELETE(

@@ -2,7 +2,18 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Badge, Button, Card, Field, Label, Select, Textarea, useToast } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  Field,
+  Label,
+  Select,
+  Textarea,
+  useToast,
+} from "@/components/ui";
+
 import type { Shoot, ShootPlan, ShotItem } from "@/lib/types";
 
 function shotCategory(item: ShotItem) {
@@ -170,11 +181,15 @@ export function ShootDayStep({
         Save notes
       </Button>
 
-      {preview ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-4 sm:items-center">
-          <Card className="relative max-h-[85vh] w-full max-w-lg overflow-auto p-5">
-            <h2 className="font-display text-2xl">{preview.label}</h2>
-            <p className="mt-1 text-sm text-muted">{shotCategory(preview)}</p>
+      <Dialog
+        open={Boolean(preview)}
+        onClose={() => setPreview(null)}
+        title={preview?.label || "Shot"}
+        className="max-h-[85vh] overflow-auto"
+      >
+        {preview ? (
+          <>
+            <p className="text-sm text-muted">{shotCategory(preview)}</p>
             {preview.referenceImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -186,9 +201,9 @@ export function ShootDayStep({
             <Button className="mt-4 w-full" onClick={() => setPreview(null)}>
               Close
             </Button>
-          </Card>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </Dialog>
     </div>
   );
 }

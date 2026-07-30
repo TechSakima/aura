@@ -35,8 +35,11 @@ export async function GET(
 
   const safeGallery = gallery
     ? (() => {
-        const { downloadPinHash: _, ...rest } = gallery;
-        return rest;
+        const { downloadPinHash, ...rest } = gallery;
+        return {
+          ...rest,
+          hasDownloadPin: Boolean(downloadPinHash),
+        };
       })()
     : null;
 
@@ -49,8 +52,8 @@ export async function GET(
   });
 
   return NextResponse.json({
-    client: project,
-    shoot: session,
+    project,
+    session,
     proposal,
     plan,
     gallery: safeGallery,

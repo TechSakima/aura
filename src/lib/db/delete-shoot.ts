@@ -1,5 +1,13 @@
-import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { COL } from "@/lib/db/collections";
+import {
+  deleteStudioDocs,
+  readStudioDb,
+  updateStudioDb,
+  updateStudioDoc,
+} from "@/lib/db/store";
 import { deleteStorageObject } from "@/lib/storage/upload";
+import { deleteFavoritesForGalleries } from "@/lib/gallery-favorites";
+import type { ProjectSession } from "@/lib/types";
 
 export async function deletePhotoFiles(storagePath: string) {
   if (!storagePath.startsWith("studios/")) return;
@@ -31,6 +39,13 @@ export async function deletePhotosByIds(
   for (const photo of photos) {
     await deletePhotoFiles(photo.storagePath);
   }
+  const commentIds = db.comments
+    .filter((c) => idSet.has(c.photoId))
+    .map((c) => c.id);
+
+  await deleteStudioDocs(COL.photos, photoIds);
+  await deleteStudioDocs(COL.comments, commentIds);
+
   await updateStudioDb(studioId, (d) => {
     d.photos = d.photos.filter((p) => !idSet.has(p.id));
     d.comments = d.comments.filter((c) => !idSet.has(c.photoId));
@@ -87,6 +102,39 @@ export async function deleteShootCascade(
     await deletePhotoFiles(photo.storagePath);
   }
 
+  const commentIds = db.comments
+    .filter((c) => galleryIds.has(c.galleryId))
+    .map((c) => c.id);
+  const subAlbumIds = db.subAlbums
+    .filter((a) => galleryIds.has(a.galleryId))
+    .map((a) => a.id);
+  const planIds = db.shootPlans
+    .filter((p) => p.sessionId === shootId || p.shootId === shootId)
+    .map((p) => p.id);
+  const eventIds = db.analyticsEvents
+    .filter(
+      (e) =>
+        e.sessionId === shootId ||
+        e.shootId === shootId ||
+        (e.galleryId && galleryIds.has(e.galleryId)) ||
+        (e.proposalId && proposalIds.has(e.proposalId)),
+    )
+    .map((e) => e.id);
+
+  await deleteStudioDocs(
+    COL.photos,
+    photos.map((p) => p.id),
+  );
+  await deleteStudioDocs(COL.comments, commentIds);
+  await deleteStudioDocs(COL.subAlbums, subAlbumIds);
+  await deleteStudioDocs(COL.galleries, [...galleryIds]);
+  await deleteFavoritesForGalleries([...galleryIds]);
+  await deleteStudioDocs(COL.shootPlans, planIds);
+  await deleteStudioDocs(COL.proposals, [...proposalIds]);
+  await deleteStudioDocs(COL.analyticsEvents, eventIds);
+  await deleteStudioDocs(COL.projectSessions, [shootId]);
+  await deleteStudioDocs(COL.shoots, [shootId]);
+
   await updateStudioDb(studioId, (d) => {
     d.photos = d.photos.filter((p) => !galleryIds.has(p.galleryId));
     d.comments = d.comments.filter((c) => !galleryIds.has(c.galleryId));
@@ -129,6 +177,32 @@ export async function deleteProposalCascade(
   const proposal = db.proposals.find((p) => p.id === proposalId);
   if (!proposal) return false;
 
+  const eventIds = db.analyticsEvents
+    .filter((e) => e.proposalId === proposalId)
+    .map((e) => e.id);
+
+  await deleteStudioDocs(COL.proposals, [proposalId]);
+  await deleteStudioDocs(COL.analyticsEvents, eventIds);
+
+  const sessionId = proposal.sessionId || proposal.shootId;
+  if (sessionId) {
+    await updateStudioDoc<ProjectSession>(
+      COL.projectSessions,
+      sessionId,
+      (session) => {
+        if (session.proposalId === proposalId) {
+          session.proposalId = undefined;
+        }
+        if (session.status === "proposed" || session.status === "booked") {
+          session.status = "inquiry";
+        }
+        session.wizardSkippedProposal = false;
+        session.updatedAt = new Date().toISOString();
+        return session;
+      },
+    );
+  }
+
   await updateStudioDb(studioId, (d) => {
     d.proposals = d.proposals.filter((p) => p.id !== proposalId);
     d.analyticsEvents = d.analyticsEvents.filter(
@@ -141,7 +215,6 @@ export async function deleteProposalCascade(
       if (session.proposalId === proposalId) {
         session.proposalId = undefined;
       }
-      // Revert booking that came from this proposal (keep if already delivered/archived)
       if (session.status === "proposed" || session.status === "booked") {
         session.status = "inquiry";
       }

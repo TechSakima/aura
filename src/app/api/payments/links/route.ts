@@ -61,6 +61,7 @@ export async function POST(req: Request) {
       title: link.title,
       paymentLinkId: link.id,
       publicUrl: link.publicUrl || publicLinkUrl(link.id),
+      isDeposit: /^deposit\b/i.test(link.title || ""),
     });
     if (!result.ok && "skipped" in result && result.skipped) {
       return NextResponse.json({

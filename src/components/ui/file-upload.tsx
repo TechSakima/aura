@@ -109,7 +109,8 @@ export function UploadStatusDialog({
           <div className="h-2 overflow-hidden rounded-full bg-line">
             <div
               className={cn(
-                "h-full rounded-full transition-all duration-300",
+                "h-full rounded-full transition-all duration-base",
+
                 failed && !busy ? "bg-danger" : "bg-accent",
               )}
               style={{ width: `${pct}%` }}

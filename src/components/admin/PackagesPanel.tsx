@@ -17,6 +17,7 @@ import {
   useConfirm,
   useToast,
 } from "@/components/ui";
+import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 import type { PackageTemplate } from "@/lib/types";
 
 export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
@@ -25,6 +26,8 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
   const [packages, setPackages] = useState<PackageTemplate[]>([]);
   const [editing, setEditing] = useState<PackageTemplate | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editDirty, setEditDirty] = useState(false);
+  useUnsavedChangesGuard(editDirty);
 
   async function load() {
     const res = await fetch("/api/packages");
@@ -53,6 +56,7 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
       push("Save failed", "danger");
       return;
     }
+    setEditDirty(false);
     push("Package saved", "success");
     setPackages((prev) =>
       prev.map((p) => (p.id === editing.id ? editing : p)),
@@ -197,37 +201,49 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
               <Input
                 id="name"
                 value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                onChange={(e) => {
+                  setEditing({ ...editing, name: e.target.value });
+                  setEditDirty(true);
+                }}
               />
             </Field>
             <Field>
-              <Label htmlFor="terms">Contract terms</Label>
+              <Label htmlFor="terms">Quote terms</Label>
               <Textarea
                 id="terms"
                 value={editing.contractTerms}
-                onChange={(e) =>
-                  setEditing({ ...editing, contractTerms: e.target.value })
-                }
+                onChange={(e) => {
+                  setEditing({ ...editing, contractTerms: e.target.value });
+                  setEditDirty(true);
+                }}
               />
+              <p className="mt-1 text-xs text-muted">
+                Shown on quotes. Signing agreements use Documents templates.
+              </p>
             </Field>
             <StringListEditor
               label="Inclusions"
               values={editing.inclusions}
-              onChange={(inclusions) => setEditing({ ...editing, inclusions })}
+              onChange={(inclusions) => {
+                setEditing({ ...editing, inclusions });
+                setEditDirty(true);
+              }}
               placeholder="Add inclusion"
             />
             <PricingListEditor
               tiers={editing.defaultPricing}
-              onChange={(defaultPricing) =>
-                setEditing({ ...editing, defaultPricing })
-              }
+              onChange={(defaultPricing) => {
+                setEditing({ ...editing, defaultPricing });
+                setEditDirty(true);
+              }}
             />
             <IntakeListEditor
               label="Intake questions"
               questions={editing.intakeQuestions}
-              onChange={(intakeQuestions) =>
-                setEditing({ ...editing, intakeQuestions })
-              }
+              onChange={(intakeQuestions) => {
+                setEditing({ ...editing, intakeQuestions });
+                setEditDirty(true);
+              }}
             />
             <div className="flex flex-wrap gap-2">
               <Button
@@ -237,7 +253,13 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
               >
                 Save
               </Button>
-              <Button tone="ghost" onClick={() => setEditing(null)}>
+              <Button
+                tone="ghost"
+                onClick={() => {
+                  setEditing(null);
+                  setEditDirty(false);
+                }}
+              >
                 Cancel
               </Button>
               <Button

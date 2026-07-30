@@ -39,7 +39,7 @@ export function StudioMark({
         alt={name}
         className={cn(
           "h-12 w-auto max-w-[14rem] object-contain sm:h-14 sm:max-w-[16rem]",
-          tone === "light" && "drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]",
+          tone === "light" && "drop-shadow-on-media",
           imgClassName,
         )}
       />

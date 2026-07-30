@@ -1,30 +1,47 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import type {
+  GalleryDensityPreference,
+  GalleryMotionPreference,
+} from "@/lib/types";
 
 export function PublicShell({
   children,
   footer,
   bare,
+  className,
+  style,
+  galleryMotion,
+  galleryDensity,
 }: {
   children: ReactNode;
   footer?: ReactNode;
   /** Skip default main padding — for custom full-bleed layouts. */
   bare?: boolean;
+  className?: string;
+  style?: CSSProperties;
+  /** Applies motion CSS tokens (AURA-252). */
+  galleryMotion?: GalleryMotionPreference;
+  /** Applies density spacing tokens (AURA-252). */
+  galleryDensity?: GalleryDensityPreference;
 }) {
   return (
-    <div className="min-h-full bg-canvas text-ink">
-      <main
-        className={cn(
-          bare
-            ? ""
-            : "shell-pad mx-auto w-full max-w-[var(--shell-max)] py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] animate-enter sm:py-14",
-        )}
-      >
-        {children}
-      </main>
+    <div
+      className={cn("min-h-full bg-canvas text-ink", className)}
+      style={style}
+      data-gallery-motion={galleryMotion || undefined}
+      data-gallery-density={galleryDensity || undefined}
+    >
+      {bare ? (
+        children
+      ) : (
+        <main className="shell-pad mx-auto w-full max-w-[var(--public-max)] py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] animate-enter sm:py-14">
+          {children}
+        </main>
+      )}
       {footer ? (
         <footer className="border-t border-line">
-          <div className="shell-pad mx-auto max-w-[var(--shell-max)] py-8 text-sm text-muted">
+          <div className="shell-pad mx-auto max-w-[var(--public-max)] py-8 pb-[max(2rem,env(safe-area-inset-bottom))] text-sm text-muted">
             {footer}
           </div>
         </footer>

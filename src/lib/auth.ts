@@ -147,6 +147,11 @@ export async function signupWithFirebaseIdToken(opts: {
   }
 }
 
+export async function getSessionToken(): Promise<string | null> {
+  const jar = await cookies();
+  return jar.get(COOKIE)?.value || null;
+}
+
 export async function logout() {
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;

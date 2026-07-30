@@ -2,7 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Badge, Button, PageHeader, SectionIntro } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  List,
+  ListRow,
+  MetricTile,
+  PageHeader,
+  Panel,
+  SectionIntro,
+} from "@/components/ui";
 
 type Dash = {
   studio: { name: string; brandTagline?: string; timeZone?: string };
@@ -16,14 +26,23 @@ type Dash = {
     helperHref: string;
     projectHref: string;
   } | null;
-  awaitingProposals: { id: string; title: string; token: string }[];
+  awaitingProposals: { id: string; title: string; token: string; projectHref: string }[];
   expiringGalleries: {
     id: string;
     title: string;
     expiresAt: string;
     publicToken: string;
   }[];
-  archiveFlags: { id: string; title: string; expiresAt: string }[];
+  archiveFlags: { id: string; title: string; expiresAt: string; adminHref: string }[];
+  recentContacts: {
+    id: string;
+    name: string;
+    email: string;
+    source: string;
+    context?: string;
+    preview: string;
+    createdAt: string;
+  }[];
 };
 
 const COUNT_LABELS: Record<string, string> = {
@@ -35,16 +54,53 @@ const COUNT_LABELS: Record<string, string> = {
 
 export default function AdminDashboard() {
   const [data, setData] = useState<Dash | null>(null);
+  const [error, setError] = useState("");
+
+  async function load() {
+    setError("");
+    try {
+      const r = await fetch("/api/dashboard");
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(String(json.error || "Could not load dashboard"));
+        setData(null);
+        return;
+      }
+      setData(json as Dash);
+    } catch {
+      setError("Could not load dashboard");
+      setData(null);
+    }
+  }
 
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((r) => r.json())
-      .then(setData)
-      .catch(() => undefined);
+    void load();
   }, []);
 
+  useEffect(() => {
+    if (!data) return;
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== "#messages") return;
+    requestAnimationFrame(() => {
+      document.getElementById("messages")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [data]);
+
+  if (error && !data) {
+    return (
+      <EmptyState
+        variant="error"
+        title={error}
+        action={<Button onClick={() => void load()}>Retry</Button>}
+      />
+    );
+  }
+
   if (!data) {
-    return <p className="text-muted">Loading dashboard…</p>;
+    return <EmptyState variant="loading" title="Loading dashboard…" />;
   }
 
   const upcomingLabel = data.upcomingSession?.startsAt
@@ -65,7 +121,7 @@ export default function AdminDashboard() {
       />
 
       {data.upcomingSession ? (
-        <section className="border border-line bg-surface px-6 py-8">
+        <Panel as="section" className="px-6 py-8">
           <p className="text-xs uppercase tracking-[0.16em] text-muted">
             Next session
           </p>
@@ -86,24 +142,51 @@ export default function AdminDashboard() {
               </Button>
             </Link>
           </div>
-        </section>
+        </Panel>
       ) : (
-        <section className="border border-dashed border-line px-6 py-8">
+        <Panel variant="dashed" as="section" className="px-6 py-8">
           <p className="text-sm text-muted">
             No upcoming sessions. Add a session date on a project to see it here.
           </p>
-        </section>
+        </Panel>
       )}
 
       <section className="grid gap-6 border-b border-line pb-10 sm:grid-cols-2 lg:grid-cols-4">
         {Object.entries(data.counts).map(([key, value]) => (
-          <div key={key}>
-            <p className="text-xs uppercase tracking-[0.16em] text-muted">
-              {COUNT_LABELS[key] || key}
-            </p>
-            <p className="mt-2 font-display text-4xl tracking-tight">{value}</p>
-          </div>
+          <MetricTile
+            key={key}
+            label={COUNT_LABELS[key] || key}
+            value={value}
+          />
         ))}
+      </section>
+
+      <section id="messages" className="scroll-mt-24 space-y-5">
+        <SectionIntro eyebrow="Inbox" title="Messages" />
+        {(data.recentContacts || []).length === 0 ? (
+          <EmptyState variant="inline" title="No messages yet." />
+        ) : (
+          <List>
+            {(data.recentContacts || []).map((m) => (
+              <ListRow key={m.id}>
+                <div className="min-w-0">
+                  <p className="font-medium">{m.name}</p>
+                  <p className="mt-0.5 truncate text-sm text-muted">
+                    {m.source}
+                    {m.context ? ` · ${m.context}` : ""}
+                    {m.preview ? ` — ${m.preview}` : ""}
+                  </p>
+                </div>
+                <a
+                  className="shrink-0 text-sm text-accent no-underline"
+                  href={`mailto:${m.email}`}
+                >
+                  Reply
+                </a>
+              </ListRow>
+            ))}
+          </List>
+        )}
       </section>
 
       <div className="grid gap-12 lg:grid-cols-2">
@@ -114,26 +197,31 @@ export default function AdminDashboard() {
             description="Clients who haven’t accepted yet."
           />
           {data.awaitingProposals.length === 0 ? (
-            <p className="text-sm text-muted">None right now.</p>
+            <EmptyState variant="inline" title="None right now." />
           ) : (
-            <ul className="divide-y divide-line border-y border-line">
+            <List>
               {data.awaitingProposals.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex items-center justify-between gap-3 py-4"
-                >
+                <ListRow key={p.id}>
                   <span className="font-medium">{p.title}</span>
-                  <a
-                    className="text-sm text-accent"
-                    href={`/p/${p.token}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View quote
-                  </a>
-                </li>
+                  <div className="flex shrink-0 gap-3">
+                    <a
+                      className="text-sm text-accent no-underline"
+                      href={p.projectHref}
+                    >
+                      Continue workflow
+                    </a>
+                    <a
+                      className="text-sm text-muted no-underline hover:text-ink"
+                      href={`/p/${p.token}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Preview
+                    </a>
+                  </div>
+                </ListRow>
               ))}
-            </ul>
+            </List>
           )}
         </section>
 
@@ -144,14 +232,11 @@ export default function AdminDashboard() {
             description="Galleries within seven days."
           />
           {data.expiringGalleries.length === 0 ? (
-            <p className="text-sm text-muted">No galleries due soon.</p>
+            <EmptyState variant="inline" title="No galleries due soon." />
           ) : (
-            <ul className="divide-y divide-line border-y border-line">
+            <List>
               {data.expiringGalleries.map((g) => (
-                <li
-                  key={g.id}
-                  className="flex items-center justify-between gap-3 py-4"
-                >
+                <ListRow key={g.id}>
                   <div>
                     <span className="font-medium">{g.title}</span>
                     <Badge className="ml-2">
@@ -166,9 +251,39 @@ export default function AdminDashboard() {
                   >
                     Open
                   </a>
-                </li>
+                </ListRow>
               ))}
-            </ul>
+            </List>
+          )}
+        </section>
+
+        <section className="space-y-5 lg:col-span-2">
+          <SectionIntro
+            eyebrow="Wrap"
+            title="Expired — ready to archive"
+            description="Past expiry; archive from Wrap when done."
+          />
+          {data.archiveFlags.length === 0 ? (
+            <EmptyState variant="inline" title="None right now." />
+          ) : (
+            <List>
+              {data.archiveFlags.map((g) => (
+                <ListRow key={g.id}>
+                  <div>
+                    <span className="font-medium">{g.title}</span>
+                    <Badge className="ml-2">
+                      {new Date(g.expiresAt).toLocaleDateString()}
+                    </Badge>
+                  </div>
+                  <a
+                    className="text-sm text-accent no-underline"
+                    href={g.adminHref}
+                  >
+                    Open delivery
+                  </a>
+                </ListRow>
+              ))}
+            </List>
           )}
         </section>
       </div>

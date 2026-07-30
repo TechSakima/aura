@@ -1,8 +1,17 @@
 import Stripe from "stripe";
+import {
+  DEFAULT_PAYMENT_CURRENCY,
+  grossUpAmount,
+} from "@/lib/stripe-fees";
 
-/** Approximate US card rate used to gross-up so studio nets `netDollars`. */
-export const STRIPE_PERCENT = 0.029;
-export const STRIPE_FIXED = 0.3;
+export {
+  STRIPE_PERCENT,
+  STRIPE_FIXED,
+  DEFAULT_PAYMENT_CURRENCY,
+  assertPaymentCurrency,
+  grossUpAmount,
+  amountsFromCheckoutSession,
+} from "@/lib/stripe-fees";
 
 function appOrigin() {
   // Re-export path — stripe helpers use notify appOrigin semantics via local copy
@@ -37,21 +46,6 @@ function appOrigin() {
 function stripeSecretKey() {
   const key = process.env.STRIPE_SECRET_KEY?.trim();
   return key || null;
-}
-
-/** Client pays processing fee: charge so studio receives `netDollars`. */
-export function grossUpAmount(netDollars: number) {
-  const net = Math.max(0, netDollars);
-  const gross =
-    Math.ceil(((net + STRIPE_FIXED) / (1 - STRIPE_PERCENT)) * 100) / 100;
-  const processingFee = Math.round((gross - net) * 100) / 100;
-  return {
-    netAmount: net,
-    processingFee,
-    grossAmount: gross,
-    /** cents for Stripe APIs */
-    grossCents: Math.round(gross * 100),
-  };
 }
 
 let stripeClient: Stripe | null | undefined;
@@ -158,6 +152,8 @@ export async function createPaymentLinkCheckout(opts: {
   customerName?: string;
   projectId?: string;
   studioName?: string;
+  /** Stable idempotency key so double-submit doesn’t create duplicate Checkout Sessions (AURA-365). */
+  idempotencyKey?: string;
 }) {
   const stripe = getStripe();
   if (!stripe) return null;
@@ -171,27 +167,38 @@ export async function createPaymentLinkCheckout(opts: {
     opts.description ||
     `Includes card processing fee. You’ll be charged $${breakdown.grossAmount.toFixed(2)}.`;
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer_email: opts.customerEmail || undefined,
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "usd",
-          unit_amount: breakdown.grossCents,
-          product_data: {
-            name: productName,
-            description: productDescription,
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: "payment",
+      customer_email: opts.customerEmail || undefined,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: DEFAULT_PAYMENT_CURRENCY,
+            unit_amount: breakdown.grossCents,
+            product_data: {
+              name: productName,
+              description: productDescription,
+            },
           },
         },
-      },
-    ],
-    // Destination charge: $0 Aura platform fee; Stripe fee from total ≈ studio nets listed amount
-    payment_intent_data: {
-      application_fee_amount: 0,
-      transfer_data: {
-        destination: opts.stripeAccountId,
+      ],
+      // Destination charge: $0 Aura platform fee; Stripe fee from total ≈ studio
+      // nets listed amount (see stripe-fees.ts / AURA-015 for estimate limits).
+      payment_intent_data: {
+        application_fee_amount: 0,
+        transfer_data: {
+          destination: opts.stripeAccountId,
+        },
+        metadata: {
+          studioId: opts.studioId,
+          paymentLinkId: opts.paymentLinkId,
+          projectId: opts.projectId || "",
+          netAmount: String(breakdown.netAmount),
+          processingFee: String(breakdown.processingFee),
+          grossAmount: String(breakdown.grossAmount),
+        },
       },
       metadata: {
         studioId: opts.studioId,
@@ -200,20 +207,15 @@ export async function createPaymentLinkCheckout(opts: {
         netAmount: String(breakdown.netAmount),
         processingFee: String(breakdown.processingFee),
         grossAmount: String(breakdown.grossAmount),
+        customerName: opts.customerName || "",
       },
+      success_url: `${origin}/pay/${opts.paymentLinkId}?paid=1&amount=${breakdown.grossAmount.toFixed(2)}`,
+      cancel_url: `${origin}/pay/${opts.paymentLinkId}?canceled=1`,
     },
-    metadata: {
-      studioId: opts.studioId,
-      paymentLinkId: opts.paymentLinkId,
-      projectId: opts.projectId || "",
-      netAmount: String(breakdown.netAmount),
-      processingFee: String(breakdown.processingFee),
-      grossAmount: String(breakdown.grossAmount),
-      customerName: opts.customerName || "",
-    },
-    success_url: `${origin}/pay/${opts.paymentLinkId}?paid=1`,
-    cancel_url: `${origin}/pay/${opts.paymentLinkId}?canceled=1`,
-  });
+    opts.idempotencyKey
+      ? { idempotencyKey: opts.idempotencyKey }
+      : undefined,
+  );
 
   return { session, breakdown };
 }

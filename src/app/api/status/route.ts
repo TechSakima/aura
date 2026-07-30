@@ -3,15 +3,24 @@ import { mediaBackend, storageBackend } from "@/lib/db/store";
 import { firebaseReady } from "@/lib/db/require-firebase";
 import { firebaseConfigured } from "@/lib/firebase/client";
 import { firebaseAdminConfigured } from "@/lib/firebase/admin";
+import {
+  isProductionMediaRuntime,
+  mediaDualReadEnabled,
+} from "@/lib/storage/media-store";
+import { isR2Configured } from "@/lib/storage/r2-store";
 
 export async function GET() {
   const ready = firebaseReady();
+  const r2 = isR2Configured();
   return NextResponse.json({
     ok: ready,
     firebaseClient: firebaseConfigured(),
     firebaseAdmin: firebaseAdminConfigured(),
     dataBackend: ready ? storageBackend() : "unavailable",
-    mediaBackend: ready ? mediaBackend() : "unavailable",
+    mediaBackend: r2 ? "r2" : ready ? mediaBackend() : "unavailable",
+    r2Configured: r2,
+    r2RequiredInProd: isProductionMediaRuntime(),
+    mediaDualRead: mediaDualReadEnabled(),
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || null,
     hosting: [
       "aura--aura-photo-manager.us-east4.hosted.app",
@@ -19,7 +28,9 @@ export async function GET() {
       "aura-photo-manager.firebaseapp.com",
     ],
     error: ready
-      ? null
+      ? r2 || !isProductionMediaRuntime()
+        ? null
+        : "R2 required in production for media (set R2_* secrets)."
       : "Firebase Admin + Storage bucket required. On App Hosting, associate a web app and set NEXT_PUBLIC_* / FIREBASE_STORAGE_BUCKET.",
   });
 }

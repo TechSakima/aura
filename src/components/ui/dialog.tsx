@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { IconButton } from "@/components/ui/icon-button";
-import type { ReactNode } from "react";
 
 export function Dialog({
   open,
@@ -17,14 +18,29 @@ export function Dialog({
   children: ReactNode;
   className?: string;
 }) {
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  if (!open || !mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:items-center">
       <button
         type="button"
         aria-label="Close dialog"
-        className="absolute inset-0 bg-ink/40"
+        className="absolute inset-0 bg-scrim"
         onClick={onClose}
       />
       <div
@@ -44,6 +60,7 @@ export function Dialog({
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

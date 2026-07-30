@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { updateStudioDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { appOrigin } from "@/lib/notify/send";
 
-/** OAuth callback — stores refresh token when Google credentials are configured. */
+/** OAuth callback — stores this studio's Google Calendar refresh token. */
 export async function GET(req: Request) {
   const admin = await requireAdmin();
   const origin = appOrigin();
-  const settingsUrl = `${origin}/admin/settings`;
+  const settingsUrl = `${origin}/admin/settings/integrations`;
 
   if (!admin) {
     return NextResponse.redirect(`${origin}/admin/login`);
@@ -23,10 +23,7 @@ export async function GET(req: Request) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    await updateStudioDb(admin.studioId, (db) => {
-      db.studio.googleCalendarConnected = true;
-    });
-    return NextResponse.redirect(`${settingsUrl}?gcal=stub`);
+    return NextResponse.redirect(`${settingsUrl}?gcal=error`);
   }
 
   const redirectUri = `${origin}/api/integrations/google/callback`;
@@ -51,11 +48,18 @@ export async function GET(req: Request) {
     access_token?: string;
   };
 
+  const existing = await readStudioDb(admin.studioId);
+  const refreshToken =
+    tokens.refresh_token || existing.studio.googleCalendarRefreshToken;
+  if (!refreshToken) {
+    return NextResponse.redirect(`${settingsUrl}?gcal=error`);
+  }
+
   await updateStudioDb(admin.studioId, (db) => {
     db.studio.googleCalendarConnected = true;
-    if (tokens.refresh_token) {
-      db.studio.googleCalendarRefreshToken = tokens.refresh_token;
-    }
+    db.studio.googleCalendarRefreshToken = refreshToken;
+    db.studio.googleCalendarLastSyncAt = new Date().toISOString();
+    delete db.studio.googleCalendarLastSyncError;
   });
 
   return NextResponse.redirect(`${settingsUrl}?gcal=connected`);

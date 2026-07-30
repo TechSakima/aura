@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
+import { COL } from "@/lib/db/collections";
 import {
+  appendStudioDoc,
   findGalleryByPublicToken,
-  updateStudioDb,
 } from "@/lib/db/store";
+import { assertPublicGalleryAccess } from "@/lib/public-access";
+import type { Comment } from "@/lib/types";
 
 export async function POST(
   req: Request,
@@ -21,32 +24,33 @@ export async function POST(
     );
   }
 
-  const hit = await findGalleryByPublicToken(token);
-  if (!hit?.studioId) {
+  const gallery = await findGalleryByPublicToken(token);
+  if (!gallery?.studioId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-
-  const comment = await updateStudioDb(hit.studioId, (db) => {
-    const gallery = db.galleries.find((g) => g.publicToken === token);
-    if (!gallery || !gallery.commentsEnabled) return null;
-    const c = {
-      id: nanoid(),
-      studioId: gallery.studioId,
-      galleryId: gallery.id,
-      photoId,
-      authorName,
-      body: text,
-      createdAt: new Date().toISOString(),
-    };
-    db.comments.push(c);
-    return c;
-  });
-
-  if (!comment) {
+  const access = await assertPublicGalleryAccess(gallery, { mutate: true });
+  if (!access.ok) {
+    return NextResponse.json(
+      { error: access.error },
+      { status: access.status },
+    );
+  }
+  if (!gallery.commentsEnabled) {
     return NextResponse.json(
       { error: "Comments disabled or not found" },
       { status: 400 },
     );
   }
+
+  const comment: Comment = {
+    id: nanoid(),
+    studioId: gallery.studioId,
+    galleryId: gallery.id,
+    photoId,
+    authorName,
+    body: text,
+    createdAt: new Date().toISOString(),
+  };
+  await appendStudioDoc(COL.comments, comment);
   return NextResponse.json({ comment });
 }

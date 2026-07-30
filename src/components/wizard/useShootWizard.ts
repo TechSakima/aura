@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type {
   Client,
+  GalleryStatus,
   PackageTemplate,
   Proposal,
   Shoot,
@@ -23,12 +24,14 @@ export type WizardGallery = {
   watermarkEnabled: boolean;
   watermarkPresetId?: string;
   selectLimit?: number;
-  status: string;
+  status: GalleryStatus;
   expiresAt: string;
   favoritePhotoIds: string[];
   coverPhotoUrl?: string;
   design?: import("@/lib/types").GalleryDesign;
   showOnHomepage?: boolean;
+  hasDownloadPin?: boolean;
+  clientEmailedAt?: string;
 };
 
 export type WizardPhoto = {
@@ -42,8 +45,8 @@ export type WizardPhoto = {
 };
 
 export type WizardBundle = {
-  client: Client | null;
-  shoot: Shoot;
+  project: Client | null;
+  session: Shoot;
   proposal: Proposal | null;
   plan: ShootPlan | null;
   gallery: WizardGallery | null;

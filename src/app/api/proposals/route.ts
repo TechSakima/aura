@@ -21,13 +21,14 @@ export async function POST(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
-  if (!body.shootId) {
-    return NextResponse.json({ error: "shootId required" }, { status: 400 });
+  const sessionId = String(body.sessionId || body.shootId || "");
+  if (!sessionId) {
+    return NextResponse.json({ error: "sessionId required" }, { status: 400 });
   }
 
   const db = await readStudioDb(admin.studioId);
-  const session = db.sessions.find((s) => s.id === body.shootId);
-  if (!session) return NextResponse.json({ error: "Shoot not found" }, { status: 404 });
+  const session = db.sessions.find((s) => s.id === sessionId);
+  if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
   const pkg = body.packageTemplateId
     ? db.packageTemplates.find((p) => p.id === body.packageTemplateId)

@@ -1,5 +1,6 @@
+import { COL } from "@/lib/db/collections";
 import { deleteShootCascade } from "@/lib/db/delete-shoot";
-import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { deleteStudioDocs, readStudioDb, updateStudioDb } from "@/lib/db/store";
 
 /** Soft-archive a project and its sessions. */
 export async function archiveProject(
@@ -25,7 +26,12 @@ export async function archiveProject(
 export async function unarchiveProject(
   studioId: string,
   projectId: string,
-  restoreStage: "inquiry" | "booked" | "in_progress" | "delivered" | "completed" = "booked",
+  restoreStage:
+    | "inquiry"
+    | "booked"
+    | "in_progress"
+    | "delivered"
+    | "completed" = "booked",
 ): Promise<boolean> {
   const now = new Date().toISOString();
   const ok = await updateStudioDb(studioId, (db) => {
@@ -61,6 +67,44 @@ export async function deleteProjectCascade(
     await deleteShootCascade(studioId, sessionId);
   }
 
+  const fresh = await readStudioDb(studioId);
+  const questionnaireIds = fresh.questionnaireResponses
+    .filter((r) => r.projectId === projectId)
+    .map((r) => r.id);
+  const contractIds = fresh.contracts
+    .filter((c) => c.projectId === projectId)
+    .map((c) => c.id);
+  const bookingIds = fresh.bookingRequests
+    .filter((b) => b.projectId === projectId)
+    .map((b) => b.id);
+  const invoiceIds = fresh.invoices
+    .filter((i) => i.projectId === projectId)
+    .map((i) => i.id);
+  const linkIds = fresh.paymentLinks
+    .filter((l) => l.projectId === projectId)
+    .map((l) => l.id);
+  const txIds = fresh.paymentTransactions
+    .filter((t) => t.projectId === projectId)
+    .map((t) => t.id);
+  const proposalIds = fresh.proposals
+    .filter((p) => p.projectId === projectId)
+    .map((p) => p.id);
+  const orphanSessionIds = fresh.sessions
+    .filter((s) => s.projectId === projectId)
+    .map((s) => s.id);
+
+  await deleteStudioDocs(COL.questionnaireResponses, questionnaireIds);
+  await deleteStudioDocs(COL.contracts, contractIds);
+  await deleteStudioDocs(COL.bookingRequests, bookingIds);
+  await deleteStudioDocs(COL.invoices, invoiceIds);
+  await deleteStudioDocs(COL.paymentLinks, linkIds);
+  await deleteStudioDocs(COL.paymentTransactions, txIds);
+  await deleteStudioDocs(COL.proposals, proposalIds);
+  await deleteStudioDocs(COL.projectSessions, orphanSessionIds);
+  await deleteStudioDocs(COL.shoots, orphanSessionIds);
+  await deleteStudioDocs(COL.projects, [projectId]);
+  await deleteStudioDocs(COL.clients, [projectId]);
+
   await updateStudioDb(studioId, (d) => {
     d.questionnaireResponses = d.questionnaireResponses.filter(
       (r) => r.projectId !== projectId,
@@ -74,11 +118,9 @@ export async function deleteProjectCascade(
     d.paymentTransactions = d.paymentTransactions.filter(
       (t) => t.projectId !== projectId,
     );
-    // Proposals may remain if session cascade missed project-only rows
     d.proposals = d.proposals.filter((p) => p.projectId !== projectId);
     d.projects = d.projects.filter((p) => p.id !== projectId);
     d.clients = d.projects;
-    // Drop any orphan sessions that still reference this project
     d.sessions = d.sessions.filter((s) => s.projectId !== projectId);
     d.shoots = d.sessions.map((s) => ({
       ...s,

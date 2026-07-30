@@ -8,6 +8,7 @@ import {
   grossUpAmount,
 } from "@/lib/stripe";
 import { absoluteUrl } from "@/lib/notify/send";
+import { studioPaymentDefaults } from "@/lib/payment-defaults";
 import type { Invoice, PaymentLinkTemplate } from "@/lib/types";
 
 /** Create a project deposit invoice and optional Stripe Checkout URL. */
@@ -37,10 +38,14 @@ export async function POST(
     body.amount !== undefined && body.amount !== null && body.amount !== ""
       ? Number(body.amount)
       : undefined;
+  const paymentDefaults = studioPaymentDefaults(db.studio);
   const netAmount =
     fromBody !== undefined && Number.isFinite(fromBody) && fromBody > 0
       ? fromBody
-      : sessionType?.depositAmount ?? sessionType?.basePrice ?? undefined;
+      : sessionType?.depositAmount ??
+        sessionType?.basePrice ??
+        paymentDefaults.defaultDepositAmount ??
+        undefined;
 
   if (netAmount == null || netAmount <= 0) {
     return NextResponse.json(

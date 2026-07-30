@@ -2,6 +2,9 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { StudioMark } from "@/components/brand/StudioMark";
+import { PublicShell } from "@/components/shells/PublicShell";
+import { PublicSuccess } from "@/components/public/PublicSuccess";
 import { Button, Field, Label, Textarea } from "@/components/ui";
 
 export default function PublicCancelPage() {
@@ -50,58 +53,66 @@ export default function PublicCancelPage() {
   }
 
   if (loading) {
-    return <p className="shell-pad py-16 text-center text-muted">Loading…</p>;
+    return (
+      <PublicShell>
+        <p className="py-16 text-center text-muted">Loading…</p>
+      </PublicShell>
+    );
   }
 
   if (done) {
     return (
-      <div className="shell-pad mx-auto max-w-md py-16 text-center">
-        <h1 className="font-display text-3xl">Request canceled</h1>
-        <p className="mt-2 text-muted">
-          {studioName} has been notified.
-        </p>
-      </div>
+      <PublicShell>
+        <PublicSuccess title="Request canceled">
+          <p>{studioName} has been notified.</p>
+        </PublicSuccess>
+      </PublicShell>
     );
   }
 
   return (
-    <div className="shell-pad mx-auto max-w-md py-12 sm:py-16">
-      <h1 className="font-display text-3xl">Cancel request</h1>
-      <p className="mt-2 text-muted">
-        {name}
-        {startsAt
-          ? ` · ${new Date(startsAt).toLocaleString(undefined, {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })}`
-          : ""}
-      </p>
-
-      {!canCancel ? (
-        <p className="mt-8 text-sm text-muted">
-          {blockReason || error || "This request can no longer be canceled here."}
+    <PublicShell>
+      <div className="mx-auto max-w-md py-12 sm:py-16">
+        {studioName ? (
+          <StudioMark name={studioName} tone="dark" className="mb-2" />
+        ) : null}
+        <h1 className="font-display text-3xl">Cancel request</h1>
+        <p className="mt-2 text-muted">
+          {name}
+          {startsAt
+            ? ` · ${new Date(startsAt).toLocaleString(undefined, {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })}`
+            : ""}
         </p>
-      ) : (
-        <form onSubmit={onSubmit} className="mt-8 space-y-4">
-          <Field>
-            <Label htmlFor="reason">Reason</Label>
-            <Textarea
-              id="reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              required
-              rows={4}
-            />
-          </Field>
-          {error ? <p className="text-sm text-danger">{error}</p> : null}
-          <Button type="submit" tone="danger" className="min-h-11 w-full">
-            Cancel request
-          </Button>
-        </form>
-      )}
-    </div>
+
+        {!canCancel ? (
+          <p className="mt-8 text-sm text-muted">
+            {blockReason || error || "This request can no longer be canceled here."}
+          </p>
+        ) : (
+          <form onSubmit={onSubmit} className="mt-8 space-y-4">
+            <Field>
+              <Label htmlFor="reason">Reason</Label>
+              <Textarea
+                id="reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                required
+                rows={4}
+              />
+            </Field>
+            {error ? <p className="text-sm text-danger">{error}</p> : null}
+            <Button type="submit" tone="danger" className="min-h-11 w-full">
+              Cancel request
+            </Button>
+          </form>
+        )}
+      </div>
+    </PublicShell>
   );
 }

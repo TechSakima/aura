@@ -8,6 +8,7 @@ import {
   emailStudioBookingCanceled,
   notifyStudio,
 } from "@/lib/notify/send";
+import { deleteGoogleCalendarEvent } from "@/lib/google-calendar";
 import type { CancelPolicy } from "@/lib/types";
 
 function canCancel(opts: {
@@ -128,6 +129,8 @@ export async function POST(
     project.type ||
     "Session";
 
+  const googleEventId = session?.googleEventId;
+
   await updateStudioDb(studioId, (d) => {
     const now = new Date().toISOString();
     const p = d.projects.find((x) => x.id === project.id);
@@ -149,16 +152,21 @@ export async function POST(
       s.status = "archived";
       s.startsAt = undefined;
       s.endsAt = undefined;
+      s.googleEventId = undefined;
       s.updatedAt = now;
     }
   });
 
+  if (googleEventId) {
+    await deleteGoogleCalendarEvent({ studioId, eventId: googleEventId });
+  }
   await emailStudioBookingCanceled({
     studioId,
     clientName: project.name,
     sessionTypeName,
     reason,
     projectHref: `/admin/projects/${project.id}`,
+    projectId: project.id,
   });
   await notifyStudio({
     studioId,

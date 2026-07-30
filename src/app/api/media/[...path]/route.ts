@@ -1,25 +1,57 @@
 import { NextResponse } from "next/server";
-import { downloadStorageBuffer } from "@/lib/storage/upload";
 import { firebaseReady } from "@/lib/db/require-firebase";
+import {
+  isProductionMediaRuntime,
+  mediaDualReadEnabled,
+} from "@/lib/storage/media-store";
+import { isR2Configured } from "@/lib/storage/r2-store";
+import {
+  downloadStorageBuffer,
+  getSignedMediaDownloadUrl,
+} from "@/lib/storage/upload";
 
+const PROXY_SIGNED_TTL_SEC = 60 * 60;
+
+/**
+ * Legacy media proxy. When R2 is configured (AURA-362), redirect to a signed
+ * R2 GET so App Hosting does not egress image bytes. Originals stay forbidden.
+ */
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ path: string[] }> },
 ) {
-  if (!firebaseReady()) {
-    return NextResponse.json({ error: "Firebase not configured" }, { status: 503 });
-  }
-
   const { path: parts } = await ctx.params;
   const objectPath = parts.map(decodeURIComponent).join("/");
 
-  // Block public access to originals — PIN-gated download API only
   if (objectPath.includes("/originals/")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (!objectPath.startsWith("studios/")) {
     return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  }
+
+  if (isR2Configured()) {
+    try {
+      const url = await getSignedMediaDownloadUrl(objectPath, {
+        expiresInSec: PROXY_SIGNED_TTL_SEC,
+      });
+      return NextResponse.redirect(url, 302);
+    } catch {
+      if (!mediaDualReadEnabled()) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      // Fall through to buffer dual-read for leftover Firebase-only objects.
+    }
+  } else if (isProductionMediaRuntime()) {
+    return NextResponse.json(
+      { error: "Media backend not configured" },
+      { status: 503 },
+    );
+  }
+
+  if (!firebaseReady()) {
+    return NextResponse.json({ error: "Firebase not configured" }, { status: 503 });
   }
 
   try {

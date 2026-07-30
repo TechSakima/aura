@@ -10,11 +10,17 @@
     "start": "next start",
     "lint": "eslint",
     "icons": "node scripts/generate-icons.mjs",
+    "r2:smoke": "node scripts/r2-smoke.mjs",
+    "r2:cors": "node scripts/r2-cors.mjs",
+    "r2:migrate": "node scripts/r2-migrate-from-firebase.mjs",
+    "r2:secrets": "node scripts/r2-set-apphosting-secrets.mjs",
     "firebase:deploy": "firebase deploy",
     "firebase:deploy:hosting": "node -r ./scripts/win-symlink-shim.cjs ./node_modules/firebase-tools/lib/bin/firebase.js deploy --only hosting --non-interactive",
     "firebase:rules": "firebase deploy --only firestore:rules,storage"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1097.0",
+    "@aws-sdk/s3-request-presigner": "^3.1097.0",
     "@react-pdf/renderer": "^4.5.1",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
@@ -27,6 +33,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.18.0",
+    "server-only": "^0.0.1",
     "sharp": "^0.34.5",
     "stripe": "^22.3.2",
     "zod": "^4.4.3"

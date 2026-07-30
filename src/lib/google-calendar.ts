@@ -1,32 +1,81 @@
-import { readStudioDb } from "@/lib/db/store";
+import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+
+/** Persist GCal health for Settings (not called from freeBusy hot path). */
+export async function recordGoogleCalendarHealth(
+  studioId: string,
+  result: { ok: boolean; error?: string },
+): Promise<void> {
+  const now = new Date().toISOString();
+  await updateStudioDb(studioId, (db) => {
+    if (result.ok) {
+      db.studio.googleCalendarLastSyncAt = now;
+      delete db.studio.googleCalendarLastSyncError;
+      return;
+    }
+    if (result.error) {
+      db.studio.googleCalendarLastSyncError = result.error.slice(0, 200);
+    }
+  });
+}
+
+export type BusyInterval = { start: string; end: string };
+
+/** True only when this studio has a usable Google refresh token (not a stub flag). */
+export function studioGoogleCalendarReady(studio: {
+  googleCalendarRefreshToken?: string;
+}): boolean {
+  return Boolean(studio.googleCalendarRefreshToken?.trim());
+}
+
+/** Default 1h end when a session has a start but no end (manual create). */
+export function defaultSessionEndsAt(startsAt: string): string {
+  return new Date(new Date(startsAt).getTime() + 60 * 60 * 1000).toISOString();
+}
+
+export type BusyIntervalsResult = {
+  busy: BusyInterval[];
+  /**
+   * Google Calendar is connected but sync failed.
+   * Callers must not treat empty `busy` as free (AURA-007).
+   */
+  syncFailed: boolean;
+  syncError?: string;
+};
+
+function sessionsAsBusy(
+  sessions: { startsAt?: string; endsAt?: string }[],
+  timeMin: string,
+  timeMax: string,
+): BusyInterval[] {
+  return sessions
+    .filter((s) => s.startsAt && s.endsAt)
+    .filter((s) => s.startsAt! < timeMax && s.endsAt! > timeMin)
+    .map((s) => ({ start: s.startsAt!, end: s.endsAt! }));
+}
 
 /** Returns busy intervals overlapping the requested window when GCal is connected. */
 export async function getBusyIntervals(opts: {
   studioId: string;
   timeMin: string;
   timeMax: string;
-}): Promise<{ start: string; end: string }[]> {
+}): Promise<BusyIntervalsResult> {
   const db = await readStudioDb(opts.studioId);
-  if (!db.studio.googleCalendarConnected) {
-    // Fall back to Aura sessions as busy blocks
-    return db.sessions
-      .filter((s) => s.startsAt && s.endsAt)
-      .filter((s) => {
-        const start = s.startsAt!;
-        const end = s.endsAt!;
-        return start < opts.timeMax && end > opts.timeMin;
-      })
-      .map((s) => ({ start: s.startsAt!, end: s.endsAt! }));
+  if (!studioGoogleCalendarReady(db.studio)) {
+    return {
+      busy: sessionsAsBusy(db.sessions, opts.timeMin, opts.timeMax),
+      syncFailed: false,
+    };
   }
 
-  const refresh = db.studio.googleCalendarRefreshToken;
+  const refresh = db.studio.googleCalendarRefreshToken!;
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!refresh || !clientId || !clientSecret) {
-    return db.sessions
-      .filter((s) => s.startsAt && s.endsAt)
-      .filter((s) => s.startsAt! < opts.timeMax && s.endsAt! > opts.timeMin)
-      .map((s) => ({ start: s.startsAt!, end: s.endsAt! }));
+  if (!clientId || !clientSecret) {
+    return {
+      busy: [],
+      syncFailed: true,
+      syncError: "Google Calendar OAuth is not configured",
+    };
   }
 
   try {
@@ -40,9 +89,21 @@ export async function getBusyIntervals(opts: {
         grant_type: "refresh_token",
       }),
     });
-    if (!tokenRes.ok) return [];
+    if (!tokenRes.ok) {
+      return {
+        busy: [],
+        syncFailed: true,
+        syncError: "Google Calendar token refresh failed",
+      };
+    }
     const { access_token } = (await tokenRes.json()) as { access_token?: string };
-    if (!access_token) return [];
+    if (!access_token) {
+      return {
+        busy: [],
+        syncFailed: true,
+        syncError: "Google Calendar token refresh returned no access token",
+      };
+    }
 
     const freeBusy = await fetch(
       "https://www.googleapis.com/calendar/v3/freeBusy",
@@ -59,20 +120,33 @@ export async function getBusyIntervals(opts: {
         }),
       },
     );
-    if (!freeBusy.ok) return [];
+    if (!freeBusy.ok) {
+      return {
+        busy: [],
+        syncFailed: true,
+        syncError: "Google Calendar freeBusy request failed",
+      };
+    }
     const data = (await freeBusy.json()) as {
-      calendars?: { primary?: { busy?: { start: string; end: string }[] } };
+      calendars?: { primary?: { busy?: BusyInterval[] } };
     };
-    return data.calendars?.primary?.busy || [];
+    return {
+      busy: data.calendars?.primary?.busy || [],
+      syncFailed: false,
+    };
   } catch {
-    return [];
+    return {
+      busy: [],
+      syncFailed: true,
+      syncError: "Google Calendar sync error",
+    };
   }
 }
 
 export function overlapsBusy(
   startIso: string,
   endIso: string,
-  busy: { start: string; end: string }[],
+  busy: BusyInterval[],
 ) {
   return busy.some((b) => startIso < b.end && endIso > b.start);
 }
@@ -90,21 +164,33 @@ export function withBuffer(
   };
 }
 
-/** Push a session to Google Calendar when connected; returns event id or null. */
-export async function pushSessionToGoogleCalendar(opts: {
-  studioId: string;
-  title: string;
-  startsAt: string;
-  endsAt: string;
-  description?: string;
-}): Promise<string | null> {
-  const db = await readStudioDb(opts.studioId);
-  if (!db.studio.googleCalendarConnected) return null;
-  const refresh = db.studio.googleCalendarRefreshToken;
+export type CalendarWriteResult = {
+  eventId: string | null;
+  /** Studio has no usable GCal connection — not an error. */
+  skipped: boolean;
+  /** Connected but the Google write failed. */
+  failed: boolean;
+  error?: string;
+};
+
+async function getGoogleAccessToken(studioId: string): Promise<
+  | { ok: true; accessToken: string }
+  | { ok: false; skipped: boolean; error?: string }
+> {
+  const db = await readStudioDb(studioId);
+  if (!studioGoogleCalendarReady(db.studio)) {
+    return { ok: false, skipped: true };
+  }
+  const refresh = db.studio.googleCalendarRefreshToken!;
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  if (!refresh || !clientId || !clientSecret) return null;
-
+  if (!clientId || !clientSecret) {
+    return {
+      ok: false,
+      skipped: false,
+      error: "Google Calendar OAuth is not configured",
+    };
+  }
   try {
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -116,16 +202,68 @@ export async function pushSessionToGoogleCalendar(opts: {
         grant_type: "refresh_token",
       }),
     });
-    if (!tokenRes.ok) return null;
+    if (!tokenRes.ok) {
+      return {
+        ok: false,
+        skipped: false,
+        error: "Google Calendar token refresh failed",
+      };
+    }
     const { access_token } = (await tokenRes.json()) as { access_token?: string };
-    if (!access_token) return null;
+    if (!access_token) {
+      return {
+        ok: false,
+        skipped: false,
+        error: "Google Calendar token refresh returned no access token",
+      };
+    }
+    return { ok: true, accessToken: access_token };
+  } catch {
+    return { ok: false, skipped: false, error: "Google Calendar sync error" };
+  }
+}
 
+async function finishWriteHealth(
+  studioId: string,
+  result: CalendarWriteResult,
+): Promise<CalendarWriteResult> {
+  if (result.skipped) return result;
+  if (result.failed) {
+    await recordGoogleCalendarHealth(studioId, {
+      ok: false,
+      error: result.error || "Google Calendar sync failed",
+    });
+  } else {
+    await recordGoogleCalendarHealth(studioId, { ok: true });
+  }
+  return result;
+}
+
+/** Push a session to Google Calendar when connected. */
+export async function pushSessionToGoogleCalendar(opts: {
+  studioId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  description?: string;
+}): Promise<CalendarWriteResult> {
+  const token = await getGoogleAccessToken(opts.studioId);
+  if (!token.ok) {
+    return finishWriteHealth(opts.studioId, {
+      eventId: null,
+      skipped: token.skipped,
+      failed: !token.skipped,
+      error: token.error,
+    });
+  }
+
+  try {
     const create = await fetch(
       "https://www.googleapis.com/calendar/v3/calendars/primary/events",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${access_token}`,
+          Authorization: `Bearer ${token.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -136,11 +274,175 @@ export async function pushSessionToGoogleCalendar(opts: {
         }),
       },
     );
-    if (!create.ok) return null;
+    if (!create.ok) {
+      return finishWriteHealth(opts.studioId, {
+        eventId: null,
+        skipped: false,
+        failed: true,
+        error: "Google Calendar create event failed",
+      });
+    }
     const event = (await create.json()) as { id?: string };
-    return event.id || null;
+    if (!event.id) {
+      return finishWriteHealth(opts.studioId, {
+        eventId: null,
+        skipped: false,
+        failed: true,
+        error: "Google Calendar create returned no event id",
+      });
+    }
+    return finishWriteHealth(opts.studioId, {
+      eventId: event.id,
+      skipped: false,
+      failed: false,
+    });
   } catch {
-    return null;
+    return finishWriteHealth(opts.studioId, {
+      eventId: null,
+      skipped: false,
+      failed: true,
+      error: "Google Calendar create error",
+    });
   }
 }
 
+/** Update an existing Google Calendar event (reschedule). */
+export async function updateGoogleCalendarEvent(opts: {
+  studioId: string;
+  eventId: string;
+  title?: string;
+  startsAt: string;
+  endsAt: string;
+  description?: string;
+}): Promise<CalendarWriteResult> {
+  const token = await getGoogleAccessToken(opts.studioId);
+  if (!token.ok) {
+    return finishWriteHealth(opts.studioId, {
+      eventId: opts.eventId,
+      skipped: token.skipped,
+      failed: !token.skipped,
+      error: token.error,
+    });
+  }
+
+  try {
+    const patch = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(opts.eventId)}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...(opts.title ? { summary: opts.title } : {}),
+          ...(opts.description !== undefined
+            ? { description: opts.description }
+            : {}),
+          start: { dateTime: opts.startsAt },
+          end: { dateTime: opts.endsAt },
+        }),
+      },
+    );
+    if (!patch.ok) {
+      return finishWriteHealth(opts.studioId, {
+        eventId: opts.eventId,
+        skipped: false,
+        failed: true,
+        error: "Google Calendar update event failed",
+      });
+    }
+    return finishWriteHealth(opts.studioId, {
+      eventId: opts.eventId,
+      skipped: false,
+      failed: false,
+    });
+  } catch {
+    return finishWriteHealth(opts.studioId, {
+      eventId: opts.eventId,
+      skipped: false,
+      failed: true,
+      error: "Google Calendar update error",
+    });
+  }
+}
+
+/** Delete a Google Calendar event (decline / cancel). */
+export async function deleteGoogleCalendarEvent(opts: {
+  studioId: string;
+  eventId: string;
+}): Promise<CalendarWriteResult> {
+  const token = await getGoogleAccessToken(opts.studioId);
+  if (!token.ok) {
+    return finishWriteHealth(opts.studioId, {
+      eventId: null,
+      skipped: token.skipped,
+      failed: !token.skipped,
+      error: token.error,
+    });
+  }
+
+  try {
+    const del = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(opts.eventId)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token.accessToken}` },
+      },
+    );
+    // 404/410 = already gone — treat as success
+    if (!del.ok && del.status !== 404 && del.status !== 410) {
+      return finishWriteHealth(opts.studioId, {
+        eventId: opts.eventId,
+        skipped: false,
+        failed: true,
+        error: "Google Calendar delete event failed",
+      });
+    }
+    return finishWriteHealth(opts.studioId, {
+      eventId: null,
+      skipped: false,
+      failed: false,
+    });
+  } catch {
+    return finishWriteHealth(opts.studioId, {
+      eventId: opts.eventId,
+      skipped: false,
+      failed: true,
+      error: "Google Calendar delete error",
+    });
+  }
+}
+
+/** Probe freeBusy and record health (Settings Integrations). */
+export async function probeGoogleCalendarHealth(studioId: string): Promise<{
+  connected: boolean;
+  syncFailed: boolean;
+  syncError?: string;
+  lastSyncAt?: string;
+  lastSyncError?: string;
+}> {
+  const db = await readStudioDb(studioId);
+  if (!studioGoogleCalendarReady(db.studio)) {
+    return { connected: false, syncFailed: false };
+  }
+  const timeMin = new Date().toISOString();
+  const timeMax = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const result = await getBusyIntervals({ studioId, timeMin, timeMax });
+  if (result.syncFailed) {
+    await recordGoogleCalendarHealth(studioId, {
+      ok: false,
+      error: result.syncError || "Google Calendar sync failed",
+    });
+  } else {
+    await recordGoogleCalendarHealth(studioId, { ok: true });
+  }
+  const next = await readStudioDb(studioId);
+  return {
+    connected: true,
+    syncFailed: result.syncFailed,
+    syncError: result.syncError,
+    lastSyncAt: next.studio.googleCalendarLastSyncAt,
+    lastSyncError: next.studio.googleCalendarLastSyncError,
+  };
+}

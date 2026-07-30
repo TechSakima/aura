@@ -11,15 +11,18 @@ import {
   Input,
   Label,
   PageHeader,
+  StatusBadge,
   Textarea,
   useToast,
 } from "@/components/ui";
+
 import type { Project } from "@/lib/types";
 
 export default function ProjectsPage() {
   const router = useRouter();
   const { push } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,13 +33,15 @@ export default function ProjectsPage() {
   const [showArchived, setShowArchived] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/clients");
+    const res = await fetch("/api/projects");
     if (!res.ok) {
+      setLoading(false);
       push("Could not load projects", "danger");
       return;
     }
     const data = await res.json();
-    setProjects(data.projects || data.clients || []);
+    setProjects(data.projects || []);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -52,7 +57,7 @@ export default function ProjectsPage() {
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
-    const res = await fetch("/api/clients", {
+    const res = await fetch("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email, phone, notes, type: projectType }),
@@ -62,7 +67,7 @@ export default function ProjectsPage() {
       return;
     }
     const data = await res.json();
-    const project = data.project || data.client;
+    const project = data.project as Project;
     setProjects((prev) => [project, ...prev]);
     resetForm();
     setAdding(false);
@@ -76,7 +81,7 @@ export default function ProjectsPage() {
     return (
       !s ||
       c.name.toLowerCase().includes(s) ||
-      c.email.toLowerCase().includes(s) ||
+      (c.email || "").toLowerCase().includes(s) ||
       (c.phone || "").includes(s)
     );
   });
@@ -132,7 +137,7 @@ export default function ProjectsPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
+                placeholder="Optional — required when emailing"
               />
             </Field>
             <Field>
@@ -194,7 +199,9 @@ export default function ProjectsPage() {
             />
             Show archived
           </label>
-          {filtered.length === 0 ? (
+          {loading ? (
+            <EmptyState variant="loading" title="Loading projects…" />
+          ) : filtered.length === 0 ? (
             <EmptyState
               title={projects.length === 0 ? "No projects yet" : "No matches"}
               description={
@@ -217,8 +224,15 @@ export default function ProjectsPage() {
                     >
                       {c.name}
                     </Link>
-                    <p className="truncate text-sm text-muted">
-                      {c.type || "Project"} · {c.stage || "inquiry"} · {c.email}
+                    <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
+                      <span className="truncate">{c.type || "Project"}</span>
+                      <StatusBadge
+                        domain="projectStage"
+                        value={c.stage || "inquiry"}
+                      />
+                      {c.email ? (
+                        <span className="truncate">· {c.email}</span>
+                      ) : null}
                     </p>
                   </div>
                   <Link href={`/admin/projects/${c.id}`}>

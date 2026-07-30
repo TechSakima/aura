@@ -19,6 +19,7 @@ import type {
   BookingRequest,
   Client,
   Comment,
+  ContactMessage,
   Contract,
   ContractTemplate,
   Gallery,
@@ -82,11 +83,6 @@ async function writeStudioCollection<T extends { id: string; studioId: string }>
   studioId: string,
   items: T[],
 ) {
-  const existingSnap = await db
-    .collection(name)
-    .where("studioId", "==", studioId)
-    .get();
-  const keep = new Set(items.map((i) => i.id));
   const batchSize = 400;
   let batch = db.batch();
   let ops = 0;
@@ -97,13 +93,6 @@ async function writeStudioCollection<T extends { id: string; studioId: string }>
     ops = 0;
   };
 
-  for (const doc of existingSnap.docs) {
-    if (!keep.has(doc.id)) {
-      batch.delete(doc.ref);
-      ops++;
-      if (ops >= batchSize) await commit();
-    }
-  }
   for (const item of items) {
     const { id, ...rest } = { ...item, studioId };
     batch.set(db.collection(name).doc(id), stripUndefined(rest));
@@ -111,6 +100,116 @@ async function writeStudioCollection<T extends { id: string; studioId: string }>
     if (ops >= batchSize) await commit();
   }
   await commit();
+}
+
+/** Explicit deletes — required now that collection writes are upsert-only (AURA-002). */
+export async function deleteStudioDocs(
+  collection: string,
+  ids: string[],
+): Promise<void> {
+  if (!ids.length) return;
+  writeQueue = writeQueue.then(async () => {
+    await ensureMigrated();
+    const { db } = assertFirebaseReady();
+    const batchSize = 400;
+    let batch = db.batch();
+    let ops = 0;
+    const commit = async () => {
+      if (!ops) return;
+      await batch.commit();
+      batch = db.batch();
+      ops = 0;
+    };
+    for (const id of ids) {
+      batch.delete(db.collection(collection).doc(id));
+      ops++;
+      if (ops >= batchSize) await commit();
+    }
+    await commit();
+  });
+  await writeQueue;
+}
+
+/** Append / overwrite a single tenant document without a full studio rewrite (AURA-003). */
+export async function appendStudioDoc<T extends { id: string; studioId: string }>(
+  collection: string,
+  doc: T,
+): Promise<void> {
+  writeQueue = writeQueue.then(async () => {
+    await ensureMigrated();
+    const { db } = assertFirebaseReady();
+    const { id, ...rest } = { ...doc };
+    await db.collection(collection).doc(id).set(stripUndefined(rest));
+  });
+  await writeQueue;
+}
+
+/** Recent public contact messages — O(messages), not full workspace RMW (AURA-311). */
+export async function listRecentContactMessages(
+  studioId: string,
+  limit = 8,
+): Promise<ContactMessage[]> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db
+    .collection(COL.contactMessages)
+    .where("studioId", "==", studioId)
+    .get();
+  const rows = snap.docs.map((d) => {
+    const data = d.data() as Omit<ContactMessage, "id">;
+    return { ...data, id: d.id } as ContactMessage;
+  });
+  rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return rows.slice(0, Math.max(1, Math.min(limit, 40)));
+}
+
+/** Partial update on a single tenant document (no full studio RMW). */
+export async function patchStudioDoc(
+  collection: string,
+  id: string,
+  partial: Record<string, unknown>,
+): Promise<void> {
+  writeQueue = writeQueue.then(async () => {
+    await ensureMigrated();
+    const { db } = assertFirebaseReady();
+    await db
+      .collection(collection)
+      .doc(id)
+      .set(stripUndefined({ ...partial, updatedAt: new Date().toISOString() }), {
+        merge: true,
+      });
+  });
+  await writeQueue;
+}
+
+/**
+ * Read-modify-write one document in place (no full studio RMW).
+ * Prefer this over updateStudioDb for hot public paths.
+ */
+export async function updateStudioDoc<T extends { id: string }>(
+  collection: string,
+  id: string,
+  mutator: (current: T) => T | null | void | Promise<T | null | void>,
+): Promise<T | null> {
+  let result: T | null = null;
+  writeQueue = writeQueue.then(async () => {
+    await ensureMigrated();
+    const { db } = assertFirebaseReady();
+    const snap = await db.collection(collection).doc(id).get();
+    if (!snap.exists) {
+      result = null;
+      return;
+    }
+    const current = { id: snap.id, ...snap.data() } as T;
+    const next = await mutator(current);
+    if (next) {
+      const { id: _, ...rest } = next;
+      await db.collection(collection).doc(id).set(stripUndefined(rest));
+    }
+    result = next || current;
+  });
+  await writeQueue;
+  return result;
 }
 
 async function persistStudioDatabase(db: Firestore, raw: AuraDatabase) {
@@ -123,19 +222,11 @@ async function persistStudioDatabase(db: Firestore, raw: AuraDatabase) {
 
   const projects = data.projects;
   const sessions = data.sessions;
-  // Dual-write legacy collections so older readers keep working during rollout.
-  const legacyClients = projects.map((p) => ({ ...p, studioId }));
-  const legacyShoots = sessions.map((s) => ({
-    ...s,
-    studioId,
-    clientId: s.projectId,
-    shootDate: s.startsAt,
-  }));
+  // Single source: projects/projectSessions only (AURA-168). Legacy clients/shoots
+  // are not written; normalizeDb backfills on read only when canonical is empty.
 
   await writeStudioCollection(db, COL.projects, studioId, projects);
   await writeStudioCollection(db, COL.projectSessions, studioId, sessions);
-  await writeStudioCollection(db, COL.clients, studioId, legacyClients);
-  await writeStudioCollection(db, COL.shoots, studioId, legacyShoots);
   await writeStudioCollection(
     db,
     COL.packageTemplates,
@@ -218,8 +309,6 @@ async function loadStudioDatabase(
   const [
     projects,
     projectSessions,
-    clients,
-    shoots,
     packageTemplates,
     proposals,
     galleries,
@@ -244,8 +333,6 @@ async function loadStudioDatabase(
   ] = await Promise.all([
     listByStudioId<Project>(db, COL.projects, studioId),
     listByStudioId<ProjectSession>(db, COL.projectSessions, studioId),
-    listByStudioId<Client>(db, COL.clients, studioId),
-    listByStudioId<Shoot>(db, COL.shoots, studioId),
     listByStudioId<PackageTemplate>(db, COL.packageTemplates, studioId),
     listByStudioId<Proposal>(db, COL.proposals, studioId),
     listByStudioId<Gallery>(db, COL.galleries, studioId),
@@ -275,6 +362,19 @@ async function loadStudioDatabase(
     ),
     listByStudioId<SessionType>(db, COL.sessionTypes, studioId),
     listByStudioId<BookingRequest>(db, COL.bookingRequests, studioId),
+  ]);
+
+  // Legacy collections: only scan when canonical is empty (dual-write backfill).
+  // Skip two collection scans per load when canonical exists (AURA-167).
+  const needLegacyClients = projects.length === 0;
+  const needLegacyShoots = projectSessions.length === 0;
+  const [clients, shoots] = await Promise.all([
+    needLegacyClients
+      ? listByStudioId<Client>(db, COL.clients, studioId)
+      : Promise.resolve([] as Client[]),
+    needLegacyShoots
+      ? listByStudioId<Shoot>(db, COL.shoots, studioId)
+      : Promise.resolve([] as Shoot[]),
   ]);
 
   return normalizeDb({
@@ -456,7 +556,7 @@ async function migrateToMultiTenant(db: Firestore): Promise<void> {
   multiTenantMigrated = true;
 }
 
-async function ensureMigrated() {
+export async function ensureMigrated() {
   const { db } = assertFirebaseReady();
   await migrateToMultiTenant(db);
 }
@@ -484,14 +584,7 @@ export async function updateStudioDb<T>(
     result = await mutator(current);
     current.studio.id = studioId;
     current.studio.updatedAt = new Date().toISOString();
-    // Keep legacy aliases in sync. normalizeDb merges shoots/clients back into
-    // sessions/projects — stale aliases would resurrect deleted rows on persist.
-    current.shoots = current.sessions.map((s) => ({
-      ...s,
-      clientId: s.projectId,
-      shootDate: s.startsAt,
-    }));
-    current.clients = current.projects;
+    // Single source — do not mirror to deprecated aliases on write (AURA-168).
     await persistStudioDatabase(db, current);
   });
   await writeQueue;
@@ -564,6 +657,24 @@ export async function getStudioDoc(studioId: string): Promise<Studio | null> {
   return { id: snap.id, ...snap.data() } as Studio;
 }
 
+/** Galleries for one studio — O(galleries), not full workspace RMW (AURA-227). */
+export async function listGalleriesForStudio(
+  studioId: string,
+): Promise<Gallery[]> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  return listByStudioId<Gallery>(db, COL.galleries, studioId);
+}
+
+/** Session types for one studio — O(types), not full workspace RMW (AURA-232). */
+export async function listSessionTypesForStudio(
+  studioId: string,
+): Promise<SessionType[]> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  return listByStudioId<SessionType>(db, COL.sessionTypes, studioId);
+}
+
 export async function createStudioWithDefaults(opts: {
   name: string;
   ownerEmail: string;
@@ -589,6 +700,13 @@ export async function createStudioWithDefaults(opts: {
     .collection(COL.studioMembers)
     .doc(opts.ownerUid)
     .set(stripUndefined(member));
+
+  const { syncHomepageSlugIndex } = await import("@/lib/db/homepage-slug");
+  await syncHomepageSlugIndex({
+    studioId: studio.id,
+    previousSlug: "",
+    nextSlug: workspace.studio.homepage?.slug || "",
+  });
 
   return { studio: workspace.studio, member };
 }
@@ -663,6 +781,32 @@ export async function deleteSession(token: string): Promise<void> {
   await db.collection(COL.sessions).doc(token).delete();
 }
 
+/** Auth cookie sessions for a Firebase uid (not product projectSessions). */
+export async function listSessionsForUid(uid: string): Promise<AuthSession[]> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db.collection(COL.sessions).where("uid", "==", uid).get();
+  return snap.docs.map((d) => ({
+    token: d.id,
+    ...(d.data() as Omit<AuthSession, "token">),
+  }));
+}
+
+/** Delete auth sessions for uid, optionally keeping one token (current device). */
+export async function deleteSessionsForUid(
+  uid: string,
+  exceptToken?: string,
+): Promise<number> {
+  const sessions = await listSessionsForUid(uid);
+  let deleted = 0;
+  for (const session of sessions) {
+    if (exceptToken && session.token === exceptToken) continue;
+    await deleteSession(session.token);
+    deleted += 1;
+  }
+  return deleted;
+}
+
 export async function getStudio(): Promise<Studio> {
   throw new Error("getStudio() removed — use getStudioDoc(studioId)");
 }
@@ -727,6 +871,107 @@ export async function findSubAlbumByToken(
   return { id: d.id, ...d.data() } as SubAlbum;
 }
 
+/** Photos for one gallery — O(gallery photos), not full studio (AURA-256). */
+export async function listPhotosByGalleryId(
+  galleryId: string,
+): Promise<Photo[]> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const photosSnap = await db
+    .collection(COL.photos)
+    .where("galleryId", "==", galleryId)
+    .get();
+  const photos = photosSnap.docs.map(
+    (d) => ({ id: d.id, ...d.data() }) as Photo,
+  );
+  photos.sort((a, b) => a.sortOrder - b.sortOrder);
+  return photos;
+}
+
+export async function listCommentsByGalleryId(
+  galleryId: string,
+): Promise<Comment[]> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db
+    .collection(COL.comments)
+    .where("galleryId", "==", galleryId)
+    .get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Comment);
+}
+
+export async function listSubAlbumsByGalleryId(
+  galleryId: string,
+): Promise<SubAlbum[]> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db
+    .collection(COL.subAlbums)
+    .where("galleryId", "==", galleryId)
+    .get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SubAlbum);
+}
+
+export async function getGalleryById(
+  galleryId: string,
+): Promise<Gallery | null> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db.collection(COL.galleries).doc(galleryId).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...snap.data() } as Gallery;
+}
+
+export async function getPhotosByIds(ids: string[]): Promise<Photo[]> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return [];
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snaps = await Promise.all(
+    unique.map((id) => db.collection(COL.photos).doc(id).get()),
+  );
+  const out: Photo[] = [];
+  for (const snap of snaps) {
+    if (!snap.exists) continue;
+    out.push({ id: snap.id, ...snap.data() } as Photo);
+  }
+  return out;
+}
+
+/** Session (projectSessions) with legacy shoots fallback — single doc. */
+export async function getSessionById(
+  sessionId: string,
+): Promise<Shoot | null> {
+  if (!sessionId) return null;
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const sessionSnap = await db
+    .collection(COL.projectSessions)
+    .doc(sessionId)
+    .get();
+  if (sessionSnap.exists) {
+    const s = { id: sessionSnap.id, ...sessionSnap.data() } as ProjectSession;
+    return { ...s, clientId: s.projectId, shootDate: s.startsAt };
+  }
+  const shootSnap = await db.collection(COL.shoots).doc(sessionId).get();
+  if (!shootSnap.exists) return null;
+  return { id: shootSnap.id, ...shootSnap.data() } as Shoot;
+}
+
+export async function getProjectById(
+  projectId: string,
+): Promise<Client | null> {
+  if (!projectId) return null;
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  let snap = await db.collection(COL.projects).doc(projectId).get();
+  if (!snap.exists) {
+    snap = await db.collection(COL.clients).doc(projectId).get();
+  }
+  if (!snap.exists) return null;
+  return { id: snap.id, ...snap.data() } as Client;
+}
+
 export async function getGalleryBundle(galleryId: string) {
   await ensureMigrated();
   const { db } = assertFirebaseReady();
@@ -736,50 +981,22 @@ export async function getGalleryBundle(galleryId: string) {
     id: gallerySnap.id,
     ...gallerySnap.data(),
   } as Gallery;
-  const photosSnap = await db
-    .collection(COL.photos)
-    .where("galleryId", "==", galleryId)
-    .get();
-  const photos = photosSnap.docs.map(
-    (d) => ({ id: d.id, ...d.data() }) as Photo,
-  );
-  photos.sort((a, b) => a.sortOrder - b.sortOrder);
+  const photos = await listPhotosByGalleryId(galleryId);
   const sessionId = gallery.sessionId || gallery.shootId || "";
-  let shoot: Shoot | null = null;
-  if (sessionId) {
-    const sessionSnap = await db
-      .collection(COL.projectSessions)
-      .doc(sessionId)
-      .get();
-    if (sessionSnap.exists) {
-      const s = { id: sessionSnap.id, ...sessionSnap.data() } as ProjectSession;
-      shoot = { ...s, clientId: s.projectId, shootDate: s.startsAt };
-    } else {
-      const shootSnap = await db.collection(COL.shoots).doc(sessionId).get();
-      if (shootSnap.exists) {
-        shoot = { id: shootSnap.id, ...shootSnap.data() } as Shoot;
-      }
-    }
-  }
-  let client = null as Client | null;
+  const shoot = sessionId ? await getSessionById(sessionId) : null;
   const projectId =
     gallery.projectId || shoot?.projectId || shoot?.clientId || "";
-  if (projectId) {
-    const projectSnap = await db.collection(COL.projects).doc(projectId).get();
-    if (projectSnap.exists) {
-      client = { id: projectSnap.id, ...projectSnap.data() } as Client;
-    } else {
-      const clientSnap = await db.collection(COL.clients).doc(projectId).get();
-      if (clientSnap.exists) {
-        client = { id: clientSnap.id, ...clientSnap.data() } as Client;
-      }
-    }
-  }
+  const client = projectId ? await getProjectById(projectId) : null;
   const studioId = gallery.studioId;
   const watermarkPresets = studioId
     ? await listByStudioId<WatermarkPreset>(db, COL.watermarkPresets, studioId)
     : [];
   return { gallery, photos, shoot, client, watermarkPresets };
+}
+
+/** Canonical project bundle (AURA-159). Alias of getClientBundle until FE cutover drops parallel keys. */
+export async function getProjectBundle(projectId: string) {
+  return getClientBundle(projectId);
 }
 
 export async function getClientBundle(clientId: string) {
@@ -823,6 +1040,11 @@ export async function getClientBundle(clientId: string) {
   }
   const shoots = [...byId.values()];
   return { client, shoots, project: client, sessions: shoots };
+}
+
+/** Canonical session bundle (AURA-159). Alias of getShootBundle until FE cutover drops parallel keys. */
+export async function getSessionBundle(sessionId: string) {
+  return getShootBundle(sessionId);
 }
 
 export async function getShootBundle(shootId: string) {

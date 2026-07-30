@@ -15,10 +15,15 @@ export const COL = {
   galleries: "galleries",
   photos: "photos",
   comments: "comments",
+  /** Per-visitor gallery hearts — not part of AuraDatabase / TENANT_COLLECTIONS */
+  galleryFavorites: "galleryFavorites",
   subAlbums: "subAlbums",
   watermarkPresets: "watermarkPresets",
   analyticsEvents: "analyticsEvents",
-  /** Auth cookie sessions */
+  /**
+   * Auth cookie sessions (login tokens) — NOT product sessions.
+   * Product sessions are `projectSessions` (jobs under a Project). Rename candidate: `authSessions`.
+   */
   sessions: "sessions",
   ideaCards: "ideaCards",
   shotListTemplates: "shotListTemplates",
@@ -33,6 +38,19 @@ export const COL = {
   questionnaireResponses: "questionnaireResponses",
   sessionTypes: "sessionTypes",
   bookingRequests: "bookingRequests",
+  /**
+   * Public homepage/book slug → studioId (AURA-111 / AURA-227).
+   * Doc id = normalized slug; fields: { studioId, updatedAt }.
+   */
+  homepageSlugs: "homepageSlugs",
+  /**
+   * Public contact form messages (AURA-305) — append-only; not in TENANT_COLLECTIONS.
+   */
+  contactMessages: "contactMessages",
+  /**
+   * Durable email retry queue (AURA-313 / AURA-149) — not in TENANT_COLLECTIONS.
+   */
+  emailOutbox: "emailOutbox",
   /** Legacy monolith — read once for migration */
   legacy: "aura",
 } as const;
@@ -44,8 +62,6 @@ export const LEGACY_DATABASE_DOC = "database";
 export const TENANT_COLLECTIONS = [
   COL.projects,
   COL.projectSessions,
-  COL.clients,
-  COL.shoots,
   COL.packageTemplates,
   COL.proposals,
   COL.galleries,

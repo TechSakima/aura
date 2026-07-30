@@ -1,10 +1,14 @@
 export { Badge } from "./badge";
-export { Button } from "./button";
+export { Button, type ButtonProps } from "./button";
+export { ButtonLink } from "./button-link";
 export { Card } from "./card";
 export { Checkbox } from "./checkbox";
+export { Chip, type ChipTone } from "./chip";
+
 export { ConfirmProvider, useConfirm } from "./confirm";
 export { Dialog } from "./dialog";
-export { EmptyState } from "./empty-state";
+export { EmptyState, type EmptyStateVariant } from "./empty-state";
+
 export { Field } from "./field";
 export {
   FileUploadButton,
@@ -15,12 +19,23 @@ export type { UploadItem, UploadItemStatus } from "./file-upload";
 export { IconButton } from "./icon-button";
 export { Input } from "./input";
 export { Label } from "./label";
+export { LayoutTemplateSwatch } from "./layout-template-swatch";
+export { List, ListRow } from "./list";
+export { MetricTile } from "./metric-tile";
+export { Panel, type PanelVariant } from "./panel";
 export { PageHeader } from "./page-header";
+export { PublicCta } from "./public-cta";
 export { SectionIntro } from "./section-intro";
 export { Select } from "./select";
+export { SegmentedControl, type SegmentedOption } from "./segmented-control";
 export { Skeleton } from "./skeleton";
+export { StatusBadge } from "./status-badge";
+
 export { Cluster, Stack } from "./stack";
 export { Switch } from "./switch";
-export { Tabs } from "./tabs";
+export { Tabs, type TabItem } from "./tabs";
+
 export { Textarea } from "./textarea";
+export { ThemeSwatch } from "./theme-swatch";
+export { TypePairingSwatch } from "./type-pairing-swatch";
 export { ToastProvider, useToast } from "./toast";

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { IntakeListEditor } from "@/components/admin/ListEditor";
 import {
   Button,
+  ButtonLink,
   Card,
   Checkbox,
   Field,
@@ -14,6 +15,7 @@ import {
   Textarea,
   useToast,
 } from "@/components/ui";
+import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 import type {
   Contract,
   ContractTemplate,
@@ -105,22 +107,40 @@ export default function DocumentsPage() {
     };
   }
 
+  const [loading, setLoading] = useState(true);
+  const [docDirty, setDocDirty] = useState(false);
+  useUnsavedChangesGuard(docDirty);
+
   async function load() {
-    const [docs, projs, qs] = await Promise.all([
+    const [docs, projs, qs, studioRes] = await Promise.all([
       fetch("/api/documents/contracts"),
-      fetch("/api/clients"),
+      fetch("/api/projects"),
       fetch("/api/documents/questionnaires"),
+      fetch("/api/studio"),
     ]);
+    setLoading(false);
     if (docs.ok) {
       const d = await docs.json();
       setContracts(d.contracts || []);
       const tmpls = (d.templates || []) as ContractTemplate[];
       setContractTemplates(tmpls);
-      if (!contractTemplateId && tmpls[0]) setContractTemplateId(tmpls[0].id);
+      if (!contractTemplateId && tmpls[0]) {
+        let preferred = "";
+        if (studioRes.ok) {
+          const s = await studioRes.json().catch(() => ({}));
+          preferred = String(
+            s.studio?.legalDefaults?.defaultContractTemplateId || "",
+          );
+        }
+        const match = preferred
+          ? tmpls.find((t) => t.id === preferred)
+          : undefined;
+        setContractTemplateId(match?.id || tmpls[0].id);
+      }
     }
     if (projs.ok) {
       const p = await projs.json();
-      const list = p.projects || p.clients || [];
+      const list = p.projects || [];
       setProjects(list);
       if (!projectId && list[0]) setProjectId(list[0].id);
     }
@@ -136,6 +156,18 @@ export default function DocumentsPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    const hash = window.location.hash.replace(/^#/, "");
+    if (hash !== "contract-templates" && hash !== "questionnaires") return;
+    requestAnimationFrame(() => {
+      document.getElementById(hash)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [loading]);
 
   function applyContractTemplate(id: string) {
     setContractTemplateId(id);
@@ -202,6 +234,7 @@ export default function DocumentsPage() {
       push(data.error || "Failed", "danger");
       return;
     }
+    setDocDirty(false);
     push(
       editingTemplateId ? "Template updated" : "Contract template created",
       "success",
@@ -248,6 +281,7 @@ export default function DocumentsPage() {
       push("Could not save template", "danger");
       return;
     }
+    setDocDirty(false);
     push(editingQId ? "Template updated" : "Questionnaire template created", "success");
     setEditingQId(null);
     setQName("Session questionnaire");
@@ -300,6 +334,15 @@ export default function DocumentsPage() {
       <PageHeader
         title="Documents"
         description="Contracts, questionnaires, and templates."
+        actions={
+          <ButtonLink
+            href="/admin/settings/library"
+            tone="ghost"
+            className="min-h-11"
+          >
+            Library
+          </ButtonLink>
+        }
       />
 
       <div className="grid gap-8 lg:grid-cols-2">
@@ -392,7 +435,7 @@ export default function DocumentsPage() {
           </form>
         </Card>
 
-        <Card className="p-5">
+        <Card id="questionnaires" className="scroll-mt-24 p-5">
           <h2 className="mb-4 font-display text-2xl">Questionnaire</h2>
           <form onSubmit={saveQTemplate} className="mb-6 space-y-3">
             <Field>
@@ -402,7 +445,10 @@ export default function DocumentsPage() {
               <Input
                 id="qname"
                 value={qName}
-                onChange={(e) => setQName(e.target.value)}
+                onChange={(e) => {
+                  setQName(e.target.value);
+                  setDocDirty(true);
+                }}
               />
             </Field>
             <IntakeListEditor
@@ -499,7 +545,7 @@ export default function DocumentsPage() {
         </Card>
       </div>
 
-      <Card className="p-5">
+      <Card id="contract-templates" className="scroll-mt-24 p-5">
         <h2 className="mb-4 font-display text-2xl">
           {editingTemplateId ? "Edit contract template" : "Contract template"}
         </h2>
@@ -509,7 +555,10 @@ export default function DocumentsPage() {
             <Input
               id="tmpl-name"
               value={tmplName}
-              onChange={(e) => setTmplName(e.target.value)}
+              onChange={(e) => {
+                setTmplName(e.target.value);
+                setDocDirty(true);
+              }}
               required
             />
           </Field>
@@ -518,7 +567,10 @@ export default function DocumentsPage() {
             <Textarea
               id="tmpl-body"
               value={tmplBody}
-              onChange={(e) => setTmplBody(e.target.value)}
+                onChange={(e) => {
+                  setTmplBody(e.target.value);
+                  setDocDirty(true);
+                }}
               rows={14}
               required
             />
@@ -655,7 +707,9 @@ export default function DocumentsPage() {
       <section>
         <h2 className="mb-3 font-display text-2xl">Contracts</h2>
         <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
-          {contracts.length === 0 ? (
+          {loading ? (
+            <li className="py-4 text-sm text-muted">Loading documents…</li>
+          ) : contracts.length === 0 ? (
             <li className="py-4 text-sm text-muted">No contracts yet.</li>
           ) : (
             contracts.map((c) => (
@@ -690,7 +744,9 @@ export default function DocumentsPage() {
       <section>
         <h2 className="mb-3 font-display text-2xl">Questionnaire responses</h2>
         <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
-          {responses.length === 0 ? (
+          {loading ? (
+            <li className="py-4 text-sm text-muted">Loading…</li>
+          ) : responses.length === 0 ? (
             <li className="py-4 text-sm text-muted">None yet.</li>
           ) : (
             responses.map((r) => {

@@ -2,43 +2,68 @@
 
 import type { ReactNode } from "react";
 import { MasonryGrid, type MasonryPhoto } from "@/components/gallery/MasonryGrid";
-import { Button } from "@/components/ui";
+import { Button, ButtonLink } from "@/components/ui";
 
 export function AlbumView({
   title,
   subtitle,
   photos,
   onBack,
+  backHref,
+  backLabel = "All albums",
   onPhotoClick,
   renderOverlay,
   actions,
   emptyMessage,
+  /** When another sticky bar is above (gallery chrome), do not double-stick. */
+  stickyHeader = true,
+  headerExtra,
+  enter,
+  staggerMs,
 }: {
   title: string;
   subtitle?: string;
   photos: MasonryPhoto[];
   onBack?: () => void;
+  /** Prefer for public album routes (AURA-247). */
+  backHref?: string;
+  backLabel?: string;
   onPhotoClick?: (photo: MasonryPhoto) => void;
   renderOverlay?: (photo: MasonryPhoto) => ReactNode;
   actions?: ReactNode;
   emptyMessage?: string;
+  stickyHeader?: boolean;
+  /** e.g. AlbumNav under the title row */
+  headerExtra?: ReactNode;
+  enter?: boolean;
+  staggerMs?: number;
 }) {
-  const showHeader = Boolean(title || onBack || actions || subtitle);
+  const showHeader = Boolean(
+    title || onBack || backHref || actions || subtitle || headerExtra,
+  );
+  const backControl = backHref ? (
+    <ButtonLink href={backHref} tone="ghost" size="sm" className="min-h-11 px-0">
+      ← {backLabel}
+    </ButtonLink>
+  ) : onBack ? (
+    <Button tone="ghost" size="sm" className="min-h-11 px-0" onClick={onBack}>
+      ← {backLabel}
+    </Button>
+  ) : null;
+
   return (
     <div className={showHeader ? "min-h-full bg-canvas text-ink" : undefined}>
       {showHeader ? (
-        <header className="sticky top-0 z-20 border-b border-line bg-canvas/95 backdrop-blur">
-          <div className="shell-pad mx-auto flex max-w-[var(--shell-max)] flex-wrap items-center justify-between gap-3 py-3">
-            <div>
-              {onBack ? (
-                <button
-                  type="button"
-                  className="text-sm text-muted hover:text-ink"
-                  onClick={onBack}
-                >
-                  ← Back
-                </button>
-              ) : null}
+        <header
+          className={
+            stickyHeader
+              ? "sticky top-0 z-20 border-b border-line bg-canvas/95 pt-[env(safe-area-inset-top)] backdrop-blur"
+              : "border-b border-line bg-canvas/95 pt-[env(safe-area-inset-top)]"
+          }
+        >
+          <div className="shell-pad mx-auto flex max-w-[var(--public-max)] flex-wrap items-center justify-between gap-3 py-3">
+            <div className="min-w-0">
+              {backControl}
               {title ? (
                 <h1 className="font-display text-2xl sm:text-3xl">{title}</h1>
               ) : null}
@@ -50,13 +75,14 @@ export function AlbumView({
               <div className="flex flex-wrap gap-2">{actions}</div>
             ) : null}
           </div>
+          {headerExtra}
         </header>
       ) : null}
 
       <main
         className={
           showHeader
-            ? "shell-pad mx-auto max-w-[var(--shell-max)] py-6"
+            ? "shell-pad mx-auto max-w-[var(--public-max)] py-6"
             : undefined
         }
       >
@@ -69,6 +95,8 @@ export function AlbumView({
             photos={photos}
             onPhotoClick={onPhotoClick}
             renderOverlay={renderOverlay}
+            enter={enter}
+            staggerMs={staggerMs}
           />
         )}
       </main>

@@ -8,8 +8,15 @@ import {
   nextStepHtml,
   offeringLabel,
 } from "@/lib/copy/offering";
-import { readStudioDb, updateStudioDb } from "@/lib/db/store";
-import type { Studio } from "@/lib/types";
+import {
+  DEFAULT_CONTACT_AUTO_REPLY,
+  studioContactPrefs,
+  studioContactRecipientEmail,
+} from "@/lib/contact-prefs";
+import { readStudioDb, updateStudioDb, appendStudioDoc, getStudioDoc } from "@/lib/db/store";
+import { COL } from "@/lib/db/collections";
+import { contactSourceLabel } from "@/lib/public-contact-server";
+import type { ContactMessage, Studio, StudioNotification } from "@/lib/types";
 
 function resendClient() {
   const key = process.env.RESEND_API_KEY;
@@ -102,13 +109,13 @@ export function wrapHtml(opts: {
 }) {
   const cta =
     opts.ctaHref && opts.ctaLabel
-      ? `<p style="margin:28px 0 8px"><a href="${opts.ctaHref}" style="display:inline-block;padding:12px 20px;background:#1c1915;color:#f7f5f1;text-decoration:none;font-size:14px;letter-spacing:0.04em">${opts.ctaLabel}</a></p>`
+      ? `<p style="margin:28px 0 8px"><a href="${escapeHtml(opts.ctaHref)}" style="display:inline-block;padding:12px 20px;background:#1c1915;color:#f7f5f1;text-decoration:none;font-size:14px;letter-spacing:0.04em">${escapeHtml(opts.ctaLabel)}</a></p>`
       : "";
   const footerLink =
     opts.ctaHref && !opts.ctaLabel
-      ? `<p style="margin-top:16px;font-size:13px;word-break:break-all"><a href="${opts.ctaHref}" style="color:#1c1915">${opts.ctaHref}</a></p>`
+      ? `<p style="margin-top:16px;font-size:13px;word-break:break-all"><a href="${escapeHtml(opts.ctaHref)}" style="color:#1c1915">${escapeHtml(opts.ctaHref)}</a></p>`
       : opts.ctaHref
-        ? `<p style="margin-top:20px;font-size:12px;color:#6b6560;word-break:break-all">${opts.ctaHref}</p>`
+        ? `<p style="margin-top:20px;font-size:12px;color:#6b6560;word-break:break-all">${escapeHtml(opts.ctaHref)}</p>`
         : "";
   return `<!DOCTYPE html>
 <html>
@@ -119,8 +126,8 @@ export function wrapHtml(opts: {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;padding:36px 32px;border:1px solid #e8e4de">
           <tr>
             <td style="font-family:Georgia,'Iowan Old Style',serif;color:#1c1915;line-height:1.55">
-              <p style="margin:0 0 20px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#6b6560">${opts.studioName}</p>
-              <h1 style="margin:0 0 16px;font-size:26px;font-weight:normal;line-height:1.25">${opts.title}</h1>
+              <p style="margin:0 0 20px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#6b6560">${escapeHtml(opts.studioName)}</p>
+              <h1 style="margin:0 0 16px;font-size:26px;font-weight:normal;line-height:1.25">${escapeHtml(opts.title)}</h1>
               <div style="font-size:16px;color:#2a2622">${opts.bodyHtml}</div>
               ${cta}
               ${footerLink}
@@ -146,7 +153,11 @@ export async function emailClient(opts: {
   const resend = resendClient();
   if (!resend) {
     console.warn("[notify] RESEND_API_KEY missing — skip email");
-    return { ok: false as const, skipped: true };
+    return {
+      ok: false as const,
+      skipped: true,
+      error: "RESEND_API_KEY missing",
+    };
   }
   const { data, error } = await resend.emails.send(
     {
@@ -179,25 +190,22 @@ export async function notifyStudio(opts: {
 }) {
   const id = nanoid();
   const createdAt = new Date().toISOString();
-  let ownerEmail: string | undefined;
-  let studioName = "Aura";
-  let prefs: Studio["notificationPrefs"];
+  const studio = await getStudioDoc(opts.studioId);
+  const ownerEmail = studio?.ownerEmail;
+  const studioName = studio?.name || "Aura";
+  const prefs = studio?.notificationPrefs;
 
-  await updateStudioDb(opts.studioId, (db) => {
-    ownerEmail = db.studio.ownerEmail;
-    studioName = db.studio.name || "Aura";
-    prefs = db.studio.notificationPrefs;
-    db.notifications.unshift({
-      id,
-      studioId: opts.studioId,
-      type: opts.type,
-      title: opts.title,
-      body: opts.body,
-      href: opts.href,
-      read: false,
-      createdAt,
-    });
-  });
+  const notification: StudioNotification = {
+    id,
+    studioId: opts.studioId,
+    type: opts.type,
+    title: opts.title,
+    body: opts.body,
+    href: opts.href,
+    read: false,
+    createdAt,
+  };
+  await appendStudioDoc(COL.notifications, notification);
 
   const shouldEmail =
     opts.emailStudio !== false &&
@@ -210,13 +218,13 @@ export async function notifyStudio(opts: {
       to: ownerEmail,
       subject: opts.title,
       fromDisplayName: studioName,
-      html: wrapHtml({
-        studioName,
-        title: opts.title,
-        bodyHtml: `<p>${opts.body}</p>`,
-        ctaLabel: href ? "Open" : undefined,
-        ctaHref: href,
-      }),
+    html: wrapHtml({
+      studioName,
+      title: opts.title,
+      bodyHtml: `<p>${escapeHtml(opts.body)}</p>`,
+      ctaLabel: href ? "Open" : undefined,
+      ctaHref: href,
+    }),
       text: `${opts.body}${href ? `\n${href}` : ""}`,
       idempotencyKey: `studio-notify/${opts.studioId}/${opts.type}/${id}`,
     });
@@ -242,6 +250,9 @@ function studioEmailAllowed(
     type === "booking_declined"
   ) {
     return prefs.emailBookingSubmitted !== false;
+  }
+  if (type === "contact_message") {
+    return prefs.emailContactMessage !== false;
   }
   return true;
 }
@@ -286,8 +297,8 @@ export async function emailQuoteShared(opts: {
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Your quote",
-      bodyHtml: `<p>Hi ${opts.clientName},</p>
-<p>Your quote is ready to review${showLabel ? ` · ${rawLabel}` : ""}.</p>
+      bodyHtml: `<p>Hi ${escapeHtml(opts.clientName)},</p>
+<p>Your quote is ready to review${showLabel ? ` · ${escapeHtml(rawLabel)}` : ""}.</p>
 ${nextStepHtml("Open the link, choose a package if shown, and accept when you're ready.")}`,
       ctaLabel: "View quote",
       ctaHref: href,
@@ -339,8 +350,8 @@ export async function emailGalleryLive(opts: {
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Your gallery",
-      bodyHtml: `<p>Hi ${opts.clientName},</p>
-<p>Your gallery is ready to view${opts.galleryTitle ? ` (${offeringLabel(opts.galleryTitle)})` : ""}.</p>
+      bodyHtml: `<p>Hi ${escapeHtml(opts.clientName)},</p>
+<p>Your gallery is ready to view${opts.galleryTitle ? ` (${escapeHtml(offeringLabel(opts.galleryTitle))})` : ""}.</p>
 ${nextStepHtml("Open the gallery to view, favorite, and download your photos.")}`,
       ctaLabel: "Open gallery",
       ctaHref: href,
@@ -358,6 +369,8 @@ export async function emailPaymentLink(opts: {
   title: string;
   paymentLinkId: string;
   publicUrl?: string;
+  /** Only say “secures your date” when this link is for a booking deposit */
+  isDeposit?: boolean;
 }) {
   const db = await readStudioDb(opts.studioId);
   if (!clientEmailAllowed("payment", db.studio.notificationPrefs)) {
@@ -365,6 +378,9 @@ export async function emailPaymentLink(opts: {
   }
   const href = opts.publicUrl || absoluteUrl(`/pay/${opts.paymentLinkId}`);
   const who = opts.clientName || "there";
+  const next = opts.isDeposit
+    ? "Use the button below to pay securely. This secures your date."
+    : "Use the button below to pay securely.";
   return emailClient({
     to: opts.to,
     subject: `Payment — ${db.studio.name}`,
@@ -373,13 +389,13 @@ export async function emailPaymentLink(opts: {
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Payment",
-      bodyHtml: `<p>Hi ${who},</p>
-<p>Please complete your payment${opts.title ? ` · ${offeringLabel(opts.title)}` : ""}.</p>
-${nextStepHtml("Use the button below to pay securely. This secures your date.")}`,
+      bodyHtml: `<p>Hi ${escapeHtml(who)},</p>
+<p>Please complete your payment${opts.title ? ` · ${escapeHtml(offeringLabel(opts.title))}` : ""}.</p>
+${nextStepHtml(next)}`,
       ctaLabel: "Pay now",
       ctaHref: href,
     }),
-    text: `Hi ${who},\n\nPlease complete your payment.\n\nNext: Use the link to pay securely — this secures your date.\n${href}`,
+    text: `Hi ${who},\n\nPlease complete your payment.\n\nNext: ${next}\n${href}`,
     idempotencyKey: `payment-link/${opts.paymentLinkId}/${opts.to}`,
   });
 }
@@ -407,8 +423,8 @@ export async function emailPaymentReceipt(opts: {
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Payment received",
-      bodyHtml: `<p>Hi ${who},</p>
-<p>Thanks — we received your payment${opts.title ? ` · ${offeringLabel(opts.title)}` : ""}.</p>
+      bodyHtml: `<p>Hi ${escapeHtml(who)},</p>
+<p>Thanks — we received your payment${opts.title ? ` · ${escapeHtml(offeringLabel(opts.title))}` : ""}.</p>
 <ul>
 <li>Amount to studio: $${opts.netAmount.toFixed(2)}</li>
 <li>Processing fee: $${opts.processingFee.toFixed(2)}</li>
@@ -417,7 +433,7 @@ export async function emailPaymentReceipt(opts: {
 ${nextStepHtml("You're all set on payment. We'll be in touch with prep details closer to your date.")}`,
     }),
     text: `Hi ${who},\n\nThanks — we received your payment.\nYou paid: $${opts.grossAmount.toFixed(2)}\n\nNext: You're all set on payment. We'll be in touch with prep details closer to your date.`,
-    idempotencyKey: `payment-receipt/${opts.studioId}/${opts.to}/${opts.netAmount}/${Date.now()}`,
+    idempotencyKey: `payment-receipt/${opts.studioId}/${opts.to}/${opts.netAmount}/${nanoid(8)}`,
   });
 }
 
@@ -440,8 +456,8 @@ export async function emailContractToSign(opts: {
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Agreement to sign",
-      bodyHtml: `<p>Hi ${who},</p>
-<p>Please review and sign your agreement${opts.title ? ` (${offeringLabel(opts.title)})` : ""}.</p>
+      bodyHtml: `<p>Hi ${escapeHtml(who)},</p>
+<p>Please review and sign your agreement${opts.title ? ` (${escapeHtml(offeringLabel(opts.title))})` : ""}.</p>
 ${nextStepHtml("Open the link, read the terms, and sign when ready. Reply to this email with questions.")}`,
       ctaLabel: "Sign now",
       ctaHref: href,
@@ -506,8 +522,8 @@ export async function emailQuestionnaireInvite(opts: {
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Questionnaire",
-      bodyHtml: `<p>Hi ${opts.clientName},</p>
-<p>Please complete this short questionnaire${opts.title ? ` (${offeringLabel(opts.title)})` : ""} when you have a moment.</p>
+      bodyHtml: `<p>Hi ${escapeHtml(opts.clientName)},</p>
+<p>Please complete this short questionnaire${opts.title ? ` (${escapeHtml(offeringLabel(opts.title))})` : ""} when you have a moment.</p>
 ${nextStepHtml("Answer the questions in the link. We'll use your answers to prepare the next step.")}`,
       ctaLabel: "Open questionnaire",
       ctaHref: href,
@@ -542,7 +558,7 @@ export async function emailBookingConfirmed(opts: {
   const confirmed = bookingConfirmedSentence(when, opts.sessionTypeName);
   const next = nextStepAfterBookingConfirm(opts.nextWorkflowStep);
   const cancelBit = opts.cancelHref
-    ? `<p style="margin-top:24px;font-size:13px;opacity:0.75"><a href="${opts.cancelHref}" style="color:inherit">Need to cancel?</a></p>`
+    ? `<p style="margin-top:24px;font-size:13px;opacity:0.75"><a href="${escapeHtml(opts.cancelHref)}" style="color:inherit">Need to cancel?</a></p>`
     : "";
   return emailClient({
     to: opts.to,
@@ -552,8 +568,8 @@ export async function emailBookingConfirmed(opts: {
     html: wrapHtml({
       studioName: db.studio.name,
       title: "You're booked",
-      bodyHtml: `<p>Hi ${opts.clientName},</p>
-<p>${confirmed}</p>
+      bodyHtml: `<p>Hi ${escapeHtml(opts.clientName)},</p>
+<p>${escapeHtml(confirmed)}</p>
 ${nextStepHtml(next)}${cancelBit}`,
     }),
     text: `Hi ${opts.clientName},\n\n${confirmed}\n\nNext: ${next}${opts.cancelHref ? `\n\nNeed to cancel? ${opts.cancelHref}` : ""}`,
@@ -568,9 +584,12 @@ export async function emailBookingDeclined(opts: {
   clientName: string;
   sessionTypeName: string;
   reason: string;
+  /** Booking request id for stable idempotency */
+  requestId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   const declined = bookingDeclinedSentence(opts.sessionTypeName);
+  const stableId = opts.requestId || opts.sessionTypeName;
   return emailClient({
     to: opts.to,
     subject: `Booking update — ${db.studio.name}`,
@@ -579,13 +598,13 @@ export async function emailBookingDeclined(opts: {
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Request update",
-      bodyHtml: `<p>Hi ${opts.clientName},</p>
-<p>${declined}</p>
-<p>${opts.reason}</p>
+      bodyHtml: `<p>Hi ${escapeHtml(opts.clientName)},</p>
+<p>${escapeHtml(declined)}</p>
+<p>${escapeHtml(opts.reason)}</p>
 ${nextStepHtml("No further action is needed. Reply to this email if you'd like to find another date.")}`,
     }),
     text: `Hi ${opts.clientName},\n\n${declined}\n\n${opts.reason}\n\nNext: No further action is needed. Reply if you'd like to find another date.`,
-    idempotencyKey: `booking-declined/${opts.studioId}/${opts.to}/${Date.now()}`,
+    idempotencyKey: `booking-declined/${opts.studioId}/${opts.to}/${stableId}`,
   });
 }
 
@@ -596,6 +615,8 @@ export async function emailStudioBookingCanceled(opts: {
   sessionTypeName: string;
   reason: string;
   projectHref?: string;
+  /** Project id for stable idempotency */
+  projectId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   const to = db.studio.ownerEmail;
@@ -604,6 +625,9 @@ export async function emailStudioBookingCanceled(opts: {
     opts.clientName,
     opts.sessionTypeName,
   );
+  const stableId =
+    opts.projectId ||
+    `${opts.clientName.replace(/\s+/g, "-")}-${opts.sessionTypeName.replace(/\s+/g, "-")}`;
   return emailClient({
     to,
     subject: `Canceled: ${opts.clientName} — ${db.studio.name}`,
@@ -612,13 +636,117 @@ export async function emailStudioBookingCanceled(opts: {
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Request canceled",
-      bodyHtml: `<p>${line}</p>
-<p>Reason: ${opts.reason}</p>`,
+      bodyHtml: `<p>${escapeHtml(line)}</p>
+<p>Reason: ${escapeHtml(opts.reason)}</p>`,
       ...(opts.projectHref
         ? { ctaLabel: "Open project", ctaHref: absoluteUrl(opts.projectHref) }
         : {}),
     }),
-    idempotencyKey: `booking-canceled-studio/${opts.studioId}/${opts.clientName}/${Date.now()}`,
+    idempotencyKey: `booking-canceled-studio/${opts.studioId}/${stableId}`,
+  });
+}
+
+/**
+ * Deliver a public contact form message to the studio inbox (AURA-306).
+ * `replyTo` is the client so Reply works in the studio’s mail client.
+ */
+export async function emailContactToStudio(opts: {
+  studio: Studio;
+  message: ContactMessage;
+}): Promise<
+  { ok: true; id?: string } | { ok: false; error: string; skipped?: boolean }
+> {
+  const to = studioContactRecipientEmail(opts.studio);
+  if (!to) {
+    return { ok: false, error: "Studio contact email missing" };
+  }
+
+  const msg = opts.message;
+  const source = contactSourceLabel(msg.source);
+  const studioName = opts.studio.name || "Studio";
+  const subject = `${source} message — ${studioName}`;
+
+  const rows: string[] = [
+    `<p><strong>From</strong> ${escapeHtml(msg.name)} &lt;${escapeHtml(msg.email)}&gt;</p>`,
+  ];
+  if (msg.phone) {
+    rows.push(`<p><strong>Phone</strong> ${escapeHtml(msg.phone)}</p>`);
+  }
+  rows.push(`<p><strong>Via</strong> ${escapeHtml(source)}</p>`);
+  if (msg.context) {
+    rows.push(`<p><strong>Context</strong> ${escapeHtml(msg.context)}</p>`);
+  }
+  rows.push(
+    `<p style="margin-top:20px;white-space:pre-wrap">${escapeHtml(msg.message)}</p>`,
+  );
+
+  const textLines = [
+    `From: ${msg.name} <${msg.email}>`,
+    msg.phone ? `Phone: ${msg.phone}` : null,
+    `Via: ${source}`,
+    msg.context ? `Context: ${msg.context}` : null,
+    "",
+    msg.message,
+  ].filter((line): line is string => line != null);
+
+  return emailClient({
+    to,
+    subject,
+    fromDisplayName: studioName,
+    replyTo: msg.email,
+    html: wrapHtml({
+      studioName,
+      title: subject,
+      bodyHtml: rows.join("\n"),
+    }),
+    text: textLines.join("\n"),
+    idempotencyKey: `contact/${opts.studio.id}/${msg.id}`,
+  });
+}
+
+/**
+ * Optional client acknowledgment when contactPrefs.autoReplyEnabled (AURA-314).
+ * Failures are non-fatal — studio delivery is the source of truth.
+ */
+export async function emailContactAutoReply(opts: {
+  studio: Studio;
+  message: ContactMessage;
+}): Promise<
+  | { ok: true; id?: string; skipped?: boolean }
+  | { ok: false; error: string; skipped?: boolean }
+> {
+  const prefs = studioContactPrefs(opts.studio);
+  if (!prefs.autoReplyEnabled) {
+    return { ok: true, skipped: true };
+  }
+
+  const to = String(opts.message.email || "")
+    .trim()
+    .toLowerCase();
+  if (!to) {
+    return { ok: false, error: "Client email missing" };
+  }
+
+  const studioName = opts.studio.name || "Studio";
+  const body =
+    (prefs.autoReplyMessage || DEFAULT_CONTACT_AUTO_REPLY).trim() ||
+    DEFAULT_CONTACT_AUTO_REPLY;
+  const title = "Message received";
+  const greeting = opts.message.name?.trim()
+    ? `Hi ${opts.message.name.trim()},`
+    : "Hi,";
+
+  return emailClient({
+    to,
+    subject: `${studioName} — ${title}`,
+    fromDisplayName: studioName,
+    html: wrapHtml({
+      studioName,
+      title,
+      bodyHtml: `<p>${escapeHtml(greeting)}</p><p style="white-space:pre-wrap">${escapeHtml(body)}</p>`,
+    }),
+    text: `${greeting}\n\n${body}`,
+    idempotencyKey: `contact-auto-reply/${opts.studio.id}/${opts.message.id}`,
   });
 }
 

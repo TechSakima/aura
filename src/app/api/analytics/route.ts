@@ -10,25 +10,29 @@ export async function GET(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const url = new URL(req.url);
-  const shootId = url.searchParams.get("shootId") || undefined;
+  const sessionId =
+    url.searchParams.get("sessionId") || url.searchParams.get("shootId") || undefined;
+  const projectIdParam = url.searchParams.get("projectId") || undefined;
   const galleryId = url.searchParams.get("galleryId") || undefined;
 
   const db = await readStudioDb(admin.studioId);
   let events = db.analyticsEvents;
 
-  let projectIdFilter: string | undefined;
-  if (shootId) {
-    const session = db.sessions.find((s) => s.id === shootId);
-    projectIdFilter = session?.projectId;
+  let projectIdFilter: string | undefined = projectIdParam;
+  if (sessionId) {
+    const session = db.sessions.find((s) => s.id === sessionId);
+    projectIdFilter = session?.projectId || projectIdFilter;
   }
 
-  if (shootId) {
+  if (sessionId) {
     events = events.filter(
       (e) =>
-        e.shootId === shootId ||
-        e.sessionId === shootId ||
+        e.sessionId === sessionId ||
+        e.shootId === sessionId ||
         (projectIdFilter != null && e.projectId === projectIdFilter),
     );
+  } else if (projectIdFilter) {
+    events = events.filter((e) => e.projectId === projectIdFilter);
   }
   if (galleryId) events = events.filter((e) => e.galleryId === galleryId);
 
@@ -64,7 +68,7 @@ export async function GET(req: Request) {
   if (projectIdFilter) {
     txs = txs.filter((t) => t.projectId === projectIdFilter);
     invoices = invoices.filter((i) => i.projectId === projectIdFilter);
-  } else if (shootId) {
+  } else if (sessionId) {
     // Session filter with no project — empty money slice
     txs = [];
     invoices = [];

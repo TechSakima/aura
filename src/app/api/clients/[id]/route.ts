@@ -8,6 +8,7 @@ import {
 import { cascadeProjectRename } from "@/lib/db/rename-project";
 import { getClientBundle, updateStudioDb } from "@/lib/db/store";
 import type { ProjectStage } from "@/lib/types";
+import { isProjectWorkflowStep } from "@/lib/workflow/path";
 
 export async function GET(
   _req: Request,
@@ -50,6 +51,13 @@ export async function PATCH(
       client: bundle?.client,
       project: bundle?.client,
     });
+  }
+
+  if (body.workflowStep != null && !isProjectWorkflowStep(body.workflowStep)) {
+    return NextResponse.json(
+      { error: "Invalid workflow step" },
+      { status: 400 },
+    );
   }
 
   const client = await updateStudioDb(admin.studioId, (db) => {

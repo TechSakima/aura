@@ -2,6 +2,9 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { StudioMark } from "@/components/brand/StudioMark";
+import { PublicShell } from "@/components/shells/PublicShell";
+import { PublicSuccess } from "@/components/public/PublicSuccess";
 import {
   Button,
   Field,
@@ -16,6 +19,7 @@ export default function PublicQuestionnairePage() {
   const params = useParams<{ token: string }>();
   const [title, setTitle] = useState("");
   const [studioName, setStudioName] = useState("");
+  const [studioLogoUrl, setStudioLogoUrl] = useState("");
   const [questions, setQuestions] = useState<IntakeQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -33,6 +37,7 @@ export default function PublicQuestionnairePage() {
         setTitle(data.questionnaire.title);
         setQuestions(data.questionnaire.questions || []);
         setStudioName(data.studio?.name || "");
+        setStudioLogoUrl(data.studio?.logoUrl || "");
         if (data.questionnaire.submittedAt) {
           setSubmitted(true);
           setAnswers(data.questionnaire.answers || {});
@@ -59,72 +64,102 @@ export default function PublicQuestionnairePage() {
   }
 
   if (error && !title) {
-    return <p className="shell-pad py-20 text-center text-muted">{error}</p>;
+    return (
+      <PublicShell>
+        <p className="py-20 text-center text-danger">{error}</p>
+      </PublicShell>
+    );
   }
 
   if (!title) {
-    return <p className="shell-pad py-20 text-center text-muted">Loading…</p>;
+    return (
+      <PublicShell>
+        <p className="py-20 text-center text-muted">Loading…</p>
+      </PublicShell>
+    );
   }
 
   return (
-    <div className="shell-pad mx-auto max-w-lg py-12">
-      <p className="text-sm text-muted">{studioName}</p>
-      <h1 className="mt-1 font-display text-3xl">{title}</h1>
-      {submitted ? (
-        <p className="mt-6 text-muted">Thanks — your answers were saved.</p>
-      ) : (
-        <form onSubmit={onSubmit} className="mt-8 space-y-4">
-          {questions.map((q) => (
-            <Field key={q.id}>
-              <Label htmlFor={q.id}>
-                {q.label}
-                {q.required ? " *" : ""}
-              </Label>
-              {q.type === "textarea" ? (
-                <Textarea
-                  id={q.id}
-                  required={q.required}
-                  value={answers[q.id] || ""}
-                  onChange={(e) =>
-                    setAnswers((a) => ({ ...a, [q.id]: e.target.value }))
-                  }
-                  rows={4}
-                />
-              ) : q.type === "select" ? (
-                <Select
-                  id={q.id}
-                  required={q.required}
-                  value={answers[q.id] || ""}
-                  onChange={(e) =>
-                    setAnswers((a) => ({ ...a, [q.id]: e.target.value }))
-                  }
-                >
-                  <option value="">Select…</option>
-                  {(q.options || []).map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </Select>
-              ) : (
-                <Input
-                  id={q.id}
-                  type={q.type === "date" ? "date" : "text"}
-                  required={q.required}
-                  value={answers[q.id] || ""}
-                  onChange={(e) =>
-                    setAnswers((a) => ({ ...a, [q.id]: e.target.value }))
-                  }
-                />
-              )}
-            </Field>
-          ))}
-          {error ? <p className="text-sm text-danger">{error}</p> : null}
-          <Button type="submit" disabled={busy}>
-            {busy ? "Sending…" : "Submit"}
-          </Button>
-        </form>
-      )}
-    </div>
+    <PublicShell>
+      <div className="mx-auto max-w-lg">
+        <StudioMark
+          logoUrl={studioLogoUrl || undefined}
+          name={studioName}
+          tone="dark"
+          className="mb-2"
+        />
+        <h1 className="font-display text-3xl">{title}</h1>
+        {submitted ? (
+          <PublicSuccess title="Answers saved">
+            <dl className="mt-6 space-y-4 border-t border-line pt-6 text-left">
+              {questions.map((q) => (
+                <div key={q.id}>
+                  <dt className="text-xs uppercase tracking-[0.14em] text-muted">
+                    {q.label}
+                  </dt>
+                  <dd className="mt-1 whitespace-pre-wrap text-sm text-ink">
+                    {answers[q.id]?.trim() || "—"}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </PublicSuccess>
+        ) : questions.length === 0 ? (
+          <p className="mt-6 text-muted">No questions to answer.</p>
+        ) : (
+          <form onSubmit={onSubmit} className="mt-8 space-y-4">
+            {questions.map((q) => (
+              <Field key={q.id}>
+                <Label htmlFor={q.id}>
+                  {q.label}
+                  {q.required ? " *" : ""}
+                </Label>
+                {q.type === "textarea" ? (
+                  <Textarea
+                    id={q.id}
+                    required={q.required}
+                    value={answers[q.id] || ""}
+                    onChange={(e) =>
+                      setAnswers((a) => ({ ...a, [q.id]: e.target.value }))
+                    }
+                    rows={4}
+                  />
+                ) : q.type === "select" ? (
+                  <Select
+                    id={q.id}
+                    required={q.required}
+                    value={answers[q.id] || ""}
+                    onChange={(e) =>
+                      setAnswers((a) => ({ ...a, [q.id]: e.target.value }))
+                    }
+                  >
+                    <option value="">Select…</option>
+                    {(q.options || []).map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    id={q.id}
+                    type={q.type === "date" ? "date" : "text"}
+                    required={q.required}
+                    value={answers[q.id] || ""}
+                    onChange={(e) =>
+                      setAnswers((a) => ({ ...a, [q.id]: e.target.value }))
+                    }
+                  />
+                )}
+              </Field>
+            ))}
+            {error ? <p className="text-sm text-danger">{error}</p> : null}
+            <Button type="submit" disabled={busy}>
+              {busy ? "Sending…" : "Submit"}
+            </Button>
+          </form>
+        )}
+      </div>
+    </PublicShell>
   );
 }

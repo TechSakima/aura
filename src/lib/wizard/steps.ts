@@ -46,7 +46,9 @@ export function deriveWizardProgress(input: {
   const { shoot, proposal, plan, gallery, photoCount } = input;
   const completed: WizardStepId[] = [];
 
-  const intakeDone = Boolean(shoot.type?.trim());
+  const intakeDone = Boolean(
+    shoot.intakeAnswers && Object.keys(shoot.intakeAnswers).length > 0,
+  );
   if (intakeDone) completed.push("intake");
 
   const proposalDone =
@@ -81,7 +83,7 @@ export function deriveWizardProgress(input: {
     shoot.status === "archived";
   if (deliveryDone) completed.push("delivery");
 
-  if (gallery?.status === "archived" || shoot.status === "archived") {
+  if (gallery?.status === "archived" || shoot.status === "archived" || shoot.status === "delivered") {
     completed.push("wrap");
   }
 

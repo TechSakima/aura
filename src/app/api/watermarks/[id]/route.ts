@@ -9,6 +9,7 @@ import {
 } from "@/lib/images/rewatermark";
 import { deleteStorageObject } from "@/lib/storage/upload";
 import type { WatermarkMode, WatermarkPosition } from "@/lib/types";
+import { clampWatermarkScale } from "@/lib/watermark-scale";
 
 export async function PATCH(
   req: Request,
@@ -46,7 +47,10 @@ export async function PATCH(
     if (form.has("opacity")) opacity = Number(form.get("opacity") || opacity);
     if (form.has("scale")) {
       const s = form.get("scale");
-      scale = s != null && String(s) !== "" ? Number(s) : scale;
+      scale =
+        s != null && String(s) !== ""
+          ? clampWatermarkScale(s)
+          : scale;
     }
     const file = formDataFile(form, "file");
     if (file && file.size > 0) {
@@ -66,7 +70,8 @@ export async function PATCH(
     if (body.position != null) position = body.position as WatermarkPosition;
     if (body.opacity != null) opacity = Number(body.opacity);
     if (body.scale !== undefined) {
-      scale = body.scale != null ? Number(body.scale) : undefined;
+      scale =
+        body.scale != null ? clampWatermarkScale(body.scale) : undefined;
     }
   }
 

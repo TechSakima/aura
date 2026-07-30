@@ -1,9 +1,13 @@
-export type ShootStatus =
+/** Session lifecycle status (formerly ShootStatus). */
+export type SessionStatus =
   | "inquiry"
   | "proposed"
   | "booked"
   | "delivered"
   | "archived";
+
+/** @deprecated Use SessionStatus */
+export type ShootStatus = SessionStatus;
 
 /** Project workflow stage (Pixieset-style). */
 export type ProjectStage =
@@ -60,15 +64,30 @@ export type AnalyticsEventType =
   | "favorite_toggle"
   | "booking_submitted"
   | "contract_signed"
-  | "payment_received";
+  | "payment_received"
+  | "payment_reversed";
 
 export type DateFormat = "mm/dd/yyyy" | "dd/mm/yyyy" | "yyyy-mm-dd";
 
-export type FontPresetId = "sans" | "serif" | "display";
+/** Curated display+body pairings (AURA-228). Legacy sans/serif/display kept. */
+export type FontPresetId =
+  | "sans"
+  | "serif"
+  | "display"
+  | "editorial"
+  | "modern"
+  | "soft";
 
-export type GalleryCoverStyle = "full" | "third" | "none";
+/** Cover treatments (AURA-244). */
+export type GalleryCoverStyle =
+  | "full"
+  | "third"
+  | "none"
+  | "immersive"
+  | "split-title";
 
-export type GalleryGridMode = "masonry" | "justified" | "columns";
+/** Shared with MediaGrid engine (AURA-246). */
+export type GalleryGridMode = "masonry" | "justified" | "columns" | "diary";
 
 export type GalleryThemeId =
   | "echo"
@@ -79,6 +98,72 @@ export type GalleryThemeId =
   | "obsidian"
   | "velvet"
   | "ember";
+
+/** Hero layout in gallery design doc — consumed by GalleryHero (AURA-241). */
+export type GalleryHeroLayout =
+  | "split"
+  | "centered"
+  | "vertical"
+  | "minimal"
+  | "cinematic";
+
+export type GalleryTitleTreatment =
+  | "display-light"
+  | "display-vertical"
+  | "sans-wide"
+  | "sans-tight";
+
+export type GalleryChromeVariant =
+  | "sticky-minimal"
+  | "floating"
+  | "bottom-bar"
+  | "branded";
+
+/**
+ * Gallery motion feel (AURA-252).
+ * `reduced` = calm (minimal motion); `full` = cinematic; `system` = OS preference.
+ */
+export type GalleryMotionPreference = "full" | "reduced" | "system";
+
+/** Photo spacing density (AURA-252). */
+export type GalleryDensityPreference = "compact" | "comfortable" | "airy";
+
+export type GalleryCoverModule = {
+  style: GalleryCoverStyle;
+  photoId?: string;
+  focalX?: number;
+  focalY?: number;
+  layout: GalleryHeroLayout;
+  titleTreatment: GalleryTitleTreatment;
+  showDate: boolean;
+  showDaysLeft: boolean;
+  showCta: boolean;
+  scrim?: "soft" | "strong";
+};
+
+export type GalleryChromeModule = {
+  variant: GalleryChromeVariant;
+  showStudioName: boolean;
+  showLogo: boolean;
+};
+
+export type GalleryGridModule = {
+  mode: GalleryGridMode;
+};
+
+export type GallerySelectsModule = {
+  showCount: boolean;
+  submitEnabled: boolean;
+};
+
+export type GalleryDownloadModule = {
+  emphasizePin: boolean;
+};
+
+/** First-visit guest tips (AURA-254). */
+export type GalleryCoachModule = {
+  enabled: boolean;
+};
 
 export type ContractStatus =
   | "draft"
@@ -92,6 +177,13 @@ export type InvoiceStatus =
   | "past_due"
   | "paid"
   | "canceled";
+
+export type PaymentTransactionStatus =
+  | "succeeded"
+  | "partially_refunded"
+  | "refunded"
+  | "disputed"
+  | "failed";
 
 export type PaymentLinkMode = "fixed" | "customer_chooses";
 
@@ -126,6 +218,155 @@ export type StudioTheme = {
   fontPreset: FontPresetId;
 };
 
+/** How social links render on public surfaces (AURA-222). */
+export type BrandSocialTreatment = "text" | "icons" | "pills";
+
+/** Logo variants in a studio brand kit. */
+export type BrandLogoVariants = {
+  /** Symbol / icon mark */
+  markUrl?: string;
+  /** Wordmark (name as type/image) */
+  wordmarkUrl?: string;
+  /** Combined mark + wordmark — preferred for nav */
+  lockupUrl?: string;
+  /** Light / inverted mark for dark covers */
+  invertedUrl?: string;
+};
+
+/**
+ * Persisted brand kit (AURA-222). Theme presets are starting kits;
+ * this document is the product source of truth after apply/customize.
+ * Legacy logoUrl / coverLogoUrl / theme / defaultCoverImageUrl stay mirrored.
+ */
+export type StudioBrandKit = {
+  /** Preset this kit was started from */
+  basePresetId?: string;
+  logos: BrandLogoVariants;
+  coverImageUrl?: string;
+  /** Curated display+body pairing (AURA-228) */
+  fonts: {
+    pairingId: FontPresetId;
+  };
+  background: string;
+  accent: string;
+  accentSecondary: string;
+  socialTreatment: BrandSocialTreatment;
+};
+
+/**
+ * Homepage collections layouts (AURA-231 / AURA-246).
+ * Shared engine: masonry | justified | columns | diary.
+ * `grid` aliases columns; list + cinematic stay homepage-specific.
+ */
+export type HomepageCollectionsLayout =
+  | "masonry"
+  | "justified"
+  | "columns"
+  | "diary"
+  | "grid"
+  | "list"
+  | "cinematic";
+export type HomepageSortOrder =
+  | "created_desc"
+  | "created_asc"
+  | "title_asc";
+
+/** Ordered homepage building blocks (AURA-223). */
+export type HomepageModuleType =
+  | "hero"
+  | "bio"
+  | "collections"
+  | "featuredGallery"
+  | "contact"
+  | "bookingCta"
+  | "customLinks"
+  | "footer";
+
+type HomepageModuleBase = {
+  id: string;
+  enabled: boolean;
+};
+
+/** Homepage hero layouts (AURA-230). */
+export type HomepageHeroVariant =
+  | "fullBleed"
+  | "split"
+  | "type"
+  | "lockup";
+
+export type HeroHomepageModule = HomepageModuleBase & {
+  type: "hero";
+  props: {
+    variant?: HomepageHeroVariant;
+    showLogo?: boolean;
+    showName?: boolean;
+    /** Booking PublicCta when bookingHref is available */
+    showCta?: boolean;
+  };
+};
+
+export type BioHomepageModule = HomepageModuleBase & {
+  type: "bio";
+  props: Record<string, never>;
+};
+
+export type CollectionsHomepageModule = HomepageModuleBase & {
+  type: "collections";
+  props: {
+    layout: HomepageCollectionsLayout;
+    sortOrder: HomepageSortOrder;
+  };
+};
+
+export type FeaturedGalleryHomepageModule = HomepageModuleBase & {
+  type: "featuredGallery";
+  props: {
+    galleryId?: string;
+  };
+};
+
+export type ContactHomepageModule = HomepageModuleBase & {
+  type: "contact";
+  props: {
+    showEmail: boolean;
+    showPhone: boolean;
+    showAddress: boolean;
+    showWebsite: boolean;
+    showSocialLinks: boolean;
+    showContactForm: boolean;
+  };
+};
+
+export type BookingCtaHomepageModule = HomepageModuleBase & {
+  type: "bookingCta";
+  props: Record<string, never>;
+};
+
+export type CustomLinksHomepageModule = HomepageModuleBase & {
+  type: "customLinks";
+  props: {
+    links: { id: string; label: string; url: string }[];
+  };
+};
+
+export type FooterHomepageModule = HomepageModuleBase & {
+  type: "footer";
+  props: {
+    showStudioName?: boolean;
+    showSocialLinks?: boolean;
+  };
+};
+
+export type StudioHomepageModule =
+  | HeroHomepageModule
+  | BioHomepageModule
+  | CollectionsHomepageModule
+  | FeaturedGalleryHomepageModule
+  | ContactHomepageModule
+  | BookingCtaHomepageModule
+  | CustomLinksHomepageModule
+  | FooterHomepageModule;
+
 export type StudioHomepageSettings = {
   enabled: boolean;
   slug: string;
@@ -133,6 +374,7 @@ export type StudioHomepageSettings = {
   /** Client-only flag from GET /api/studio — never persist. */
   hasPassword?: boolean;
   biography?: string;
+  /** @deprecated Prefer modules; mirrored from bio/contact/booking/collections. */
   showBiography: boolean;
   showSocialLinks: boolean;
   showWebsite: boolean;
@@ -141,21 +383,138 @@ export type StudioHomepageSettings = {
   showAddress: boolean;
   /** Show Book CTA linking to /book/{slug} */
   showBooking?: boolean;
-  /** Homepage portfolio layout */
-  layout?: "masonry" | "grid" | "list";
-  sortOrder: "created_desc" | "created_asc" | "title_asc";
+  /** Show contact form on public website (Phase 19 delivery). */
+  showContactForm?: boolean;
+  /** Homepage portfolio layout — mirrored from collections module */
+  layout?: HomepageCollectionsLayout;
+  sortOrder: HomepageSortOrder;
+  /**
+   * Ordered modules (AURA-223). Source of truth for composition;
+   * unknown types ignored on normalize. Toggle fields stay mirrored.
+   */
+  modules?: StudioHomepageModule[];
 };
 
+/** Color/font source for a gallery (AURA-251). Experience modules still use `themeId`. */
+export type GalleryBrandSource = "studio" | "gallery";
+
+/**
+ * Gallery experience document (AURA-239).
+ * Layout modules come from `themeId` packages; colors/fonts from `brandSource`
+ * (studio brand kit or gallery preset). Flat coverStyle/gridMode/coverPhoto* stay mirrored.
+ */
 export type GalleryDesign = {
+  themeId: GalleryThemeId;
+  /** Default `gallery` — override with studio brand kit colors/fonts. */
+  brandSource: GalleryBrandSource;
+  cover: GalleryCoverModule;
+  chrome: GalleryChromeModule;
+  grid: GalleryGridModule;
+  selects: GallerySelectsModule;
+  download: GalleryDownloadModule;
+  motion: GalleryMotionPreference;
+  density: GalleryDensityPreference;
+  coach: GalleryCoachModule;
+  /** Mirrored from cover.style */
   coverStyle: GalleryCoverStyle;
+  /** Mirrored from grid.mode */
+  gridMode: GalleryGridMode;
   coverPhotoId?: string;
   coverFocalX?: number;
   coverFocalY?: number;
-  themeId: GalleryThemeId;
-  gridMode: GalleryGridMode;
+  /** @deprecated Freeform — cleared on curated theme save */
   background?: string;
   accent?: string;
   appIconUrl?: string;
+};
+
+/** Studio-wide defaults for new galleries (AURA-334). */
+export type DownloadPinPolicy = "required" | "optional";
+
+export type StudioDeliveryDefaults = {
+  commentsEnabled: boolean;
+  watermarkEnabled: boolean;
+  /** Days from create/go-live until expiry. */
+  expiryDays: number;
+  /** Omit or undefined = no select limit. */
+  selectLimit?: number;
+  downloadPinPolicy: DownloadPinPolicy;
+  coverStyle: GalleryCoverStyle;
+  themeId: GalleryThemeId;
+  gridMode: GalleryGridMode;
+};
+
+/** Studio-wide booking setup defaults (AURA-336). */
+export type StudioBookingDefaults = {
+  /** Applied to new session types when buffer not set. */
+  defaultBufferMinutes: number;
+};
+
+/** Studio-wide payment / deposit defaults (AURA-339). */
+export type StudioPaymentDefaults = {
+  /** Fixed $ used when creating a project deposit if no session-type amount. */
+  defaultDepositAmount?: number;
+  /** Prefill title for new library payment links. */
+  defaultLinkTitle: string;
+};
+
+/** Public contact form delivery prefs (AURA-341 / AURA-310). */
+export type StudioContactPrefs = {
+  /** Inbox for contact messages; empty → ownerEmail. */
+  recipientEmail?: string;
+  /** Show contact form in gallery chrome (W11). */
+  showGalleryContactForm: boolean;
+  /** Send a short acknowledgment to the client (W11). */
+  autoReplyEnabled: boolean;
+  autoReplyMessage?: string;
+};
+
+/** Append-only public contact submission (AURA-305) — not loaded into AuraDatabase. */
+export type ContactMessage = {
+  id: string;
+  studioId: string;
+  source: "homepage" | "gallery" | "booking" | "other";
+  name: string;
+  email: string;
+  phone?: string;
+  message: string;
+  context?: string;
+  slug?: string;
+  galleryId?: string;
+  galleryToken?: string;
+  proposalToken?: string;
+  paymentLinkId?: string;
+  /** Resend delivery — filled by AURA-306 / outbox (AURA-313) */
+  emailStatus?: "pending" | "sent" | "skipped" | "failed" | "queued";
+  emailLastError?: string;
+  createdAt: string;
+};
+
+/**
+ * Durable email retry queue (AURA-313 contact; generalize in AURA-149).
+ * Not loaded into AuraDatabase / TENANT_COLLECTIONS.
+ */
+export type EmailOutboxJob = {
+  id: string;
+  studioId: string;
+  kind: "contact_message";
+  /** contactMessages doc id */
+  refId: string;
+  status: "pending" | "sent" | "dead";
+  attempts: number;
+  nextAttemptAt: string;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Legal / contract send defaults (AURA-345). */
+export type StudioLegalDefaults = {
+  /**
+   * Documents contract template for new sends (includes cancel policy).
+   * Quote package `contractTerms` remain quote-only — not used for signing.
+   */
+  defaultContractTemplateId?: string;
 };
 
 /** Job / engagement — formerly Client. */
@@ -190,7 +549,7 @@ export type WizardStepId =
   | "delivery"
   | "wrap";
 
-/** Dated occurrence under a Project — formerly Shoot. */
+/** Dated occurrence under a Project. */
 export type ProjectSession = {
   id: string;
   studioId: string;
@@ -200,7 +559,7 @@ export type ProjectSession = {
   startsAt?: string;
   /** ISO UTC end */
   endsAt?: string;
-  status: ShootStatus;
+  status: SessionStatus;
   proposalId?: string;
   galleryId?: string;
   intakeAnswers?: Record<string, string>;
@@ -333,6 +692,8 @@ export type Gallery = {
   favoritePhotoIds: string[];
   design?: GalleryDesign;
   showOnHomepage?: boolean;
+  /** Set when studio emails the gallery link (AURA-255). */
+  clientEmailedAt?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -369,6 +730,8 @@ export type Studio = {
   logoUrl?: string;
   coverLogoUrl?: string;
   defaultCoverImageUrl?: string;
+  /** Structured brand kit (AURA-222). Prefer over flat logo/theme fields. */
+  brandKit?: StudioBrandKit;
   brandTagline?: string;
   defaultWatermarkPresetId?: string;
   printPartners: PrintPartner[];
@@ -388,17 +751,37 @@ export type Studio = {
   dateFormat: DateFormat;
   theme?: StudioTheme;
   homepage?: StudioHomepageSettings;
+  /** Defaults applied when creating galleries. */
+  deliveryDefaults?: StudioDeliveryDefaults;
+  /** Booking setup defaults (buffer for new session types). */
+  bookingDefaults?: StudioBookingDefaults;
+  /** Payment / deposit defaults for new projects and link forms. */
+  paymentDefaults?: StudioPaymentDefaults;
+  /** Contact form delivery (recipient, gallery form, auto-reply). */
+  contactPrefs?: StudioContactPrefs;
+  /** Default contract template for new agreement sends. */
+  legalDefaults?: StudioLegalDefaults;
   socialLinks?: { label: string; url: string }[];
   /** Stripe Connect account id when onboarded */
   stripeAccountId?: string;
   stripeOnboardingComplete?: boolean;
+  /** Last live Connect account check (AURA-343). */
+  stripeConnectLastCheckedAt?: string;
+  /** Last Connect health error when incomplete or retrieve failed. */
+  stripeConnectLastError?: string;
   /** Google Calendar OAuth (refresh token stored server-side encrypted if needed) */
   googleCalendarRefreshToken?: string;
   googleCalendarConnected?: boolean;
+  /** Last successful GCal freeBusy/write (AURA-343). */
+  googleCalendarLastSyncAt?: string;
+  /** Last GCal sync/write failure message for Settings health. */
+  googleCalendarLastSyncError?: string;
   notificationPrefs?: {
     emailQuoteAccepted?: boolean;
     emailPaymentReceived?: boolean;
     emailBookingSubmitted?: boolean;
+    /** In-app bell + dashboard when a public contact arrives (AURA-311). */
+    emailContactMessage?: boolean;
     emailClientQuote?: boolean;
     emailClientGallery?: boolean;
     emailClientPayment?: boolean;
@@ -474,7 +857,8 @@ export type ShotItem = {
   flagged?: boolean;
 };
 
-export type ShootPlan = {
+/** Session prep plan (formerly ShootPlan). */
+export type SessionPlan = {
   id: string;
   studioId: string;
   sessionId: string;
@@ -489,6 +873,9 @@ export type ShootPlan = {
   createdAt: string;
   updatedAt: string;
 };
+
+/** @deprecated Use SessionPlan */
+export type ShootPlan = SessionPlan;
 
 export type StudioNotification = {
   id: string;
@@ -550,6 +937,16 @@ export type PaymentTransaction = {
   processingFee: number;
   grossAmount: number;
   stripePaymentIntentId?: string;
+  /** Checkout Session id (without `cs_` prefix duplication — raw `cs_…` from Stripe). */
+  stripeCheckoutSessionId?: string;
+  /** Defaults to succeeded for legacy rows. */
+  status?: PaymentTransactionStatus;
+  /** Cumulative gross dollars reversed (refunds). */
+  refundedGross?: number;
+  /** Cumulative net dollars removed from project.paidAmount. */
+  refundedNet?: number;
+  /** Stripe event ids already applied (idempotency). */
+  reversalEventIds?: string[];
   createdAt: string;
 };
 
@@ -687,9 +1084,31 @@ export type AdminContext = {
   email: string;
 };
 
+/** Matches Echo package in gallery-design-presets (AURA-240). */
 export const DEFAULT_GALLERY_DESIGN: GalleryDesign = {
-  coverStyle: "full",
   themeId: "echo",
+  brandSource: "gallery",
+  cover: {
+    style: "full",
+    layout: "split",
+    titleTreatment: "sans-wide",
+    showDate: true,
+    showDaysLeft: true,
+    showCta: true,
+    scrim: "soft",
+  },
+  chrome: {
+    variant: "sticky-minimal",
+    showStudioName: true,
+    showLogo: false,
+  },
+  grid: { mode: "masonry" },
+  selects: { showCount: true, submitEnabled: false },
+  download: { emphasizePin: true },
+  motion: "system",
+  density: "comfortable",
+  coach: { enabled: true },
+  coverStyle: "full",
   gridMode: "masonry",
 };
 

@@ -34,24 +34,24 @@ export function AlbumTile({
           <img
             src={coverUrl}
             alt=""
-            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+            className="h-full w-full object-cover transition-transform duration-emphasis group-hover:scale-[1.03]"
           />
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink to-accent/50" />
+          <div className="absolute inset-0 bg-gradient-to-br from-scrim via-scrim-strong to-accent/40" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/20 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 p-4 text-surface sm:p-5">
+        <div className="absolute inset-0 bg-gradient-to-t from-scrim-strong via-scrim/30 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-4 text-on-media sm:p-5">
           <p className={cn("font-display", featured ? "text-2xl sm:text-3xl" : "text-xl")}>
             {label}
           </p>
-          {meta ? <p className="mt-1 text-sm text-surface/75">{meta}</p> : null}
+          {meta ? <p className="mt-1 text-sm text-on-media-muted">{meta}</p> : null}
         </div>
       </div>
     </>
   );
 
   const shared = cn(
-    "group block w-full overflow-hidden bg-ink text-left no-underline",
+    "group block w-full overflow-hidden bg-canvas text-left no-underline",
     featured && "sm:col-span-2",
     className,
   );

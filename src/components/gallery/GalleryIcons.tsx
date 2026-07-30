@@ -1,7 +1,7 @@
 "use client";
 
 import type { MouseEvent, ReactNode, SVGProps } from "react";
-import { cn } from "@/lib/cn";
+import { IconButton } from "@/components/ui/icon-button";
 
 function IconBase({
   size = 18,
@@ -64,34 +64,44 @@ export function IconShare({ size = 18 }: { size?: number }) {
   );
 }
 
-/** Pixieset-style: icon + text label, not icon-only mystery glyphs. */
+export function IconMessage({ size = 18 }: { size?: number }) {
+  return (
+    <IconBase size={size}>
+      <path d="M4 6h16v10a1 1 0 0 1-1 1H8l-4 3V6z" />
+    </IconBase>
+  );
+}
+
+/** Gallery chrome: IconButton + label (AURA-217). */
 export function GalleryNavItem({
   label,
   onClick,
   children,
   active,
+  className,
+  tone,
 }: {
   label: string;
   onClick: () => void;
   children: ReactNode;
   active?: boolean;
+  className?: string;
+  tone?: "default" | "onAccent";
 }) {
   return (
-    <button
-      type="button"
+    <IconButton
+      label={label}
+      active={active}
       onClick={onClick}
-      className={cn(
-        "inline-flex h-10 items-center gap-2 px-2.5 text-[11px] font-medium uppercase tracking-[0.16em] transition",
-        active ? "text-ink" : "text-ink/65 hover:text-ink",
-      )}
+      className={className}
+      tone={tone}
     >
-      <span className="inline-flex shrink-0">{children}</span>
-      <span className="hidden sm:inline">{label}</span>
-    </button>
+      {children}
+    </IconButton>
   );
 }
 
-/** Photo hover: readable labeled actions, not micro-icons. */
+/** Photo tile: same IconButton recipe, on-media hover (≥44px). */
 export function GalleryTileAction({
   label,
   onClick,
@@ -102,14 +112,12 @@ export function GalleryTileAction({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
+    <IconButton
+      label={label}
       onClick={onClick}
-      className="inline-flex h-9 items-center gap-1.5 px-2.5 text-[10px] font-medium uppercase tracking-[0.14em] text-ink transition hover:bg-ink/5"
+      className="min-h-11 min-w-11 rounded-none text-[10px] tracking-[0.14em] hover:bg-ink/5"
     >
-      <span className="inline-flex shrink-0">{children}</span>
-      <span className="hidden md:inline">{label}</span>
-    </button>
+      {children}
+    </IconButton>
   );
 }

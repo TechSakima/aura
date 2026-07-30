@@ -1,9 +1,14 @@
-import { NextResponse } from "next/server";
-import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
+import {
+  clampBufferMinutes,
+  studioBookingDefaults,
+} from "@/lib/booking-defaults";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { studioGoogleCalendarReady } from "@/lib/google-calendar";
 import { toDurationMinutes } from "@/lib/session-duration";
 import type { SessionDurationUnit, SessionType } from "@/lib/types";
+import { NextResponse } from "next/server";
+import { nanoid } from "nanoid";
 
 export async function GET() {
   const admin = await requireAdmin();
@@ -58,7 +63,7 @@ export async function GET() {
     sessions,
     bookingRequests,
     homepageSlug: db.studio.homepage?.slug,
-    gcalConnected: Boolean(db.studio.googleCalendarConnected),
+    gcalConnected: studioGoogleCalendarReady(db.studio),
     questionnaireTemplates: db.questionnaireTemplates.map((t) => ({
       id: t.id,
       name: t.name,
@@ -74,6 +79,8 @@ export async function POST(req: Request) {
   if (!name) {
     return NextResponse.json({ error: "Name required" }, { status: 400 });
   }
+  const db = await readStudioDb(admin.studioId);
+  const defaults = studioBookingDefaults(db.studio);
   const now = new Date().toISOString();
   const pricingMode =
     body.pricingMode === "upfront" ? "upfront" : "after_intake";
@@ -89,13 +96,18 @@ export async function POST(req: Request) {
     body.durationValue !== undefined && body.durationValue !== null
       ? Number(body.durationValue)
       : Number(body.durationMinutes) || 60;
+  const bufferMinutes = clampBufferMinutes(
+    body.bufferMinutes != null && Number.isFinite(Number(body.bufferMinutes))
+      ? body.bufferMinutes
+      : defaults.defaultBufferMinutes,
+  );
   const sessionType: SessionType = {
     id: nanoid(),
     studioId: admin.studioId,
     name,
     durationMinutes: toDurationMinutes(durationValue, durationUnit),
     durationUnit,
-    bufferMinutes: Number(body.bufferMinutes) || 15,
+    bufferMinutes,
     basePrice: Number(body.basePrice) || 0,
     description: body.description ? String(body.description) : undefined,
     pricingMode,
@@ -155,7 +167,7 @@ export async function PATCH(req: Request) {
       t.basePrice = Number(body.basePrice);
     }
     if (body.bufferMinutes != null && Number.isFinite(Number(body.bufferMinutes))) {
-      t.bufferMinutes = Number(body.bufferMinutes);
+      t.bufferMinutes = clampBufferMinutes(body.bufferMinutes);
     }
     if (body.pricingMode === "upfront" || body.pricingMode === "after_intake") {
       t.pricingMode = body.pricingMode;

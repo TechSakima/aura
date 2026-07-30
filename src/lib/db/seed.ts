@@ -31,6 +31,8 @@ export function createEmptyStudio(opts: {
       showEmail: true,
       showPhone: true,
       showAddress: false,
+      showBooking: true,
+      showContactForm: false,
       sortOrder: "created_desc",
     },
     socialLinks: [],

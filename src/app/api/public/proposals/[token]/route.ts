@@ -5,8 +5,10 @@ import {
   updateStudioDb,
 } from "@/lib/db/store";
 import { recordEvent } from "@/lib/analytics";
-import { resolveMediaUrl } from "@/lib/media-url";
+import { resolveBrowseMediaUrl, resolveBrowseMediaUrls } from "@/lib/media-url-server";
 import { notifyQuoteAccepted } from "@/lib/notify/send";
+import { assertPublicProposalAccess } from "@/lib/public-access";
+import { resolveQuoteAcceptNext } from "@/lib/workflow/quote-next";
 
 export async function GET(
   _req: Request,
@@ -21,6 +23,15 @@ export async function GET(
   const db = await readStudioDb(hit.studioId);
   const proposal = db.proposals.find((p) => p.token === token);
   if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const access = await assertPublicProposalAccess(proposal);
+  if (!access.ok) {
+    return NextResponse.json(
+      { error: access.error },
+      { status: access.status },
+    );
+  }
+
   const session = db.sessions.find(
     (s) => s.id === (proposal.sessionId || proposal.shootId),
   );
@@ -28,23 +39,43 @@ export async function GET(
     ? db.projects.find((c) => c.id === session.projectId)
     : db.projects.find((c) => c.id === proposal.projectId) || null;
 
-  await recordEvent({
-    type: "proposal_view",
-    studioId: proposal.studioId,
-    proposalId: proposal.id,
-    shootId: proposal.shootId,
-  });
+  if (!access.preview) {
+    await recordEvent({
+      type: "proposal_view",
+      studioId: proposal.studioId,
+      proposalId: proposal.id,
+      shootId: proposal.shootId,
+    });
+  }
+
+  const next =
+    proposal.status === "accepted"
+      ? resolveQuoteAcceptNext(db, project?.id || proposal.projectId)
+      : undefined;
+
+  const moodBoard = await resolveBrowseMediaUrls(
+    proposal.moodBoard.map((m) => m.url),
+  );
+  const moodItems = proposal.moodBoard.map((m, i) => ({
+    ...m,
+    url: moodBoard[i] || m.url,
+  }));
 
   return NextResponse.json({
     proposal: {
       ...proposal,
+      moodBoard: moodItems,
     },
     studio: {
       name: db.studio.name,
-      logoUrl: resolveMediaUrl(db.studio.logoUrl),
+      logoUrl: await resolveBrowseMediaUrl(db.studio.logoUrl),
       brandTagline: db.studio.brandTagline,
+      theme: db.studio.theme,
     },
     clientName: project?.name,
+    projectName: project?.name,
+    preview: access.preview || undefined,
+    next,
   });
 }
 
@@ -61,6 +92,14 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const access = await assertPublicProposalAccess(hit, { accept: true });
+  if (!access.ok) {
+    return NextResponse.json(
+      { error: access.error },
+      { status: access.status },
+    );
+  }
+
   const result = await updateStudioDb(hit.studioId, (db) => {
     const proposal = db.proposals.find((p) => p.token === token);
     if (!proposal) return null;
@@ -71,6 +110,9 @@ export async function POST(
         projectId: proposal.projectId as string | undefined,
         clientName: null as string | null,
       };
+    }
+    if (proposal.status !== "sent") {
+      return null;
     }
     proposal.intakeAnswers = body.intakeAnswers || {};
     proposal.selectedTierId = body.selectedTierId;
@@ -120,5 +162,8 @@ export async function POST(
     });
   }
 
-  return NextResponse.json({ proposal: result.proposal });
+  const db = await readStudioDb(hit.studioId);
+  const next = resolveQuoteAcceptNext(db, result.projectId);
+
+  return NextResponse.json({ proposal: result.proposal, next });
 }

@@ -9,7 +9,8 @@ import { DeliveryStep } from "@/components/wizard/steps/DeliveryStep";
 import { PrepStep } from "@/components/wizard/steps/PrepStep";
 import { ShootDayStep } from "@/components/wizard/steps/ShootDayStep";
 import { WrapStep } from "@/components/wizard/steps/WrapStep";
-import { useToast } from "@/components/ui";
+import { EmptyState, useToast } from "@/components/ui";
+
 import type { WizardStepId } from "@/lib/types";
 import { SESSION_TOOL_STEPS } from "@/lib/wizard/steps";
 
@@ -55,6 +56,10 @@ function WizardInner() {
       push("Could not update session", "danger");
       return false;
     }
+    const data = await res.json().catch(() => ({}));
+    if (data.calendarSyncFailed) {
+      push("Saved · calendar not updated", "danger");
+    }
     await reload();
     return true;
   }
@@ -84,7 +89,7 @@ function WizardInner() {
       router.push(`/admin/projects/${projectId}`);
       return;
     }
-    if (step === "prep" && !data.plan && !data.shoot.wizardSkippedPrep) {
+    if (step === "prep" && !data.plan && !data.session?.wizardSkippedPrep) {
       push("Create a plan or skip prep", "danger");
       return;
     }
@@ -111,27 +116,43 @@ function WizardInner() {
   }
 
   if (requested === "intake" || requested === "proposal") {
-    return <p className="text-muted">Opening project workflow…</p>;
+    return (
+      <EmptyState variant="loading" title="Opening project workflow…" />
+    );
   }
 
-  if (loading) return <p className="text-muted">Loading session…</p>;
-  if (error || !data) return <p className="text-danger">{error || "Not found"}</p>;
-  const ownerId = data.client?.id || data.shoot.projectId || data.shoot.clientId;
+  if (loading) {
+    return <EmptyState variant="loading" title="Loading session…" />;
+  }
+  if (error || !data) {
+    return <EmptyState variant="error" title={error || "Not found"} />;
+  }
+  const session = data.session;
+  if (!session) {
+    return <EmptyState variant="error" title="Not found" />;
+  }
+  const project = data.project;
+  const ownerId = project?.id || session.projectId || session.clientId;
   if (ownerId && ownerId !== projectId) {
-    return <p className="text-danger">This session belongs to another project.</p>;
+    return (
+      <EmptyState
+        variant="error"
+        title="This session belongs to another project."
+      />
+    );
   }
 
-  const projectName = data.client?.name || "Project";
+  const projectName = project?.name || "Project";
   const toolUnlocked = data.unlocked.filter((id) => TOOL_IDS.has(id));
 
   return (
     <ShootWizardShell
       projectId={projectId}
       projectName={projectName}
-      sessionType={data.shoot.type}
+      sessionType={session.type}
       sessionDate={
-        data.shoot.startsAt?.slice(0, 10) ||
-        (data.shoot as { shootDate?: string }).shootDate
+        session.startsAt?.slice(0, 10) ||
+        (session as { shootDate?: string }).shootDate
       }
       quoteToken={data.proposal?.token}
       galleryToken={data.gallery?.publicToken}
@@ -148,7 +169,7 @@ function WizardInner() {
     >
       {step === "prep" ? (
         <PrepStep
-          shoot={data.shoot}
+          shoot={session}
           plan={data.plan}
           templates={data.templates}
           onChanged={reload}
@@ -156,15 +177,16 @@ function WizardInner() {
       ) : null}
       {step === "shoot-day" ? (
         <ShootDayStep
-          shoot={data.shoot}
+          shoot={session}
           plan={data.plan}
           onChanged={reload}
         />
       ) : null}
       {step === "delivery" ? (
         <DeliveryStep
-          shoot={data.shoot}
+          shoot={session}
           clientName={projectName}
+          projectEmail={project?.email}
           gallery={data.gallery}
           photos={data.photos}
           watermarkPresets={data.watermarkPresets}
@@ -173,7 +195,7 @@ function WizardInner() {
       ) : null}
       {step === "wrap" ? (
         <WrapStep
-          shoot={data.shoot}
+          shoot={session}
           gallery={data.gallery}
           photoCount={data.photoCount}
           favoriteCount={data.gallery?.favoritePhotoIds?.length || 0}
@@ -186,7 +208,9 @@ function WizardInner() {
 
 export default function ProjectSessionWizardPage() {
   return (
-    <Suspense fallback={<p className="text-muted">Loading session…</p>}>
+    <Suspense
+      fallback={<EmptyState variant="loading" title="Loading session…" />}
+    >
       <WizardInner />
     </Suspense>
   );

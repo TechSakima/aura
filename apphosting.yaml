@@ -67,11 +67,47 @@ env:
     secret: RESEND_API_KEY
     availability:
       - RUNTIME
+  # Inbound receiving host (docs/RESEND.md Tier 3). Webhook/cron secrets:
+  #   npx firebase apphosting:secrets:set RESEND_WEBHOOK_SECRET
+  #   npx firebase apphosting:secrets:set CRON_SECRET
+  # then grant to the backend and uncomment the secret blocks below.
+  - variable: RESEND_INBOUND_DOMAIN
+    value: inbound.aura.stroburm.app
+    availability:
+      - RUNTIME
+  # - variable: RESEND_WEBHOOK_SECRET
+  #   secret: RESEND_WEBHOOK_SECRET
+  #   availability:
+  #     - RUNTIME
+  # - variable: CRON_SECRET
+  #   secret: CRON_SECRET
+  #   availability:
+  #     - RUNTIME
   - variable: STRIPE_SECRET_KEY
     secret: STRIPE_SECRET_KEY
     availability:
       - RUNTIME
   - variable: STRIPE_WEBHOOK_SECRET
     secret: STRIPE_WEBHOOK_SECRET
+    availability:
+      - RUNTIME
+  # Cloudflare R2 (AURA-358) — secrets via:
+  #   firebase apphosting:secrets:set R2_ACCOUNT_ID --data-file -
+  #   firebase apphosting:secrets:set R2_ACCESS_KEY_ID --data-file -
+  #   firebase apphosting:secrets:set R2_SECRET_ACCESS_KEY --data-file -
+  - variable: R2_ACCOUNT_ID
+    secret: R2_ACCOUNT_ID
+    availability:
+      - RUNTIME
+  - variable: R2_ACCESS_KEY_ID
+    secret: R2_ACCESS_KEY_ID
+    availability:
+      - RUNTIME
+  - variable: R2_SECRET_ACCESS_KEY
+    secret: R2_SECRET_ACCESS_KEY
+    availability:
+      - RUNTIME
+  - variable: R2_BUCKET
+    value: aura-media
     availability:
       - RUNTIME

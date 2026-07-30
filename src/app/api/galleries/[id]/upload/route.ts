@@ -79,10 +79,10 @@ export async function POST(
           videoUrl,
           mimeType: mime || "video/mp4",
           sortOrder: sortBase++,
-          aspect: 16 / 9,
+          aspect: 1,
           version: 1,
-          width: 1920,
-          height: 1080,
+          width: 1,
+          height: 1,
           createdAt: now,
           updatedAt: now,
         });
@@ -119,7 +119,14 @@ export async function POST(
       coverPhotoUrl: needsCover ? created[0]!.watermarkedUrl : undefined,
     });
 
-    return NextResponse.json({ photos: created });
+    const unprotectedCount = created.filter(
+      (p) => (p as { watermarkUnprotected?: boolean }).watermarkUnprotected,
+    ).length;
+
+    return NextResponse.json({
+      photos: created,
+      watermarkUnprotected: unprotectedCount > 0 || undefined,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Upload failed";
     console.error("[galleries/upload]", message, e);

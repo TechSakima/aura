@@ -2,7 +2,12 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { StudioMark } from "@/components/brand/StudioMark";
+import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
+import { PublicSuccess } from "@/components/public/PublicSuccess";
+import { PublicShell } from "@/components/shells/PublicShell";
 import { Button, Field, Input, Label } from "@/components/ui";
+import { grossUpAmount } from "@/lib/stripe-fees";
 
 export default function PublicPayPage() {
   const params = useParams<{ id: string }>();
@@ -24,11 +29,21 @@ export default function PublicPayPage() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [done, setDone] = useState(false);
+  const [paidGross, setPaidGross] = useState<number | null>(null);
+  const [canceled, setCanceled] = useState(false);
+  const [checkoutReady, setCheckoutReady] = useState(true);
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    if (q.get("paid") === "1") setDone(true);
+    if (q.get("paid") === "1") {
+      setDone(true);
+      const raw = q.get("amount");
+      const n = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(n) && n > 0) setPaidGross(n);
+    }
+    if (q.get("canceled") === "1") setCanceled(true);
 
     fetch(`/api/public/pay/${params.id}`)
       .then((r) => r.json())
@@ -40,6 +55,7 @@ export default function PublicPayPage() {
             studioName: d.studioName,
             feePreview: d.feePreview,
           });
+          setCheckoutReady(d.checkoutReady !== false);
           if (d.paymentLink?.amount) setAmount(String(d.paymentLink.amount));
         }
       })
@@ -48,7 +64,10 @@ export default function PublicPayPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (pending || !checkoutReady) return;
     setError("");
+    setCanceled(false);
+    setPending(true);
     const res = await fetch(`/api/public/pay/${params.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -58,93 +77,146 @@ export default function PublicPayPage() {
         name,
       }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError(data.error || "Payment failed");
+      setPending(false);
+      setError(String(data.error || "Payment failed"));
       return;
     }
     if (data.checkoutUrl) {
       window.location.href = data.checkoutUrl as string;
       return;
     }
-    setDone(true);
+    setPending(false);
+    setError("Could not start checkout. Try again shortly.");
   }
 
   if (error && !link) {
-    return <p className="shell-pad py-16 text-center text-muted">{error}</p>;
+    return (
+      <PublicShell>
+        <p className="py-16 text-center text-muted">{error}</p>
+      </PublicShell>
+    );
   }
   if (!link) {
-    return <p className="shell-pad py-16 text-center text-muted">Loading…</p>;
+    return (
+      <PublicShell>
+        <p className="py-16 text-center text-muted">Loading…</p>
+      </PublicShell>
+    );
   }
   if (done) {
     return (
-      <div className="shell-pad mx-auto max-w-md py-20 text-center">
-        <h1 className="font-display text-3xl">Thank you</h1>
-        <p className="mt-2 text-muted">Payment received.</p>
-      </div>
+      <PublicShell>
+        <PublicSuccess title="Payment received">
+          {link.studioName ? (
+            <p>Payment to {link.studioName}</p>
+          ) : null}
+          {paidGross != null ? (
+            <p className="text-lg text-ink">Paid ${paidGross.toFixed(2)}</p>
+          ) : null}
+        </PublicSuccess>
+      </PublicShell>
     );
   }
 
-  const previewNet = Number(amount) || link.amount || 0;
-  const gross =
-    link.feePreview?.grossAmount ??
-    (previewNet > 0 ? previewNet * 1.03 : 0); // fallback approx if preview missing
+  let feePreview = link.mode === "fixed" ? link.feePreview ?? null : null;
+  if (!feePreview) {
+    const net = Number(amount);
+    if (Number.isFinite(net) && net > 0) feePreview = grossUpAmount(net);
+  }
+
   const payLabel = link.studioName
     ? `Pay ${link.studioName}`
     : "Pay now";
 
   return (
-    <div className="shell-pad mx-auto max-w-md py-16">
-      <h1 className="font-display text-4xl">{link.title}</h1>
-      {link.studioName ? (
-        <p className="mt-2 text-sm text-muted">Payment to {link.studioName}</p>
-      ) : null}
-      {link.description ? (
-        <p className="mt-2 text-muted">{link.description}</p>
-      ) : null}
-      <form onSubmit={onSubmit} className="mt-8 space-y-4">
-        <Field>
-          <Label htmlFor="name">Name</Label>
-          <Input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </Field>
-        <Field>
-          <Label htmlFor="email">Email for receipt</Label>
-          <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </Field>
-        <Field>
-          <Label htmlFor="amount">Amount</Label>
-          <Input
-            id="amount"
-            type="number"
-            min={link.minAmount || 1}
-            max={link.maxAmount}
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            disabled={link.mode === "fixed"}
-            required
-          />
-        </Field>
-        <p className="text-sm text-muted">
-          You’ll be charged about $
-          {(link.feePreview?.grossAmount ?? gross).toFixed(2)} (includes card
-          fee).
-        </p>
-        {error ? <p className="text-sm text-danger">{error}</p> : null}
-        <Button type="submit" className="w-full">
-          {payLabel}
-        </Button>
-      </form>
-    </div>
+    <PublicShell>
+      <div className="mx-auto max-w-md">
+        {link.studioName ? (
+          <StudioMark name={link.studioName} tone="dark" className="mb-2" />
+        ) : null}
+        <h1 className="font-display text-4xl">{link.title}</h1>
+        {link.studioName ? (
+          <p className="mt-2 text-sm text-muted">Payment to {link.studioName}</p>
+        ) : null}
+        {link.description ? (
+          <p className="mt-2 text-muted">{link.description}</p>
+        ) : null}
+        {canceled ? (
+          <p className="mt-4 border border-line bg-surface px-4 py-3 text-sm text-muted">
+            Checkout canceled. You can try again.
+          </p>
+        ) : null}
+        {!checkoutReady ? (
+          <>
+            <p className="mt-4 text-sm text-muted">
+              Payments aren’t available yet.
+            </p>
+            {link.studioName ? (
+              <PublicSoftFailureContact
+                studioName={link.studioName}
+                source="other"
+                paymentLinkId={params.id}
+                context={link.title || "Payment"}
+              />
+            ) : null}
+          </>
+        ) : (
+          <form onSubmit={onSubmit} className="mt-8 space-y-4">
+            <Field>
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={pending}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor="email">Email for receipt</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={pending}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor="amount">Amount</Label>
+              <Input
+                id="amount"
+                type="number"
+                min={link.minAmount || 1}
+                max={link.maxAmount}
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                disabled={link.mode === "fixed" || pending}
+                required
+              />
+            </Field>
+            {feePreview ? (
+              <p className="text-sm text-muted">
+                You’ll be charged ${feePreview.grossAmount.toFixed(2)} (includes
+                card fee).
+              </p>
+            ) : null}
+            {error ? <p className="text-sm text-danger">{error}</p> : null}
+            <Button
+              type="submit"
+              className="w-full min-h-11"
+              pending={pending}
+              pendingLabel="Starting checkout…"
+              disabled={pending}
+            >
+              {payLabel}
+            </Button>
+          </form>
+        )}
+      </div>
+    </PublicShell>
   );
 }

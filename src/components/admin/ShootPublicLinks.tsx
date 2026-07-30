@@ -1,17 +1,12 @@
 "use client";
 
-import { Button, useToast } from "@/components/ui";
+import { Button, ButtonLink, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 function absoluteUrl(path: string) {
   if (typeof window === "undefined") return path;
   return `${window.location.origin}${path}`;
 }
-
-const linkClass = {
-  sm: "inline-flex min-h-9 items-center rounded-md border border-line bg-ink px-3 text-sm text-surface no-underline hover:opacity-90",
-  md: "inline-flex min-h-11 items-center rounded-md border border-line bg-ink px-4 text-sm text-surface no-underline hover:opacity-90",
-} as const;
 
 export function ShootPublicLinks({
   quoteToken,
@@ -45,14 +40,9 @@ export function ShootPublicLinks({
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
       {quoteHref ? (
         <>
-          <a
-            href={quoteHref}
-            target="_blank"
-            rel="noreferrer"
-            className={linkClass[size]}
-          >
+          <ButtonLink href={quoteHref} target="_blank" rel="noreferrer" tone="neutral" size={size}>
             View quote
-          </a>
+          </ButtonLink>
           {showCopy ? (
             <Button
               type="button"
@@ -67,14 +57,9 @@ export function ShootPublicLinks({
       ) : null}
       {galleryHref ? (
         <>
-          <a
-            href={galleryHref}
-            target="_blank"
-            rel="noreferrer"
-            className={linkClass[size]}
-          >
+          <ButtonLink href={galleryHref} target="_blank" rel="noreferrer" tone="neutral" size={size}>
             View gallery
-          </a>
+          </ButtonLink>
           {showCopy ? (
             <Button
               type="button"

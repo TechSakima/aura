@@ -1,20 +1,28 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Button,
+  ButtonLink,
   Card,
   Cluster,
   Dialog,
+  EmptyState,
   Field,
   Input,
   Label,
   PageHeader,
+  Panel,
   Select,
   Stack,
+  StatusBadge,
   useConfirm,
   useToast,
 } from "@/components/ui";
+
+
 import type {
   Invoice,
   PaymentLinkTemplate,
@@ -34,17 +42,18 @@ type EditDraft = {
 export default function PaymentsPage() {
   const { push } = useToast();
   const { confirm } = useConfirm();
+  const router = useRouter();
   const [links, setLinks] = useState<PaymentLinkTemplate[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tx, setTx] = useState<PaymentTransaction[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("Deposit");
   const [amount, setAmount] = useState("200");
   const [mode, setMode] = useState<"fixed" | "customer_chooses">("fixed");
   const [projectId, setProjectId] = useState("");
   const [stripeConfigured, setStripeConfigured] = useState(true);
   const [stripeReady, setStripeReady] = useState(false);
-  const [stripeAccount, setStripeAccount] = useState<string | null>(null);
   const [emailTarget, setEmailTarget] = useState<PaymentLinkTemplate | null>(
     null,
   );
@@ -54,11 +63,13 @@ export default function PaymentsPage() {
   const [editBusy, setEditBusy] = useState(false);
 
   async function load() {
-    const [res, connect, projs] = await Promise.all([
+    const [res, connect, projs, studioRes] = await Promise.all([
       fetch("/api/payments/links"),
       fetch("/api/payments/connect"),
-      fetch("/api/clients"),
+      fetch("/api/projects"),
+      fetch("/api/studio"),
     ]);
+    setLoading(false);
     if (!res.ok) {
       push("Could not load payments", "danger");
       return;
@@ -71,40 +82,37 @@ export default function PaymentsPage() {
       const c = await connect.json().catch(() => ({}));
       setStripeConfigured(c.stripeConfigured !== false);
       setStripeReady(Boolean(c.onboardingComplete));
-      setStripeAccount(c.accountId || null);
     }
     if (projs.ok) {
       const p = await projs.json();
-      setProjects(p.projects || p.clients || []);
+      setProjects(p.projects || []);
+    }
+    if (studioRes.ok) {
+      const s = await studioRes.json().catch(() => ({}));
+      const d = s.studio?.paymentDefaults as
+        | { defaultDepositAmount?: number; defaultLinkTitle?: string }
+        | undefined;
+      if (d?.defaultLinkTitle) setTitle(d.defaultLinkTitle);
+      if (
+        d?.defaultDepositAmount != null &&
+        Number.isFinite(d.defaultDepositAmount) &&
+        d.defaultDepositAmount > 0
+      ) {
+        setAmount(String(d.defaultDepositAmount));
+      }
     }
   }
 
   useEffect(() => {
-    void load();
     const q = new URLSearchParams(window.location.search);
-    if (q.get("connect") === "return") {
-      void fetch("/api/payments/connect", { method: "PUT" }).then(() => load());
-    }
-  }, []);
-
-  async function startConnect() {
-    const res = await fetch("/api/payments/connect", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "onboard" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      push(String(data.error || "Connect failed"), "danger");
+    const connect = q.get("connect");
+    if (connect === "return" || connect === "refresh") {
+      router.replace(`/admin/settings/payments?connect=${connect}`);
       return;
     }
-    if (data.url) {
-      window.location.href = data.url as string;
-      return;
-    }
-    push(data.note || "Stripe Connect ready", "success");
     void load();
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once
+  }, []);
 
   async function createLink(e: FormEvent) {
     e.preventDefault();
@@ -125,7 +133,6 @@ export default function PaymentsPage() {
       return;
     }
     push("Payment link created", "success");
-    setTitle("Deposit");
     setProjectId("");
     void load();
   }
@@ -248,30 +255,32 @@ export default function PaymentsPage() {
     <div className="space-y-10">
       <PageHeader
         title="Payments"
-        description="Reusable payment links and invoices. Processing fees are passed through so you receive the listed amount."
+        description="Reusable payment links and project deposits."
       />
 
       <Stack gap="gap-8">
-        <Card className="w-full max-w-lg p-5">
-          <Stack gap="gap-3">
-            <h2 className="font-display text-2xl">Stripe Connect</h2>
-            <p className="text-sm text-muted">
-              {!stripeConfigured
-                ? "Payments aren’t available yet."
-                : stripeReady
-                  ? `Connected${stripeAccount ? ` · ${stripeAccount}` : ""}.`
-                  : "Connect to accept card payments."}
-            </p>
-            <Button
-              type="button"
-              tone="neutral"
-              disabled={!stripeConfigured}
-              onClick={() => void startConnect()}
+        <div className="flex max-w-lg flex-col gap-3 border-y border-line py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted">
+            {!stripeConfigured
+              ? "Payments aren’t available yet."
+              : stripeReady
+                ? "Card payments on"
+                : "Set up card payments in Settings."}
+          </p>
+          {stripeConfigured ? (
+            <ButtonLink
+              href={
+                stripeReady
+                  ? "/admin/settings/payments#defaults"
+                  : "/admin/settings/payments"
+              }
+              tone={stripeReady ? "ghost" : "neutral"}
+              className="min-h-11 shrink-0"
             >
-              {stripeReady ? "Manage Connect" : "Connect Stripe"}
-            </Button>
-          </Stack>
-        </Card>
+              {stripeReady ? "Payment settings" : "Set up payments"}
+            </ButtonLink>
+          ) : null}
+        </div>
 
         <Card className="w-full max-w-lg p-5">
           <h2 className="mb-4 font-display text-2xl">New payment link</h2>
@@ -334,63 +343,66 @@ export default function PaymentsPage() {
 
       <section className="space-y-4">
         <h2 className="font-display text-2xl">Payment links</h2>
-        {links.length === 0 ? (
-          <p className="border-y border-line py-4 text-sm text-muted">
-            No links yet.
-          </p>
+        {loading ? (
+          <EmptyState variant="loading" title="Loading payments…" />
+        ) : links.length === 0 ? (
+          <EmptyState
+            variant="inline"
+            title="No links yet."
+            className="border-y border-line py-4"
+          />
         ) : (
           <ul className="space-y-4">
             {links.map((l) => {
               const linked = projectName(l.projectId);
               return (
-                <li
-                  key={l.id}
-                  className="border border-line bg-surface p-4 sm:p-5"
-                >
-                  <Stack gap="gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium">{l.title}</p>
-                      <p className="mt-1 text-sm text-muted">
-                        {amountLabel(l)}
-                        {l.active === false ? " · Inactive" : ""}
-                        {linked ? ` · ${linked}` : ""}
-                      </p>
-                    </div>
-                    <Cluster gap="gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        tone="neutral"
-                        onClick={() => void copyLink(l)}
-                      >
-                        Copy link
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        tone="ghost"
-                        onClick={() => openEmail(l)}
-                      >
-                        Email link
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        tone="ghost"
-                        onClick={() => openEdit(l)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        tone="danger"
-                        onClick={() => void archiveLink(l)}
-                      >
-                        Archive
-                      </Button>
-                    </Cluster>
-                  </Stack>
+                <li key={l.id}>
+                  <Panel variant="interactive" className="sm:p-5">
+                    <Stack gap="gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium">{l.title}</p>
+                        <p className="mt-1 text-sm text-muted">
+                          {amountLabel(l)}
+                          {l.active === false ? " · Inactive" : ""}
+                          {linked ? ` · ${linked}` : ""}
+                        </p>
+                      </div>
+                      <Cluster gap="gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          tone="neutral"
+                          onClick={() => void copyLink(l)}
+                        >
+                          Copy link
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          tone="ghost"
+                          onClick={() => openEmail(l)}
+                        >
+                          Email link
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          tone="ghost"
+                          onClick={() => openEdit(l)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          tone="danger"
+                          onClick={() => void archiveLink(l)}
+                        >
+                          Archive
+                        </Button>
+                      </Cluster>
+                    </Stack>
+                  </Panel>
                 </li>
               );
             })}
@@ -401,35 +413,39 @@ export default function PaymentsPage() {
       <section className="space-y-4">
         <h2 className="font-display text-2xl">Transactions</h2>
         {tx.length === 0 ? (
-          <p className="border-y border-line py-4 text-sm text-muted">
-            No payments yet.
-          </p>
+          <EmptyState
+            variant="inline"
+            title="No payments yet."
+            className="border-y border-line py-4"
+          />
         ) : (
           <ul className="space-y-3">
             {tx.map((t) => {
               const linked = projectName(t.projectId);
               return (
-                <li
-                  key={t.id}
-                  className="border border-line bg-surface p-4 text-sm"
-                >
-                  <p className="font-medium">
-                    ${t.netAmount.toFixed(2)} net
-                  </p>
-                  <p className="mt-1 text-muted">
-                    Paid ${t.grossAmount.toFixed(2)} · fee $
-                    {t.processingFee.toFixed(2)}
-                    {linked ? ` · ${linked}` : ""}
-                  </p>
-                  <p className="mt-1 text-xs text-muted">
-                    {new Date(t.createdAt).toLocaleString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </p>
+                <li key={t.id}>
+                  <Panel className="text-sm">
+                    <p className="font-medium">
+                      ${t.netAmount.toFixed(2)} net
+                    </p>
+                    <p className="mt-1 text-muted">
+                      Paid ${t.grossAmount.toFixed(2)} · fee $
+                      {t.processingFee.toFixed(2)}
+                      {linked ? ` · ${linked}` : ""}
+                      {t.status && t.status !== "succeeded"
+                        ? ` · ${t.status.replace(/_/g, " ")}`
+                        : ""}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      {new Date(t.createdAt).toLocaleString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </Panel>
                 </li>
               );
             })}
@@ -438,25 +454,47 @@ export default function PaymentsPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="font-display text-2xl">Invoices</h2>
-        {invoices.length === 0 ? (
-          <p className="border-y border-line py-4 text-sm text-muted">
-            Create invoices from a project.
-          </p>
+        <h2 className="font-display text-2xl">Deposits</h2>
+        {loading ? (
+          <EmptyState variant="loading" title="Loading deposits…" />
+        ) : invoices.length === 0 ? (
+          <EmptyState
+            title="No deposits yet"
+            description="Open a project and use Deposit to create a pay link. It will show up here."
+            action={
+              <Link href="/admin/projects">
+                <Button tone="neutral">Open projects</Button>
+              </Link>
+            }
+          />
         ) : (
           <ul className="space-y-3">
             {invoices.map((inv) => {
               const linked = projectName(inv.projectId);
               return (
-                <li
-                  key={inv.id}
-                  className="border border-line bg-surface p-4 text-sm"
-                >
-                  <p className="font-medium">{inv.title}</p>
-                  <p className="mt-1 text-muted">
-                    ${inv.netAmount.toFixed(2)} · {inv.status}
-                    {linked ? ` · ${linked}` : ""}
-                  </p>
+                <li key={inv.id}>
+                  <Panel className="text-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="font-medium">{inv.title}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-2 text-muted">
+                          <span>${inv.netAmount.toFixed(2)}</span>
+                          <StatusBadge
+                            domain="invoiceStatus"
+                            value={inv.status}
+                          />
+                          {linked ? <span>· {linked}</span> : null}
+                        </p>
+                      </div>
+                      {inv.projectId ? (
+                        <Link href={`/admin/projects/${inv.projectId}`}>
+                          <Button size="sm" tone="neutral" className="min-h-11">
+                            Open project
+                          </Button>
+                        </Link>
+                      ) : null}
+                    </div>
+                  </Panel>
                 </li>
               );
             })}

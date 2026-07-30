@@ -5,6 +5,10 @@ import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { formDataFile } from "@/lib/form-data";
 import { saveWatermarkAsset } from "@/lib/images/process";
 import type { WatermarkMode, WatermarkPosition } from "@/lib/types";
+import {
+  clampWatermarkScale,
+  DEFAULT_WATERMARK_SCALE,
+} from "@/lib/watermark-scale";
 
 export async function GET() {
   const admin = await requireAdmin();
@@ -27,7 +31,9 @@ export async function POST(req: Request) {
       form.get("position") || "bottom-right",
     ) as WatermarkPosition;
     const opacity = Number(form.get("opacity") || 0.35);
-    const scale = form.get("scale") ? Number(form.get("scale")) : 0.14;
+    const scale = clampWatermarkScale(
+      form.get("scale") ?? DEFAULT_WATERMARK_SCALE,
+    );
     let imagePath: string | undefined;
     const file = formDataFile(form, "file");
     if (file && file.size > 0) {
@@ -68,7 +74,9 @@ export async function POST(req: Request) {
     imagePath: body.imagePath,
     position: (body.position || "bottom-right") as WatermarkPosition,
     opacity: Number(body.opacity ?? 0.35),
-    scale: body.scale != null ? Number(body.scale) : 0.14,
+    scale: clampWatermarkScale(
+      body.scale != null ? body.scale : DEFAULT_WATERMARK_SCALE,
+    ),
   };
   await updateStudioDb(admin.studioId, (db) => {
     db.watermarkPresets.push(preset);

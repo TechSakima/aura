@@ -15,6 +15,10 @@
   --color-success: var(--success);
   --color-success-ink: var(--success-ink);
   --color-focus: var(--focus);
+  --color-scrim: var(--scrim);
+  --color-scrim-strong: var(--scrim-strong);
+  --color-on-media: var(--on-media);
+  --color-on-media-muted: var(--on-media-muted);
 
   --font-display: var(--font-display);
   --font-sans: var(--font-body);
@@ -24,10 +28,45 @@
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
   --radius-xl: var(--radius-xl);
+  --radius-device: var(--radius-device);
 
   --shadow-sm: var(--shadow-sm);
   --shadow-md: var(--shadow-md);
   --shadow-lg: var(--shadow-lg);
+  --shadow-on-media: var(--shadow-on-media);
+
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --text-3xl: var(--text-3xl);
+  --text-4xl: var(--text-4xl);
+  --text-5xl: var(--text-5xl);
+
+  --space-1: var(--space-1);
+  --space-2: var(--space-2);
+  --space-3: var(--space-3);
+  --space-4: var(--space-4);
+  --space-5: var(--space-5);
+  --space-6: var(--space-6);
+  --space-8: var(--space-8);
+  --space-10: var(--space-10);
+  --space-12: var(--space-12);
+  --space-16: var(--space-16);
+
+  --z-nav: var(--z-nav);
+  --z-overlay: var(--z-overlay);
+  --z-toast: var(--z-toast);
+
+  --duration-fast: var(--duration-fast);
+  --duration-base: var(--duration-base);
+  --duration-slow: var(--duration-slow);
+  --duration-enter: var(--duration-enter);
+  --duration-emphasis: var(--duration-emphasis);
+  --duration-crossfade: var(--duration-crossfade);
+  --ease-out: var(--ease-out);
 }
 
 @layer base {
@@ -79,6 +118,15 @@
     padding-right: max(var(--shell-gutter), env(safe-area-inset-right));
   }
 
+  /* Documented device-frame radius — prefer over arbitrary rounded-[…] */
+  .rounded-device {
+    border-radius: var(--radius-device);
+  }
+
+  .drop-shadow-on-media {
+    filter: drop-shadow(var(--shadow-on-media));
+  }
+
   .animate-enter {
     animation: aura-enter var(--duration-slow) var(--ease-out) both;
   }
@@ -119,6 +167,72 @@
   }
 }
 
+/* Shared media grid enter (AURA-246) — token durations */
+.media-grid-enter > *,
 .gallery-grid-enter > * {
-  animation: gallery-tile-in 520ms var(--ease-out) both;
+  animation: gallery-tile-in var(--duration-enter) var(--ease-out) both;
+}
+
+/* Gallery motion / density preferences (AURA-252) */
+:root {
+  --gallery-grid-gap: 0.125rem;
+  --gallery-diary-gap: 2rem;
+  --gallery-pad-x: 1rem;
+  --gallery-section-y: 2rem;
+}
+
+[data-gallery-motion="reduced"] {
+  --duration-fast: 0ms;
+  --duration-base: 0ms;
+  --duration-slow: 0ms;
+  --duration-enter: 0ms;
+  --duration-emphasis: 0ms;
+  --duration-crossfade: 0ms;
+}
+
+[data-gallery-motion="full"] {
+  --duration-enter: 720ms;
+  --duration-emphasis: 900ms;
+  --duration-crossfade: 2200ms;
+}
+
+[data-gallery-density="compact"] {
+  --gallery-grid-gap: 0.0625rem;
+  --gallery-diary-gap: 1.25rem;
+  --gallery-pad-x: 0.75rem;
+  --gallery-section-y: 1.25rem;
+}
+
+[data-gallery-density="comfortable"] {
+  --gallery-grid-gap: 0.125rem;
+  --gallery-diary-gap: 2rem;
+  --gallery-pad-x: 1rem;
+  --gallery-section-y: 2rem;
+}
+
+[data-gallery-density="airy"] {
+  --gallery-grid-gap: 0.5rem;
+  --gallery-diary-gap: 3rem;
+  --gallery-pad-x: 1.25rem;
+  --gallery-section-y: 3rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  [data-gallery-motion="full"],
+  [data-gallery-motion="system"] {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+    --duration-enter: 0ms;
+    --duration-emphasis: 0ms;
+    --duration-crossfade: 0ms;
+  }
+
+  .media-grid-enter > *,
+  .gallery-grid-enter > *,
+  .animate-enter,
+  .animate-fade {
+    animation: none !important;
+  }
 }

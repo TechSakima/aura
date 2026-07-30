@@ -3,8 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ShootPublicLinks } from "@/components/admin/ShootPublicLinks";
-import { Button } from "@/components/ui";
-import { cn } from "@/lib/cn";
+import { Button, Tabs } from "@/components/ui";
 import type { WizardStepId } from "@/lib/types";
 import { WIZARD_STEPS } from "@/lib/wizard/steps";
 
@@ -63,7 +62,6 @@ export function ShootWizardShell({
   const sdate = sessionDate || shootDate;
   const navSteps = steps;
   const idx = navSteps.findIndex((s) => s.id === step);
-  const activeStep = navSteps[idx] || navSteps[0];
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -77,7 +75,7 @@ export function ShootWizardShell({
               {pname}
             </Link>
             <span className="mx-2 text-line">/</span>
-            Session
+            After deposit
           </p>
           <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl md:text-5xl">
             {stype}
@@ -94,59 +92,23 @@ export function ShootWizardShell({
             href={`/admin/projects/${pid}`}
             className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
           >
-            Back to project
+            Back to workflow
           </Link>
         </div>
       </div>
 
-      {/* Mobile: current step only + progress */}
-      <div className="md:hidden">
-        <p className="text-xs uppercase tracking-[0.16em] text-muted">
-          Step {idx + 1} of {navSteps.length}
-        </p>
-        <p className="mt-1 font-medium text-ink">{activeStep?.label}</p>
-        <div className="mt-3 h-1 overflow-hidden rounded-full bg-line">
-          <div
-            className="h-full bg-ink transition-all"
-            style={{
-              width: `${((Math.max(idx, 0) + 1) / navSteps.length) * 100}%`,
-            }}
-          />
-        </div>
-      </div>
-
-      <nav aria-label="Session tools" className="hidden md:block">
-        <ol className="flex flex-wrap gap-1 border-b border-line">
-          {navSteps.map((s, i) => {
-            const isActive = s.id === step;
-            const isDone = completed.includes(s.id);
-            const isUnlocked = unlocked.includes(s.id);
-            return (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  disabled={!isUnlocked}
-                  onClick={() => onStepChange(s.id)}
-                  className={cn(
-                    "-mb-px inline-flex min-h-11 items-center gap-2 border-b-2 px-3 text-sm transition-colors",
-                    isActive && "border-ink text-ink",
-                    !isActive && isDone && "border-transparent text-ink/80",
-                    !isActive &&
-                      !isDone &&
-                      isUnlocked &&
-                      "border-transparent text-muted hover:text-ink",
-                    !isUnlocked &&
-                      "cursor-not-allowed border-transparent text-muted/35",
-                  )}
-                >
-                  <span className="text-xs text-muted">{i + 1}</span>
-                  <span>{s.label}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+      <Tabs
+        variant="progress"
+        aria-label="Session tools after deposit"
+        value={step}
+        onChange={(id) => onStepChange(id as WizardStepId)}
+        tabs={navSteps.map((s) => ({
+          id: s.id,
+          label: s.label,
+          disabled: !unlocked.includes(s.id),
+          done: completed.includes(s.id),
+        }))}
+      />
 
       <div className="min-h-[12rem]">{children}</div>
 

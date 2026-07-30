@@ -67,7 +67,7 @@ export function PartnerListEditor({
   ) => void;
 }) {
   return (
-    <Field hint="Recommended print labs for your clients">
+    <Field>
       <Label>Print partners</Label>
       <div className="space-y-4">
         {partners.map((p, i) => (

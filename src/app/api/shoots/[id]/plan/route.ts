@@ -104,7 +104,7 @@ export async function POST(
     return next;
   });
 
-  if (!plan) return NextResponse.json({ error: "Shoot not found" }, { status: 404 });
+  if (!plan) return NextResponse.json({ error: "Session not found" }, { status: 404 });
   return NextResponse.json({ plan });
 }
 
