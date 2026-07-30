@@ -1,6 +1,13 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
 
+/* AURA-286 — enough width + height that thumb/sticky chrome can retire */
+@custom-variant roomy (@media (min-width: 768px) and (min-height: 560px));
+/* Short viewport (typical landscape phone) — keep CTAs reachable */
+@custom-variant short-vh (@media (max-height: 560px));
+/* Installed PWA (AURA-292); iOS also sets html[data-standalone] via StandaloneChrome */
+@custom-variant standalone (@media (display-mode: standalone));
+
 @theme inline {
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
@@ -56,6 +63,10 @@
   --space-12: var(--space-12);
   --space-16: var(--space-16);
 
+  --spacing-density-control: var(--density-control-gap);
+  --spacing-density-stack: var(--density-stack-gap);
+  --spacing-density-section: var(--density-section-y);
+
   --z-nav: var(--z-nav);
   --z-overlay: var(--z-overlay);
   --z-toast: var(--z-toast);
@@ -76,10 +87,12 @@
 
   html {
     height: 100%;
+    overflow-x: clip;
   }
 
   body {
     min-height: 100%;
+    overflow-x: clip;
     background: var(--canvas);
     color: var(--ink);
     font-family: var(--font-body);
@@ -116,6 +129,40 @@
   .shell-pad {
     padding-left: max(var(--shell-gutter), env(safe-area-inset-left));
     padding-right: max(var(--shell-gutter), env(safe-area-inset-right));
+  }
+
+  /* App density helpers (AURA-287) */
+  .density-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--density-stack-gap);
+  }
+
+  .text-display {
+    font-family: var(--font-display);
+    font-size: var(--text-display);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  /* Sticky/fixed chrome helpers (AURA-281; requires viewport-fit=cover) */
+  .safe-pt {
+    padding-top: env(safe-area-inset-top);
+  }
+
+
+  .safe-pb {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Hide in installed PWA — install hints, browser-only chrome (AURA-292 / 293) */
+  @media (display-mode: standalone) {
+    .browser-only {
+      display: none !important;
+    }
+  }
+  :root[data-standalone="true"] .browser-only {
+    display: none !important;
   }
 
   /* Documented device-frame radius — prefer over arbitrary rounded-[…] */

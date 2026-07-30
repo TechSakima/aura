@@ -1,12 +1,16 @@
 /**
- * Type systems map (AURA-187).
+ * Type systems map (AURA-187 / AURA-072).
  *
- * Distinct fields — do not conflate:
- * - `project.type` — job category (Wedding, Portrait, etc.). Display/sort only.
- * - `session.type` — label for this session occurrence (same vocabulary as project.type usually).
- * - `shotListTemplate.shootType` — which session types this shot list applies to (matches session.type).
- * - `sessionType.id` (booking) — public bookable offering (duration, price, deposit); links to session.type when creating session.
+ * Distinct fields — do not conflate in UI:
  *
- * Rule: `session.type` and `project.type` share a vocabulary; `sessionType.name` (booking) maps to a session.type on confirm.
+ * | Field | Admin label | Role |
+ * |-------|-------------|------|
+ * | `project.type` | Project type | Job category (Wedding, Portrait…) |
+ * | `session.type` | Session label | This session occurrence |
+ * | `shotListTemplate.shootType` | Applies to | Shot list filter (match session.label vocabulary) |
+ * | booking `SessionType` | Session type | Bookable offering (duration, price, deposit) |
+ *
+ * Rule: `session.type` and `project.type` share a vocabulary; booking
+ * `sessionType.name` often becomes `session.type` on confirm.
  */
 export const TYPE_SYSTEMS_VERSION = 1;

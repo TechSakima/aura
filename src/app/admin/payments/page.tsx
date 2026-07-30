@@ -6,28 +6,30 @@ import Link from "next/link";
 import {
   Button,
   ButtonLink,
-  Card,
   Cluster,
   Dialog,
   EmptyState,
   Field,
   Input,
   Label,
+  List,
+  ListRow,
   PageHeader,
-  Panel,
   Select,
-  Stack,
   StatusBadge,
   useConfirm,
   useToast,
 } from "@/components/ui";
 
 
+import {
+  newIdempotencyKey,
+  withIdempotencyHeaders,
+} from "@/lib/client/idempotency-key";
 import type {
   Invoice,
   PaymentLinkTemplate,
   PaymentTransaction,
-  Project,
 } from "@/lib/types";
 
 type EditDraft = {
@@ -46,12 +48,10 @@ export default function PaymentsPage() {
   const [links, setLinks] = useState<PaymentLinkTemplate[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tx, setTx] = useState<PaymentTransaction[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<
+    { id: string; name: string; email?: string }[]
+  >([]);
   const [loading, setLoading] = useState(true);
-  const [title, setTitle] = useState("Deposit");
-  const [amount, setAmount] = useState("200");
-  const [mode, setMode] = useState<"fixed" | "customer_chooses">("fixed");
-  const [projectId, setProjectId] = useState("");
   const [stripeConfigured, setStripeConfigured] = useState(true);
   const [stripeReady, setStripeReady] = useState(false);
   const [emailTarget, setEmailTarget] = useState<PaymentLinkTemplate | null>(
@@ -63,11 +63,10 @@ export default function PaymentsPage() {
   const [editBusy, setEditBusy] = useState(false);
 
   async function load() {
-    const [res, connect, projs, studioRes] = await Promise.all([
+    const [res, connect, projs] = await Promise.all([
       fetch("/api/payments/links"),
       fetch("/api/payments/connect"),
-      fetch("/api/projects"),
-      fetch("/api/studio"),
+      fetch("/api/projects?options=1"),
     ]);
     setLoading(false);
     if (!res.ok) {
@@ -87,20 +86,6 @@ export default function PaymentsPage() {
       const p = await projs.json();
       setProjects(p.projects || []);
     }
-    if (studioRes.ok) {
-      const s = await studioRes.json().catch(() => ({}));
-      const d = s.studio?.paymentDefaults as
-        | { defaultDepositAmount?: number; defaultLinkTitle?: string }
-        | undefined;
-      if (d?.defaultLinkTitle) setTitle(d.defaultLinkTitle);
-      if (
-        d?.defaultDepositAmount != null &&
-        Number.isFinite(d.defaultDepositAmount) &&
-        d.defaultDepositAmount > 0
-      ) {
-        setAmount(String(d.defaultDepositAmount));
-      }
-    }
   }
 
   useEffect(() => {
@@ -113,29 +98,6 @@ export default function PaymentsPage() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once
   }, []);
-
-  async function createLink(e: FormEvent) {
-    e.preventDefault();
-    const res = await fetch("/api/payments/links", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        mode,
-        amount: Number(amount),
-        minAmount: 25,
-        maxAmount: 500,
-        projectId: projectId || undefined,
-      }),
-    });
-    if (!res.ok) {
-      push("Could not create link", "danger");
-      return;
-    }
-    push("Payment link created", "success");
-    setProjectId("");
-    void load();
-  }
 
   async function copyLink(link: PaymentLinkTemplate) {
     const url = link.publicUrl || `${window.location.origin}/pay/${link.id}`;
@@ -157,11 +119,13 @@ export default function PaymentsPage() {
 
   async function sendEmail(e: FormEvent) {
     e.preventDefault();
-    if (!emailTarget) return;
+    if (!emailTarget || emailBusy) return;
     setEmailBusy(true);
     const res = await fetch("/api/payments/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withIdempotencyHeaders(newIdempotencyKey(), {
+        "Content-Type": "application/json",
+      }),
       body: JSON.stringify({
         action: "email",
         id: emailTarget.id,
@@ -255,91 +219,35 @@ export default function PaymentsPage() {
     <div className="space-y-10">
       <PageHeader
         title="Payments"
-        description="Reusable payment links and project deposits."
+        actions={
+          <ButtonLink href="/admin/projects" tone="ghost" className="min-h-11">
+            Open projects
+          </ButtonLink>
+        }
       />
 
-      <Stack gap="gap-8">
-        <div className="flex max-w-lg flex-col gap-3 border-y border-line py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted">
-            {!stripeConfigured
-              ? "Payments aren’t available yet."
-              : stripeReady
-                ? "Card payments on"
-                : "Set up card payments in Settings."}
-          </p>
-          {stripeConfigured ? (
-            <ButtonLink
-              href={
-                stripeReady
-                  ? "/admin/settings/payments#defaults"
-                  : "/admin/settings/payments"
-              }
-              tone={stripeReady ? "ghost" : "neutral"}
-              className="min-h-11 shrink-0"
-            >
-              {stripeReady ? "Payment settings" : "Set up payments"}
-            </ButtonLink>
-          ) : null}
-        </div>
-
-        <Card className="w-full max-w-lg p-5">
-          <h2 className="mb-4 font-display text-2xl">New payment link</h2>
-          <form onSubmit={createLink} className="space-y-4">
-            <Field>
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-              />
-            </Field>
-            <Field>
-              <Label htmlFor="mode">Mode</Label>
-              <Select
-                id="mode"
-                value={mode}
-                onChange={(e) =>
-                  setMode(e.target.value as "fixed" | "customer_chooses")
-                }
-              >
-                <option value="fixed">Fixed amount</option>
-                <option value="customer_chooses">Open amount</option>
-              </Select>
-            </Field>
-            {mode === "fixed" ? (
-              <Field>
-                <Label htmlFor="amount">Amount you receive ($)</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  required
-                />
-              </Field>
-            ) : null}
-            <Field>
-              <Label htmlFor="project">Project (optional)</Label>
-              <Select
-                id="project"
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-              >
-                <option value="">None</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Button type="submit">Create link</Button>
-          </form>
-        </Card>
-      </Stack>
+      <div className="flex max-w-lg flex-col gap-3 border-y border-line py-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted">
+          {!stripeConfigured
+            ? "Payments aren’t available yet."
+            : stripeReady
+              ? "Create deposits from a project. Links appear here."
+              : "Set up card payments in Settings."}
+        </p>
+        {stripeConfigured ? (
+          <ButtonLink
+            href={
+              stripeReady
+                ? "/admin/settings/payments#defaults"
+                : "/admin/settings/payments"
+            }
+            tone={stripeReady ? "ghost" : "neutral"}
+            className="min-h-11 shrink-0"
+          >
+            {stripeReady ? "Payment settings" : "Set up payments"}
+          </ButtonLink>
+        ) : null}
+      </div>
 
       <section className="space-y-4">
         <h2 className="font-display text-2xl">Payment links</h2>
@@ -348,65 +256,81 @@ export default function PaymentsPage() {
         ) : links.length === 0 ? (
           <EmptyState
             variant="inline"
-            title="No links yet."
+            title="No links yet"
+            description="Open a project and create a deposit from the workflow."
+            action={
+              <ButtonLink href="/admin/projects" className="min-h-11">
+                Open projects
+              </ButtonLink>
+            }
             className="border-y border-line py-4"
           />
         ) : (
-          <ul className="space-y-4">
+          <List>
             {links.map((l) => {
               const linked = projectName(l.projectId);
               return (
-                <li key={l.id}>
-                  <Panel variant="interactive" className="sm:p-5">
-                    <Stack gap="gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium">{l.title}</p>
-                        <p className="mt-1 text-sm text-muted">
-                          {amountLabel(l)}
-                          {l.active === false ? " · Inactive" : ""}
-                          {linked ? ` · ${linked}` : ""}
-                        </p>
-                      </div>
-                      <Cluster gap="gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          tone="neutral"
-                          onClick={() => void copyLink(l)}
-                        >
-                          Copy link
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          tone="ghost"
-                          onClick={() => openEmail(l)}
-                        >
-                          Email link
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          tone="ghost"
-                          onClick={() => openEdit(l)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          tone="danger"
-                          onClick={() => void archiveLink(l)}
-                        >
-                          Archive
-                        </Button>
-                      </Cluster>
-                    </Stack>
-                  </Panel>
-                </li>
+                <ListRow key={l.id} className="items-start">
+                  <div className="min-w-0">
+                    <p className="font-medium">{l.title}</p>
+                    <p className="mt-1 text-sm text-muted">
+                      {amountLabel(l)}
+                      {l.active === false ? " · Inactive" : ""}
+                      {linked ? ` · ${linked}` : ""}
+                    </p>
+                  </div>
+                  <Cluster gap="gap-2" className="w-full sm:w-auto sm:justify-end">
+                    {l.projectId ? (
+                      <ButtonLink
+                        href={`/admin/projects/${l.projectId}#workflow`}
+                        size="sm"
+                        tone="ghost"
+                        className="min-h-11"
+                      >
+                        Project
+                      </ButtonLink>
+                    ) : null}
+                    <Button
+                      type="button"
+                      size="sm"
+                      tone="neutral"
+                      className="min-h-11"
+                      onClick={() => void copyLink(l)}
+                    >
+                      Copy link
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      tone="ghost"
+                      className="min-h-11"
+                      onClick={() => openEmail(l)}
+                    >
+                      Email link
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      tone="ghost"
+                      className="min-h-11"
+                      onClick={() => openEdit(l)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      tone="danger"
+                      className="min-h-11"
+                      onClick={() => void archiveLink(l)}
+                    >
+                      Archive
+                    </Button>
+                  </Cluster>
+                </ListRow>
               );
             })}
-          </ul>
+          </List>
         )}
       </section>
 
@@ -419,12 +343,12 @@ export default function PaymentsPage() {
             className="border-y border-line py-4"
           />
         ) : (
-          <ul className="space-y-3">
+          <List>
             {tx.map((t) => {
               const linked = projectName(t.projectId);
               return (
-                <li key={t.id}>
-                  <Panel className="text-sm">
+                <ListRow key={t.id} className="items-start text-sm">
+                  <div className="min-w-0">
                     <p className="font-medium">
                       ${t.netAmount.toFixed(2)} net
                     </p>
@@ -436,20 +360,20 @@ export default function PaymentsPage() {
                         ? ` · ${t.status.replace(/_/g, " ")}`
                         : ""}
                     </p>
-                    <p className="mt-1 text-xs text-muted">
-                      {new Date(t.createdAt).toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </Panel>
-                </li>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted">
+                    {new Date(t.createdAt).toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </ListRow>
               );
             })}
-          </ul>
+          </List>
         )}
       </section>
 
@@ -468,37 +392,36 @@ export default function PaymentsPage() {
             }
           />
         ) : (
-          <ul className="space-y-3">
+          <List>
             {invoices.map((inv) => {
               const linked = projectName(inv.projectId);
               return (
-                <li key={inv.id}>
-                  <Panel className="text-sm">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="font-medium">{inv.title}</p>
-                        <p className="mt-1 flex flex-wrap items-center gap-2 text-muted">
-                          <span>${inv.netAmount.toFixed(2)}</span>
-                          <StatusBadge
-                            domain="invoiceStatus"
-                            value={inv.status}
-                          />
-                          {linked ? <span>· {linked}</span> : null}
-                        </p>
-                      </div>
-                      {inv.projectId ? (
-                        <Link href={`/admin/projects/${inv.projectId}`}>
-                          <Button size="sm" tone="neutral" className="min-h-11">
-                            Open project
-                          </Button>
-                        </Link>
-                      ) : null}
-                    </div>
-                  </Panel>
-                </li>
+                <ListRow key={inv.id} className="text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium">{inv.title}</p>
+                    <p className="mt-1 flex flex-wrap items-center gap-2 text-muted">
+                      <span>${inv.netAmount.toFixed(2)}</span>
+                      <StatusBadge
+                        domain="invoiceStatus"
+                        value={inv.status}
+                      />
+                      {linked ? <span>· {linked}</span> : null}
+                    </p>
+                  </div>
+                  {inv.projectId ? (
+                    <ButtonLink
+                      href={`/admin/projects/${inv.projectId}`}
+                      size="sm"
+                      tone="neutral"
+                      className="min-h-11"
+                    >
+                      Open project
+                    </ButtonLink>
+                  ) : null}
+                </ListRow>
               );
             })}
-          </ul>
+          </List>
         )}
       </section>
 

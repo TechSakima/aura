@@ -27,12 +27,25 @@ export async function POST(
     ? bundle.client
     : db.projects.find((p) => p.email?.trim().toLowerCase() === to);
 
+  const projectId =
+    bundle.client?.id ||
+    bundle.gallery.projectId ||
+    project?.id ||
+    undefined;
+  const sessionId =
+    bundle.gallery.sessionId ||
+    bundle.gallery.shootId ||
+    bundle.shoot?.id ||
+    undefined;
+
   const result = await emailGalleryLive({
     studioId: admin.studioId,
     to,
     clientName: project?.name || "there",
     galleryTitle: bundle.gallery.title,
     publicToken: bundle.gallery.publicToken,
+    projectId,
+    sessionId,
   });
 
   if (!result.ok && "skipped" in result && result.skipped) {

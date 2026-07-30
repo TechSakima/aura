@@ -13,9 +13,10 @@ import {
   studioContactPrefs,
   studioContactRecipientEmail,
 } from "@/lib/contact-prefs";
-import { readStudioDb, updateStudioDb, appendStudioDoc, getStudioDoc } from "@/lib/db/store";
+import { readStudioDb, appendStudioDoc, getStudioDoc } from "@/lib/db/store";
 import { COL } from "@/lib/db/collections";
 import { contactSourceLabel } from "@/lib/public-contact-server";
+import { clientTransactionalReplyTo } from "@/lib/resend-inbound";
 import type { ContactMessage, Studio, StudioNotification } from "@/lib/types";
 
 function resendClient() {
@@ -233,6 +234,27 @@ export async function notifyStudio(opts: {
   return { id };
 }
 
+/**
+ * In-app alert for delivery failures (email / payments / calendar).
+ * Never emails the studio about email failures (avoids retry loops).
+ */
+export async function notifyDeliveryIssue(opts: {
+  studioId: string;
+  kind: "email" | "calendar" | "payments";
+  title: string;
+  body: string;
+  href: string;
+}) {
+  return notifyStudio({
+    studioId: opts.studioId,
+    type: `delivery_${opts.kind}`,
+    title: opts.title,
+    body: opts.body,
+    href: opts.href,
+    emailStudio: opts.kind !== "email",
+  });
+}
+
 function studioEmailAllowed(
   type: string,
   prefs: Studio["notificationPrefs"] | undefined,
@@ -276,6 +298,8 @@ export async function emailQuoteShared(opts: {
   clientName: string;
   quoteTitle: string;
   token: string;
+  projectId?: string;
+  sessionId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   if (!clientEmailAllowed("quote", db.studio.notificationPrefs)) {
@@ -293,7 +317,12 @@ export async function emailQuoteShared(opts: {
     to: opts.to,
     subject: `Your quote — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
-    replyTo: db.studio.ownerEmail,
+    replyTo: clientTransactionalReplyTo({
+      projectId: opts.projectId,
+      sessionId: opts.sessionId,
+      fallbackEmail: db.studio.ownerEmail,
+      displayName: db.studio.name,
+    }),
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Your quote",
@@ -324,7 +353,7 @@ export async function notifyQuoteAccepted(opts: {
       ? `${opts.clientName} accepted “${opts.title}”`
       : `“${opts.title}” was accepted`,
     href: opts.projectId
-      ? `/admin/projects/${opts.projectId}`
+      ? `/admin/projects/${opts.projectId}#workflow`
       : "/admin/projects",
   });
 }
@@ -336,6 +365,8 @@ export async function emailGalleryLive(opts: {
   clientName: string;
   galleryTitle: string;
   publicToken: string;
+  projectId?: string;
+  sessionId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   if (!clientEmailAllowed("gallery", db.studio.notificationPrefs)) {
@@ -346,7 +377,12 @@ export async function emailGalleryLive(opts: {
     to: opts.to,
     subject: `Your gallery — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
-    replyTo: db.studio.ownerEmail,
+    replyTo: clientTransactionalReplyTo({
+      projectId: opts.projectId,
+      sessionId: opts.sessionId,
+      fallbackEmail: db.studio.ownerEmail,
+      displayName: db.studio.name,
+    }),
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Your gallery",
@@ -371,6 +407,8 @@ export async function emailPaymentLink(opts: {
   publicUrl?: string;
   /** Only say “secures your date” when this link is for a booking deposit */
   isDeposit?: boolean;
+  projectId?: string;
+  sessionId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   if (!clientEmailAllowed("payment", db.studio.notificationPrefs)) {
@@ -385,7 +423,12 @@ export async function emailPaymentLink(opts: {
     to: opts.to,
     subject: `Payment — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
-    replyTo: db.studio.ownerEmail,
+    replyTo: clientTransactionalReplyTo({
+      projectId: opts.projectId,
+      sessionId: opts.sessionId,
+      fallbackEmail: db.studio.ownerEmail,
+      displayName: db.studio.name,
+    }),
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Payment",
@@ -409,6 +452,8 @@ export async function emailPaymentReceipt(opts: {
   netAmount: number;
   grossAmount: number;
   processingFee: number;
+  projectId?: string;
+  sessionId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   if (!clientEmailAllowed("payment", db.studio.notificationPrefs)) {
@@ -419,7 +464,12 @@ export async function emailPaymentReceipt(opts: {
     to: opts.to,
     subject: `Payment received — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
-    replyTo: db.studio.ownerEmail,
+    replyTo: clientTransactionalReplyTo({
+      projectId: opts.projectId,
+      sessionId: opts.sessionId,
+      fallbackEmail: db.studio.ownerEmail,
+      displayName: db.studio.name,
+    }),
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Payment received",
@@ -444,6 +494,8 @@ export async function emailContractToSign(opts: {
   clientName?: string;
   title: string;
   token: string;
+  projectId?: string;
+  sessionId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   const href = absoluteUrl(`/c/${opts.token}`);
@@ -452,7 +504,12 @@ export async function emailContractToSign(opts: {
     to: opts.to,
     subject: `Please sign — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
-    replyTo: db.studio.ownerEmail,
+    replyTo: clientTransactionalReplyTo({
+      projectId: opts.projectId,
+      sessionId: opts.sessionId,
+      fallbackEmail: db.studio.ownerEmail,
+      displayName: db.studio.name,
+    }),
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Agreement to sign",
@@ -477,6 +534,8 @@ export async function emailContractSignedCopy(opts: {
   signerName: string;
   signedDate: string;
   token: string;
+  projectId?: string;
+  sessionId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   const href = absoluteUrl(`/c/${opts.token}`);
@@ -489,7 +548,12 @@ export async function emailContractSignedCopy(opts: {
     to: opts.to,
     subject: `Signed agreement — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
-    replyTo: db.studio.ownerEmail,
+    replyTo: clientTransactionalReplyTo({
+      projectId: opts.projectId,
+      sessionId: opts.sessionId,
+      fallbackEmail: db.studio.ownerEmail,
+      displayName: db.studio.name,
+    }),
     html: wrapHtml({
       studioName: db.studio.name,
       title: label,
@@ -511,6 +575,8 @@ export async function emailQuestionnaireInvite(opts: {
   clientName: string;
   title: string;
   token: string;
+  projectId?: string;
+  sessionId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   const href = absoluteUrl(`/q/${opts.token}`);
@@ -518,7 +584,12 @@ export async function emailQuestionnaireInvite(opts: {
     to: opts.to,
     subject: `Questionnaire — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
-    replyTo: db.studio.ownerEmail,
+    replyTo: clientTransactionalReplyTo({
+      projectId: opts.projectId,
+      sessionId: opts.sessionId,
+      fallbackEmail: db.studio.ownerEmail,
+      displayName: db.studio.name,
+    }),
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Questionnaire",
@@ -543,6 +614,8 @@ export async function emailBookingConfirmed(opts: {
   cancelHref?: string;
   /** Project workflow step after confirm — drives “Next” copy */
   nextWorkflowStep?: string | null;
+  projectId?: string;
+  sessionId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   if (!clientEmailAllowed("booking", db.studio.notificationPrefs)) {
@@ -564,7 +637,12 @@ export async function emailBookingConfirmed(opts: {
     to: opts.to,
     subject: `Booking confirmed — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
-    replyTo: db.studio.ownerEmail,
+    replyTo: clientTransactionalReplyTo({
+      projectId: opts.projectId,
+      sessionId: opts.sessionId,
+      fallbackEmail: db.studio.ownerEmail,
+      displayName: db.studio.name,
+    }),
     html: wrapHtml({
       studioName: db.studio.name,
       title: "You're booked",
@@ -586,6 +664,8 @@ export async function emailBookingDeclined(opts: {
   reason: string;
   /** Booking request id for stable idempotency */
   requestId?: string;
+  projectId?: string;
+  sessionId?: string;
 }) {
   const db = await readStudioDb(opts.studioId);
   const declined = bookingDeclinedSentence(opts.sessionTypeName);
@@ -594,7 +674,12 @@ export async function emailBookingDeclined(opts: {
     to: opts.to,
     subject: `Booking update — ${db.studio.name}`,
     fromDisplayName: db.studio.name,
-    replyTo: db.studio.ownerEmail,
+    replyTo: clientTransactionalReplyTo({
+      projectId: opts.projectId,
+      sessionId: opts.sessionId,
+      fallbackEmail: db.studio.ownerEmail,
+      displayName: db.studio.name,
+    }),
     html: wrapHtml({
       studioName: db.studio.name,
       title: "Request update",
@@ -676,6 +761,20 @@ export async function emailContactToStudio(opts: {
   if (msg.context) {
     rows.push(`<p><strong>Context</strong> ${escapeHtml(msg.context)}</p>`);
   }
+  if (msg.projectId) {
+    const projectPath = msg.sessionId
+      ? `/admin/projects/${msg.projectId}/sessions/${msg.sessionId}#messages`
+      : `/admin/projects/${msg.projectId}#messages`;
+    const projectHref = absoluteUrl(projectPath);
+    rows.push(
+      `<p><strong>Project</strong> <a href="${escapeHtml(projectHref)}">Open messages</a></p>`,
+    );
+  }
+  if (msg.sessionId) {
+    rows.push(
+      `<p><strong>Session</strong> ${escapeHtml(msg.sessionId)}</p>`,
+    );
+  }
   rows.push(
     `<p style="margin-top:20px;white-space:pre-wrap">${escapeHtml(msg.message)}</p>`,
   );
@@ -685,6 +784,8 @@ export async function emailContactToStudio(opts: {
     msg.phone ? `Phone: ${msg.phone}` : null,
     `Via: ${source}`,
     msg.context ? `Context: ${msg.context}` : null,
+    msg.projectId ? `Project: ${msg.projectId}` : null,
+    msg.sessionId ? `Session: ${msg.sessionId}` : null,
     "",
     msg.message,
   ].filter((line): line is string => line != null);
@@ -740,6 +841,12 @@ export async function emailContactAutoReply(opts: {
     to,
     subject: `${studioName} — ${title}`,
     fromDisplayName: studioName,
+    replyTo: clientTransactionalReplyTo({
+      projectId: opts.message.projectId,
+      sessionId: opts.message.sessionId,
+      fallbackEmail: studioContactRecipientEmail(opts.studio),
+      displayName: studioName,
+    }),
     html: wrapHtml({
       studioName,
       title,
@@ -747,6 +854,59 @@ export async function emailContactAutoReply(opts: {
     }),
     text: `${greeting}\n\n${body}`,
     idempotencyKey: `contact-auto-reply/${opts.studio.id}/${opts.message.id}`,
+  });
+}
+
+/**
+ * One-shot studio → client reply via Resend (AURA-374).
+ * Reply-To = project inbound so further client replies stay routed. Not an Inbox.
+ */
+export async function emailProjectClientReply(opts: {
+  studio: Studio;
+  to: string;
+  clientName?: string;
+  body: string;
+  projectId: string;
+  sessionId?: string;
+  idempotencyKey: string;
+}): Promise<
+  { ok: true; id?: string } | { ok: false; error: string; skipped?: boolean }
+> {
+  const to = String(opts.to || "")
+    .trim()
+    .toLowerCase();
+  if (!to || !to.includes("@")) {
+    return { ok: false, error: "Client email missing" };
+  }
+  const body = String(opts.body || "").trim();
+  if (!body) {
+    return { ok: false, error: "Message required" };
+  }
+
+  const studioName = opts.studio.name || "Studio";
+  const who = (opts.clientName || "").trim() || "there";
+  const replyTo = clientTransactionalReplyTo({
+    projectId: opts.projectId,
+    sessionId: opts.sessionId,
+    fallbackEmail:
+      studioContactRecipientEmail(opts.studio) || opts.studio.ownerEmail,
+    displayName: studioName,
+  });
+
+  return emailClient({
+    to,
+    subject: `Message from ${studioName}`,
+    fromDisplayName: studioName,
+    replyTo,
+    html: wrapHtml({
+      studioName,
+      title: "Message",
+      bodyHtml: `<p>Hi ${escapeHtml(who)},</p>
+<p style="white-space:pre-wrap">${escapeHtml(body)}</p>
+${nextStepHtml("Reply to this email — your message goes to the studio.")}`,
+    }),
+    text: `Hi ${who},\n\n${body}\n\nNext: Reply to this email — your message goes to the studio.`,
+    idempotencyKey: opts.idempotencyKey,
   });
 }
 

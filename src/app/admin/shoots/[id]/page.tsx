@@ -1,30 +1,21 @@
-"use client";
+import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth";
+import { getSessionById } from "@/lib/db/store";
 
-import { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+/** Legacy shoot URL → project session workflow (AURA-063). */
+export default async function ShootRedirectPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const admin = await requireAdmin();
+  if (!admin) redirect("/admin/login");
 
-/** Legacy shoot URL → project session workflow */
-export default function ShootRedirectPage() {
-  const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-
-  useEffect(() => {
-    void (async () => {
-      const res = await fetch(`/api/shoots/${id}`);
-      if (!res.ok) {
-        router.replace("/admin/projects");
-        return;
-      }
-      const data = await res.json();
-      const projectId =
-        data.client?.id || data.shoot?.projectId || data.shoot?.clientId;
-      if (!projectId) {
-        router.replace("/admin/projects");
-        return;
-      }
-      router.replace(`/admin/projects/${projectId}/sessions/${id}`);
-    })();
-  }, [id, router]);
-
-  return <p className="text-muted">Opening workflow…</p>;
+  const { id } = await params;
+  const session = await getSessionById(id);
+  const projectId = session?.projectId || session?.clientId;
+  if (!session || session.studioId !== admin.studioId || !projectId) {
+    redirect("/admin/projects");
+  }
+  redirect(`/admin/projects/${projectId}/sessions/${id}`);
 }

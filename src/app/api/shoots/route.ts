@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
+import { withApiDeprecation } from "@/lib/api-deprecation";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import {
@@ -8,22 +9,27 @@ import {
 } from "@/lib/google-calendar";
 import type { ProjectSession, ShootStatus } from "@/lib/types";
 
+/** @deprecated Use `/api/sessions` (AURA-273). */
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = await readStudioDb(admin.studioId);
-  return NextResponse.json({
-    shoots: db.sessions.map((s) => ({
-      ...s,
-      clientId: s.projectId,
-      shootDate: s.startsAt,
-    })),
-    sessions: db.sessions,
-    clients: db.projects,
-    projects: db.projects,
-  });
+  return withApiDeprecation(
+    NextResponse.json({
+      shoots: db.sessions.map((s) => ({
+        ...s,
+        clientId: s.projectId,
+        shootDate: s.startsAt,
+      })),
+      sessions: db.sessions,
+      clients: db.projects,
+      projects: db.projects,
+    }),
+    "/api/sessions",
+  );
 }
 
+/** @deprecated Use `/api/sessions` (AURA-273). */
 export async function POST(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -84,9 +90,12 @@ export async function POST(req: Request) {
     clientId: session.projectId,
     shootDate: session.startsAt,
   };
-  return NextResponse.json({
-    shoot,
-    session,
-    calendarSyncFailed: calendarSyncFailed || undefined,
-  });
+  return withApiDeprecation(
+    NextResponse.json({
+      shoot,
+      session,
+      calendarSyncFailed: calendarSyncFailed || undefined,
+    }),
+    "/api/sessions",
+  );
 }

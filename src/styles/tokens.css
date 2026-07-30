@@ -76,10 +76,40 @@
   /* Public surfaces + gallery chrome/content (AURA-218) — not ad-hoc 1400/1600px */
   --public-max: 87.5rem;
   --shell-gutter: 1rem;
+
+  /*
+   * Admin sticky offset (AURA-381) — matches AdminShell header:
+   * safe-area + py-3 + min-h-11 row (+ border). Use --admin-sticky-top for
+   * panels that stick under the shell header.
+   */
+  --admin-header-inner: 4.25rem;
+  --admin-sticky-top: calc(
+    env(safe-area-inset-top, 0px) + var(--admin-header-inner) + 1rem
+  );
+
+  /*
+   * App density (AURA-287) — readable at 375 without fixed wide mins.
+   * Gallery grid density remains data-gallery-density (AURA-252).
+   */
+  --density-control-gap: var(--space-2);
+  --density-stack-gap: var(--space-3);
+  --density-section-y: var(--space-8);
+  --field-min-width: 10rem;
+  --text-display: clamp(1.75rem, 0.35rem + 5.2vw, 3rem);
+}
+
+@media (max-width: 639px) {
+  :root {
+    --density-section-y: var(--space-6);
+    --density-stack-gap: var(--space-2);
+  }
 }
 
 @media (min-width: 768px) {
   :root {
     --shell-gutter: 1.5rem;
+    --density-section-y: var(--space-10);
+    /* AdminShell header: py-4 + min-h-11 */
+    --admin-header-inner: 4.75rem;
   }
 }

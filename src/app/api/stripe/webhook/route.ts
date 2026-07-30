@@ -104,7 +104,9 @@ async function recordPaidCheckoutSession(
     type: "payment_received",
     title: "Payment received",
     body: `$${netAmount.toFixed(2)} net (client paid $${grossAmount.toFixed(2)})`,
-    href: projectId ? `/admin/projects/${projectId}` : "/admin/payments",
+    href: projectId
+      ? `/admin/projects/${projectId}#workflow`
+      : "/admin/payments",
   });
 
   const email =
@@ -121,6 +123,8 @@ async function recordPaidCheckoutSession(
       netAmount,
       processingFee,
       grossAmount,
+      projectId: projectId || undefined,
+      sessionId: session.metadata?.sessionId || undefined,
     });
   }
 
@@ -167,7 +171,7 @@ async function handleMoneyReversal(opts: {
     title: opts.notifyTitle,
     body: opts.notifyBody,
     href: result.projectId
-      ? `/admin/projects/${result.projectId}`
+      ? `/admin/projects/${result.projectId}#workflow`
       : "/admin/payments",
   });
 

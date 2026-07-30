@@ -1,17 +1,20 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { IntakeListEditor } from "@/components/admin/ListEditor";
 import {
   Button,
   ButtonLink,
   Card,
   Checkbox,
+  EmptyState,
   Field,
   Input,
   Label,
   PageHeader,
   Select,
+  Tabs,
   Textarea,
   useToast,
 } from "@/components/ui";
@@ -20,11 +23,12 @@ import type {
   Contract,
   ContractTemplate,
   IntakeQuestion,
-  Project,
   QuestionnaireResponse,
   QuestionnaireTemplate,
 } from "@/lib/types";
 import { defaultContractBody } from "@/lib/contracts/defaults";
+
+type DocTab = "contracts" | "questionnaires" | "templates";
 
 function defaultQuestions(): IntakeQuestion[] {
   return [
@@ -40,6 +44,11 @@ function defaultQuestions(): IntakeQuestion[] {
       type: "text",
     },
   ];
+}
+
+function parseTab(raw: string | null): DocTab {
+  if (raw === "questionnaires" || raw === "templates") return raw;
+  return "contracts";
 }
 
 function AnswersList({
@@ -68,30 +77,27 @@ function AnswersList({
   );
 }
 
-export default function DocumentsPage() {
+function DocumentsPageInner() {
   const { push } = useToast();
-  const [contracts, setContracts] = useState<Contract[]>([]);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tab = parseTab(searchParams.get("tab"));
+
+  const [contracts, setContracts] = useState<Omit<Contract, "body">[]>([]);
   const [contractTemplates, setContractTemplates] = useState<ContractTemplate[]>(
     [],
   );
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([]);
   const [responses, setResponses] = useState<QuestionnaireResponse[]>([]);
   const [packageNames, setPackageNames] = useState<{ id: string; name: string }[]>(
     [],
   );
-  const [projectId, setProjectId] = useState("");
-  const [title, setTitle] = useState("Photography agreement");
-  const [body, setBody] = useState(() => defaultContractBody());
-  const [untilPayment, setUntilPayment] = useState(true);
-  const [daysBeforeSession, setDaysBeforeSession] = useState("7");
-  const [contractTemplateId, setContractTemplateId] = useState("");
   const [tmplName, setTmplName] = useState("Photography agreement");
   const [tmplBody, setTmplBody] = useState(() => defaultContractBody());
   const [tmplUntilPayment, setTmplUntilPayment] = useState(true);
   const [tmplDaysBefore, setTmplDaysBefore] = useState("7");
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
-  const [qTemplateId, setQTemplateId] = useState("");
   const [qName, setQName] = useState("Session questionnaire");
   const [qQuestions, setQQuestions] = useState<IntakeQuestion[]>(defaultQuestions);
   const [editingQId, setEditingQId] = useState<string | null>(null);
@@ -99,6 +105,10 @@ export default function DocumentsPage() {
   const [expandedResponseId, setExpandedResponseId] = useState<string | null>(
     null,
   );
+  const [contractsHasMore, setContractsHasMore] = useState(false);
+  const [responsesHasMore, setResponsesHasMore] = useState(false);
+  const [contractsLoadingMore, setContractsLoadingMore] = useState(false);
+  const [responsesLoadingMore, setResponsesLoadingMore] = useState(false);
 
   function cancelPolicyPayload(until: boolean, days: string) {
     return {
@@ -111,103 +121,58 @@ export default function DocumentsPage() {
   const [docDirty, setDocDirty] = useState(false);
   useUnsavedChangesGuard(docDirty);
 
+  function setTab(next: string) {
+    const id = parseTab(next);
+    router.replace(`/admin/documents?tab=${id}`, { scroll: false });
+  }
+
   async function load() {
-    const [docs, projs, qs, studioRes] = await Promise.all([
+    const [docs, projs, qs] = await Promise.all([
       fetch("/api/documents/contracts"),
-      fetch("/api/projects"),
+      fetch("/api/projects?options=1"),
       fetch("/api/documents/questionnaires"),
-      fetch("/api/studio"),
     ]);
     setLoading(false);
     if (docs.ok) {
       const d = await docs.json();
       setContracts(d.contracts || []);
-      const tmpls = (d.templates || []) as ContractTemplate[];
-      setContractTemplates(tmpls);
-      if (!contractTemplateId && tmpls[0]) {
-        let preferred = "";
-        if (studioRes.ok) {
-          const s = await studioRes.json().catch(() => ({}));
-          preferred = String(
-            s.studio?.legalDefaults?.defaultContractTemplateId || "",
-          );
-        }
-        const match = preferred
-          ? tmpls.find((t) => t.id === preferred)
-          : undefined;
-        setContractTemplateId(match?.id || tmpls[0].id);
-      }
+      setContractsHasMore(Boolean(d.hasMore));
+      setContractTemplates((d.templates || []) as ContractTemplate[]);
     }
     if (projs.ok) {
       const p = await projs.json();
-      const list = p.projects || [];
-      setProjects(list);
-      if (!projectId && list[0]) setProjectId(list[0].id);
+      setProjects(p.projects || []);
     }
     if (qs.ok) {
       const q = await qs.json();
       setTemplates(q.templates || []);
       setResponses(q.responses || []);
+      setResponsesHasMore(Boolean(q.hasMore));
       setPackageNames(q.packageTemplates || []);
-      if (!qTemplateId && q.templates?.[0]) setQTemplateId(q.templates[0].id);
     }
+  }
+
+  function projectName(id: string) {
+    return projects.find((p) => p.id === id)?.name || "Project";
   }
 
   useEffect(() => {
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Legacy hashes from Settings Library → tab query.
   useEffect(() => {
     if (loading) return;
     const hash = window.location.hash.replace(/^#/, "");
-    if (hash !== "contract-templates" && hash !== "questionnaires") return;
-    requestAnimationFrame(() => {
-      document.getElementById(hash)?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
-  }, [loading]);
-
-  function applyContractTemplate(id: string) {
-    setContractTemplateId(id);
-    const t = contractTemplates.find((x) => x.id === id);
-    if (!t) return;
-    setTitle(t.name);
-    setBody(t.body);
-    setUntilPayment(Boolean(t.cancelPolicy?.untilPayment));
-    setDaysBeforeSession(
-      t.cancelPolicy?.daysBeforeSession != null
-        ? String(t.cancelPolicy.daysBeforeSession)
-        : "",
-    );
-  }
-
-  async function onCreateContract(e: FormEvent) {
-    e.preventDefault();
-    const res = await fetch("/api/documents/contracts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectId,
-        title,
-        body,
-        templateId: contractTemplateId || undefined,
-        cancelPolicy: cancelPolicyPayload(untilPayment, daysBeforeSession),
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      push(data.error || "Failed", "danger");
+    if (hash === "contract-templates") {
+      router.replace("/admin/documents?tab=templates", { scroll: false });
       return;
     }
-    push("Contract sent for signature", "success");
-    if (data.url) {
-      await navigator.clipboard.writeText(data.url).catch(() => undefined);
-      push("Sign link copied", "success");
+    if (hash === "questionnaires") {
+      router.replace("/admin/documents?tab=questionnaires", { scroll: false });
     }
-    void load();
-  }
+  }, [loading, router]);
 
   async function saveContractTemplate(e: FormEvent) {
     e.preventDefault();
@@ -253,6 +218,7 @@ export default function DocumentsPage() {
         ? String(t.cancelPolicy.daysBeforeSession)
         : "",
     );
+    setTab("templates");
   }
 
   async function saveQTemplate(e: FormEvent) {
@@ -297,6 +263,7 @@ export default function DocumentsPage() {
         ? t.questions.map((q) => ({ ...q }))
         : defaultQuestions(),
     );
+    setTab("templates");
   }
 
   function cancelEditQTemplate() {
@@ -305,35 +272,10 @@ export default function DocumentsPage() {
     setQQuestions(defaultQuestions());
   }
 
-  async function sendQuestionnaire(e: FormEvent) {
-    e.preventDefault();
-    const res = await fetch("/api/documents/questionnaires", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "send",
-        projectId,
-        templateId: qTemplateId || undefined,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      push(data.error || "Failed", "danger");
-      return;
-    }
-    push("Questionnaire sent", "success");
-    if (data.url) {
-      await navigator.clipboard.writeText(data.url).catch(() => undefined);
-      push("Link copied", "success");
-    }
-    void load();
-  }
-
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       <PageHeader
         title="Documents"
-        description="Contracts, questionnaires, and templates."
         actions={
           <ButtonLink
             href="/admin/settings/library"
@@ -345,461 +287,441 @@ export default function DocumentsPage() {
         }
       />
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        <Card className="p-5">
-          <h2 className="mb-4 font-display text-2xl">New contract</h2>
-          <form onSubmit={onCreateContract} className="space-y-4">
-            <Field>
-              <Label htmlFor="project">Project</Label>
-              <Select
-                id="project"
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-                required
-              >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            {contractTemplates.length > 0 ? (
-              <Field>
-                <Label htmlFor="ctmpl">From template</Label>
-                <Select
-                  id="ctmpl"
-                  value={contractTemplateId}
-                  onChange={(e) => applyContractTemplate(e.target.value)}
-                >
-                  <option value="">Custom</option>
-                  {contractTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            ) : null}
-            <Field>
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-              />
-            </Field>
-            <Field>
-              <Label htmlFor="body">Contract body</Label>
-              <Textarea
-                id="body"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={12}
-                required
-              />
-              <Button
-                type="button"
-                tone="ghost"
-                size="sm"
-                onClick={() => setBody(defaultContractBody())}
-              >
-                Reset to standard clauses
-              </Button>
-            </Field>
-            <fieldset className="space-y-3 border border-line p-4">
-              <legend className="px-1 text-sm font-medium">Cancel policy</legend>
-              <label className="flex min-h-11 items-center gap-3 text-sm">
-                <Checkbox
-                  checked={untilPayment}
-                  onChange={(e) => setUntilPayment(e.target.checked)}
-                />
-                Until payment received
-              </label>
-              <Field>
-                <Label htmlFor="days-before">Days before session</Label>
-                <Input
-                  id="days-before"
-                  type="number"
-                  min={0}
-                  value={daysBeforeSession}
-                  onChange={(e) => setDaysBeforeSession(e.target.value)}
-                  placeholder="Optional"
-                />
-              </Field>
-            </fieldset>
-            <Button type="submit" className="min-h-11 w-full sm:w-auto">
-              Send for signature
-            </Button>
-          </form>
-        </Card>
+      <Tabs
+        tabs={[
+          { id: "contracts", label: "Contracts" },
+          { id: "questionnaires", label: "Questionnaires" },
+          { id: "templates", label: "Templates" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
-        <Card id="questionnaires" className="scroll-mt-24 p-5">
-          <h2 className="mb-4 font-display text-2xl">Questionnaire</h2>
-          <form onSubmit={saveQTemplate} className="mb-6 space-y-3">
-            <Field>
-              <Label htmlFor="qname">
-                {editingQId ? "Edit template" : "New template"}
-              </Label>
-              <Input
-                id="qname"
-                value={qName}
-                onChange={(e) => {
-                  setQName(e.target.value);
-                  setDocDirty(true);
-                }}
-              />
-            </Field>
-            <IntakeListEditor
-              label="Questions"
-              questions={qQuestions}
-              onChange={setQQuestions}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="submit"
-                tone="neutral"
-                className="min-h-11"
-                pending={qBusy}
-                pendingLabel="Saving…"
-              >
-                {editingQId ? "Save template" : "Create template"}
-              </Button>
-              {editingQId ? (
-                <Button
-                  type="button"
-                  tone="ghost"
-                  className="min-h-11"
-                  onClick={cancelEditQTemplate}
-                >
-                  Cancel
-                </Button>
-              ) : null}
-            </div>
-          </form>
-          {templates.length > 0 ? (
-            <ul className="mb-6 space-y-2 border-y border-line py-3 text-sm">
-              {templates.map((t) => (
-                <li
-                  key={t.id}
-                  className="flex flex-wrap items-center justify-between gap-2"
-                >
-                  <span>
-                    {t.name}
-                    <span className="text-muted">
-                      {" "}
-                      · {t.questions.length} questions
-                    </span>
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    tone="ghost"
-                    onClick={() => startEditQTemplate(t)}
-                  >
-                    Edit
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <form onSubmit={sendQuestionnaire} className="space-y-3">
-            <Field>
-              <Label htmlFor="qproj">Send to project</Label>
-              <Select
-                id="qproj"
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-                required
-              >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field>
-              <Label htmlFor="qtmpl">Template</Label>
-              <Select
-                id="qtmpl"
-                value={qTemplateId}
-                onChange={(e) => setQTemplateId(e.target.value)}
-              >
-                {templates.length === 0 ? (
-                  <option value="">Default (auto-created)</option>
-                ) : (
-                  templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))
-                )}
-              </Select>
-            </Field>
-            <Button type="submit" className="min-h-11 w-full sm:w-auto">
-              Send questionnaire
+      {tab === "contracts" ? (
+        <div className="space-y-6">
+          <p className="text-sm text-muted">
+            Send contracts from a project. This list is your sent inventory.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink href="/admin/projects" className="min-h-11">
+              Open projects
+            </ButtonLink>
+            <Button
+              type="button"
+              tone="ghost"
+              className="min-h-11"
+              onClick={() => setTab("templates")}
+            >
+              Contract templates
             </Button>
-          </form>
-        </Card>
-      </div>
-
-      <Card id="contract-templates" className="scroll-mt-24 p-5">
-        <h2 className="mb-4 font-display text-2xl">
-          {editingTemplateId ? "Edit contract template" : "Contract template"}
-        </h2>
-        <form onSubmit={saveContractTemplate} className="max-w-2xl space-y-4">
-          <Field>
-            <Label htmlFor="tmpl-name">Name</Label>
-            <Input
-              id="tmpl-name"
-              value={tmplName}
-              onChange={(e) => {
-                setTmplName(e.target.value);
-                setDocDirty(true);
-              }}
-              required
-            />
-          </Field>
-          <Field>
-            <Label htmlFor="tmpl-body">Body</Label>
-            <Textarea
-              id="tmpl-body"
-              value={tmplBody}
-                onChange={(e) => {
-                  setTmplBody(e.target.value);
-                  setDocDirty(true);
-                }}
-              rows={14}
-              required
-            />
-            {!editingTemplateId ? (
-              <Button
-                type="button"
-                tone="ghost"
-                size="sm"
-                onClick={() => setTmplBody(defaultContractBody())}
-              >
-                Reset to standard clauses
-              </Button>
-            ) : null}
-          </Field>
-          <fieldset className="space-y-3 border border-line p-4">
-            <legend className="px-1 text-sm font-medium">Cancel policy</legend>
-            <label className="flex min-h-11 items-center gap-3 text-sm">
-              <Checkbox
-                checked={tmplUntilPayment}
-                onChange={(e) => setTmplUntilPayment(e.target.checked)}
-              />
-              Until payment received
-            </label>
-            <Field>
-              <Label htmlFor="tmpl-days">Days before session</Label>
-              <Input
-                id="tmpl-days"
-                type="number"
-                min={0}
-                value={tmplDaysBefore}
-                onChange={(e) => setTmplDaysBefore(e.target.value)}
-                placeholder="Optional"
-              />
-            </Field>
-          </fieldset>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="submit" className="min-h-11">
-              {editingTemplateId ? "Save template" : "Create template"}
-            </Button>
-            {editingTemplateId ? (
-              <Button
-                type="button"
-                tone="ghost"
-                className="min-h-11"
-                onClick={() => setEditingTemplateId(null)}
-              >
-                Cancel edit
-              </Button>
-            ) : null}
           </div>
-        </form>
-        {contractTemplates.length > 0 ? (
-          <ul className="mt-6 space-y-3 border-t border-line pt-4">
-            {contractTemplates.map((t) => (
-              <li
-                key={t.id}
-                className="flex flex-col gap-2 border border-line p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium">{t.name}</p>
-                  <p className="text-sm text-muted">
-                    {t.cancelPolicy?.untilPayment ? "Until payment" : "No payment gate"}
-                    {t.cancelPolicy?.daysBeforeSession != null
-                      ? ` · ${t.cancelPolicy.daysBeforeSession}d before session`
-                      : ""}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  tone="ghost"
-                  className="min-h-11 w-full sm:w-auto"
-                  onClick={() => startEditTemplate(t)}
-                >
-                  Edit
-                </Button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </Card>
-
-      <section>
-        <h2 className="mb-3 font-display text-2xl">Templates hub</h2>
-        <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line text-sm">
-          {contractTemplates.map((t) => (
-            <li
-              key={`c-${t.id}`}
-              className="flex flex-col gap-1 border border-line p-4 sm:flex-row sm:justify-between sm:gap-3 sm:border-0 sm:p-0 sm:py-3"
-            >
-              <span>Contract · {t.name}</span>
-              <span className="text-muted">Cancel policy set</span>
-            </li>
-          ))}
-          {templates.map((t) => (
-            <li
-              key={t.id}
-              className="flex flex-col gap-1 border border-line p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:border-0 sm:p-0 sm:py-3"
-            >
-              <span>
-                Questionnaire · {t.name}
-                <span className="text-muted"> · {t.questions.length} questions</span>
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                tone="ghost"
-                onClick={() => startEditQTemplate(t)}
-              >
-                Edit
-              </Button>
-            </li>
-          ))}
-          {packageNames.map((p) => (
-            <li
-              key={p.id}
-              className="flex flex-col gap-1 border border-line p-4 sm:flex-row sm:justify-between sm:gap-3 sm:border-0 sm:p-0 sm:py-3"
-            >
-              <span>Quote package · {p.name}</span>
-              <a className="text-accent" href="/admin/prep">
-                Edit in Prep
-              </a>
-            </li>
-          ))}
-          {templates.length === 0 &&
-          packageNames.length === 0 &&
-          contractTemplates.length === 0 ? (
-            <li className="py-4 text-muted">
-              Create a questionnaire template or package to populate the hub.
-            </li>
-          ) : null}
-        </ul>
-      </section>
-
-      <section>
-        <h2 className="mb-3 font-display text-2xl">Contracts</h2>
-        <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
-          {loading ? (
-            <li className="py-4 text-sm text-muted">Loading documents…</li>
-          ) : contracts.length === 0 ? (
-            <li className="py-4 text-sm text-muted">No contracts yet.</li>
-          ) : (
-            contracts.map((c) => (
-              <li
-                key={c.id}
-                className="flex flex-col gap-3 border border-line p-4 sm:flex-row sm:flex-wrap sm:justify-between sm:border-0 sm:p-0 sm:py-4"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium">{c.title}</p>
-                  <p className="text-sm text-muted">
-                    {c.status.replaceAll("_", " ")}
-                    {c.cancelPolicy?.untilPayment ? " · until payment" : ""}
-                    {c.cancelPolicy?.daysBeforeSession != null
-                      ? ` · ${c.cancelPolicy.daysBeforeSession}d before`
-                      : ""}
-                  </p>
-                </div>
-                <a
-                  className="inline-flex min-h-11 items-center text-sm text-accent"
-                  href={`/c/${c.token}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open
-                </a>
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
-
-      <section>
-        <h2 className="mb-3 font-display text-2xl">Questionnaire responses</h2>
-        <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
-          {loading ? (
-            <li className="py-4 text-sm text-muted">Loading…</li>
-          ) : responses.length === 0 ? (
-            <li className="py-4 text-sm text-muted">None yet.</li>
-          ) : (
-            responses.map((r) => {
-              const open = expandedResponseId === r.id;
-              return (
-                <li
-                  key={r.id}
-                  className="border border-line p-4 sm:border-0 sm:p-0 sm:py-4"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <section className="space-y-4">
+            <h2 className="font-display text-2xl">Sent contracts</h2>
+            <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
+              {loading ? (
+                <li className="py-4 text-sm text-muted">Loading documents…</li>
+              ) : contracts.length === 0 ? (
+                <li className="py-4 text-sm text-muted">No contracts yet.</li>
+              ) : (
+                contracts.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex flex-col gap-3 border border-line p-4 sm:flex-row sm:flex-wrap sm:justify-between sm:border-0 sm:p-0 sm:py-4"
+                  >
                     <div className="min-w-0">
-                      <p className="font-medium">{r.title}</p>
+                      <p className="font-medium">{c.title}</p>
                       <p className="text-sm text-muted">
-                        {r.submittedAt
-                          ? `Submitted ${new Date(r.submittedAt).toLocaleString()}`
-                          : "Awaiting answers"}
+                        {projectName(c.projectId)}
+                        {" · "}
+                        {c.status.replaceAll("_", " ")}
+                        {c.cancelPolicy?.untilPayment ? " · until payment" : ""}
+                        {c.cancelPolicy?.daysBeforeSession != null
+                          ? ` · ${c.cancelPolicy.daysBeforeSession}d before`
+                          : ""}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {r.submittedAt ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          tone="neutral"
-                          onClick={() =>
-                            setExpandedResponseId(open ? null : r.id)
-                          }
-                        >
-                          {open ? "Hide answers" : "View answers"}
-                        </Button>
-                      ) : null}
+                    <div className="flex flex-wrap gap-3">
                       <a
-                        className="inline-flex min-h-11 items-center text-sm text-accent"
-                        href={`/q/${r.token}`}
+                        className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
+                        href={`/admin/projects/${c.projectId}#workflow`}
+                      >
+                        Project
+                      </a>
+                      <a
+                        className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
+                        href={`/c/${c.token}`}
                         target="_blank"
                         rel="noreferrer"
                       >
-                        Client link
+                        Preview
                       </a>
                     </div>
-                  </div>
-                  {open && r.submittedAt ? (
-                    <AnswersList
-                      questions={r.questions}
-                      answers={r.answers || {}}
-                    />
-                  ) : null}
-                </li>
-              );
-            })
-          )}
-        </ul>
-      </section>
+                  </li>
+                ))
+              )}
+            </ul>
+            {contractsHasMore ? (
+              <Button
+                type="button"
+                tone="neutral"
+                className="min-h-11 w-full sm:w-auto"
+                pending={contractsLoadingMore}
+                pendingLabel="Loading…"
+                onClick={async () => {
+                  setContractsLoadingMore(true);
+                  const res = await fetch(
+                    `/api/documents/contracts?offset=${contracts.length}`,
+                  );
+                  setContractsLoadingMore(false);
+                  if (!res.ok) {
+                    push("Could not load contracts", "danger");
+                    return;
+                  }
+                  const d = await res.json();
+                  setContracts((prev) => [...prev, ...(d.contracts || [])]);
+                  setContractsHasMore(Boolean(d.hasMore));
+                }}
+              >
+                Load more
+              </Button>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
+
+      {tab === "questionnaires" ? (
+        <div className="space-y-6">
+          <p className="text-sm text-muted">
+            Send questionnaires from a project. Responses land here.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink href="/admin/projects" className="min-h-11">
+              Open projects
+            </ButtonLink>
+            <Button
+              type="button"
+              tone="ghost"
+              className="min-h-11"
+              onClick={() => setTab("templates")}
+            >
+              Questionnaire templates
+            </Button>
+          </div>
+          <section className="space-y-4">
+            <h2 className="font-display text-2xl">Responses</h2>
+            <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
+              {loading ? (
+                <li className="py-4 text-sm text-muted">Loading…</li>
+              ) : responses.length === 0 ? (
+                <li className="py-4 text-sm text-muted">None yet.</li>
+              ) : (
+                responses.map((r) => {
+                  const open = expandedResponseId === r.id;
+                  return (
+                    <li
+                      key={r.id}
+                      className="border border-line p-4 sm:border-0 sm:p-0 sm:py-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="font-medium">{r.title}</p>
+                          <p className="text-sm text-muted">
+                            {projectName(r.projectId)}
+                            {" · "}
+                            {r.submittedAt
+                              ? `Submitted ${new Date(r.submittedAt).toLocaleString()}`
+                              : "Awaiting answers"}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
+                            href={`/admin/projects/${r.projectId}#workflow`}
+                          >
+                            Project
+                          </a>
+                          {r.submittedAt ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              tone="neutral"
+                              className="min-h-11"
+                              onClick={() =>
+                                setExpandedResponseId(open ? null : r.id)
+                              }
+                            >
+                              {open ? "Hide answers" : "View answers"}
+                            </Button>
+                          ) : null}
+                          <a
+                            className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
+                            href={`/q/${r.token}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Preview
+                          </a>
+                        </div>
+                      </div>
+                      {open && r.submittedAt ? (
+                        <AnswersList
+                          questions={r.questions}
+                          answers={r.answers || {}}
+                        />
+                      ) : null}
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+            {responsesHasMore ? (
+              <Button
+                type="button"
+                tone="neutral"
+                className="min-h-11 w-full sm:w-auto"
+                pending={responsesLoadingMore}
+                pendingLabel="Loading…"
+                onClick={async () => {
+                  setResponsesLoadingMore(true);
+                  const res = await fetch(
+                    `/api/documents/questionnaires?offset=${responses.length}`,
+                  );
+                  setResponsesLoadingMore(false);
+                  if (!res.ok) {
+                    push("Could not load responses", "danger");
+                    return;
+                  }
+                  const q = await res.json();
+                  setResponses((prev) => [...prev, ...(q.responses || [])]);
+                  setResponsesHasMore(Boolean(q.hasMore));
+                }}
+              >
+                Load more
+              </Button>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
+
+      {tab === "templates" ? (
+        <div className="space-y-10">
+          <Card className="p-5">
+            <h2 className="mb-4 font-display text-2xl">
+              {editingTemplateId ? "Edit contract template" : "Contract template"}
+            </h2>
+            <form onSubmit={saveContractTemplate} className="max-w-2xl space-y-4">
+              <Field>
+                <Label htmlFor="tmpl-name">Name</Label>
+                <Input
+                  id="tmpl-name"
+                  value={tmplName}
+                  onChange={(e) => {
+                    setTmplName(e.target.value);
+                    setDocDirty(true);
+                  }}
+                  required
+                />
+              </Field>
+              <Field>
+                <Label htmlFor="tmpl-body">Body</Label>
+                <Textarea
+                  id="tmpl-body"
+                  value={tmplBody}
+                  onChange={(e) => {
+                    setTmplBody(e.target.value);
+                    setDocDirty(true);
+                  }}
+                  rows={14}
+                  required
+                />
+                {!editingTemplateId ? (
+                  <Button
+                    type="button"
+                    tone="ghost"
+                    size="sm"
+                    onClick={() => setTmplBody(defaultContractBody())}
+                  >
+                    Reset to standard clauses
+                  </Button>
+                ) : null}
+              </Field>
+              <fieldset className="space-y-3 border border-line p-4">
+                <legend className="px-1 text-sm font-medium">Cancel policy</legend>
+                <label className="flex min-h-11 items-center gap-3 text-sm">
+                  <Checkbox
+                    checked={tmplUntilPayment}
+                    onChange={(e) => setTmplUntilPayment(e.target.checked)}
+                  />
+                  Until payment received
+                </label>
+                <Field>
+                  <Label htmlFor="tmpl-days">Days before session</Label>
+                  <Input
+                    id="tmpl-days"
+                    type="number"
+                    min={0}
+                    value={tmplDaysBefore}
+                    onChange={(e) => setTmplDaysBefore(e.target.value)}
+                    placeholder="Optional"
+                  />
+                </Field>
+              </fieldset>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button type="submit" className="min-h-11">
+                  {editingTemplateId ? "Save template" : "Create template"}
+                </Button>
+                {editingTemplateId ? (
+                  <Button
+                    type="button"
+                    tone="ghost"
+                    className="min-h-11"
+                    onClick={() => setEditingTemplateId(null)}
+                  >
+                    Cancel edit
+                  </Button>
+                ) : null}
+              </div>
+            </form>
+            {contractTemplates.length > 0 ? (
+              <ul className="mt-6 space-y-3 border-t border-line pt-4">
+                {contractTemplates.map((t) => (
+                  <li
+                    key={t.id}
+                    className="flex flex-col gap-2 border border-line p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium">{t.name}</p>
+                      <p className="text-sm text-muted">
+                        {t.cancelPolicy?.untilPayment
+                          ? "Until payment"
+                          : "No payment gate"}
+                        {t.cancelPolicy?.daysBeforeSession != null
+                          ? ` · ${t.cancelPolicy.daysBeforeSession}d before session`
+                          : ""}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      tone="ghost"
+                      className="min-h-11 w-full sm:w-auto"
+                      onClick={() => startEditTemplate(t)}
+                    >
+                      Edit
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </Card>
+
+          <Card className="p-5">
+            <h2 className="mb-4 font-display text-2xl">
+              {editingQId ? "Edit questionnaire template" : "Questionnaire template"}
+            </h2>
+            <form onSubmit={saveQTemplate} className="max-w-2xl space-y-3">
+              <Field>
+                <Label htmlFor="qname">Name</Label>
+                <Input
+                  id="qname"
+                  value={qName}
+                  onChange={(e) => {
+                    setQName(e.target.value);
+                    setDocDirty(true);
+                  }}
+                />
+              </Field>
+              <IntakeListEditor
+                label="Questions"
+                questions={qQuestions}
+                onChange={(next) => {
+                  setQQuestions(next);
+                  setDocDirty(true);
+                }}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="submit"
+                  tone="neutral"
+                  className="min-h-11"
+                  pending={qBusy}
+                  pendingLabel="Saving…"
+                >
+                  {editingQId ? "Save template" : "Create template"}
+                </Button>
+                {editingQId ? (
+                  <Button
+                    type="button"
+                    tone="ghost"
+                    className="min-h-11"
+                    onClick={cancelEditQTemplate}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
+              </div>
+            </form>
+            {templates.length > 0 ? (
+              <ul className="mt-6 space-y-2 border-t border-line pt-4 text-sm">
+                {templates.map((t) => (
+                  <li
+                    key={t.id}
+                    className="flex flex-wrap items-center justify-between gap-2"
+                  >
+                    <span>
+                      {t.name}
+                      <span className="text-muted">
+                        {" "}
+                        · {t.questions.length} questions
+                      </span>
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      tone="ghost"
+                      className="min-h-11"
+                      onClick={() => startEditQTemplate(t)}
+                    >
+                      Edit
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </Card>
+
+          {packageNames.length > 0 ? (
+            <section className="space-y-3">
+              <h2 className="font-display text-2xl">Quote packages</h2>
+              <ul className="space-y-3 sm:divide-y sm:divide-line sm:border-y sm:border-line">
+                {packageNames.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex flex-col gap-1 border border-line p-4 sm:flex-row sm:justify-between sm:gap-3 sm:border-0 sm:p-0 sm:py-3"
+                  >
+                    <span className="text-sm">{p.name}</span>
+                    <a
+                      className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
+                      href="/admin/prep?tab=packages"
+                    >
+                      Edit in Library
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+export default function DocumentsPage() {
+  return (
+    <Suspense
+      fallback={<EmptyState variant="loading" title="Loading documents…" />}
+    >
+      <DocumentsPageInner />
+    </Suspense>
   );
 }

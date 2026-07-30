@@ -15,6 +15,7 @@ import {
   ListRow,
   useToast,
 } from "@/components/ui";
+import { mutateJson } from "@/lib/client/mutation";
 import { firebaseConfigured, getFirebaseAuth } from "@/lib/firebase/client";
 import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 
@@ -90,22 +91,29 @@ export function SettingsAccount() {
   async function saveAccount(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "account",
-        ownerFirstName: ownerFirstName.trim(),
-        ownerLastName: ownerLastName.trim(),
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+    try {
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "account",
+            ownerFirstName: ownerFirstName.trim(),
+            ownerLastName: ownerLastName.trim(),
+          }),
+        },
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setDirty(false);
+      push("Account saved", "success");
+    } finally {
+      setSaving(false);
     }
-    setDirty(false);
-    push("Account saved", "success");
   }
 
   async function changePassword(e: FormEvent) {
@@ -182,7 +190,7 @@ export function SettingsAccount() {
         </div>
 
         <form onSubmit={saveAccount} className="space-y-4">
-          <Field hint="Sign-in email. Can’t change here.">
+          <Field>
             <Label htmlFor="owner-email">Owner email</Label>
             <Input
               id="owner-email"

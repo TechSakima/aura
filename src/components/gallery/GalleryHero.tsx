@@ -11,16 +11,31 @@ import type {
 } from "@/lib/types";
 
 function titleClassFor(treatment: GalleryTitleTreatment): string {
+  const wrap = "max-w-full min-w-0 break-words";
   switch (treatment) {
     case "display-light":
-      return "font-display text-4xl font-light tracking-[0.08em] sm:text-6xl md:text-7xl";
+      return cn(
+        wrap,
+        "font-display text-4xl font-light tracking-[0.08em] sm:text-6xl md:text-7xl",
+      );
     case "display-vertical":
-      return "font-display text-4xl uppercase tracking-[0.2em] [writing-mode:vertical-rl] rotate-180 sm:text-5xl";
+      // Vertical type only when roomy — not landscape phones (AURA-283/286).
+      return cn(
+        wrap,
+        "font-display text-3xl uppercase tracking-[0.16em] sm:text-4xl",
+        "roomy:text-5xl roomy:tracking-[0.2em] roomy:[writing-mode:vertical-rl] roomy:rotate-180",
+      );
     case "sans-tight":
-      return "font-sans text-3xl font-semibold uppercase tracking-[0.12em] sm:text-5xl md:text-6xl";
+      return cn(
+        wrap,
+        "font-sans text-3xl font-semibold uppercase tracking-[0.12em] sm:text-5xl md:text-6xl",
+      );
     case "sans-wide":
     default:
-      return "font-sans text-3xl font-semibold uppercase tracking-[0.16em] sm:text-5xl md:text-6xl";
+      return cn(
+        wrap,
+        "font-sans text-3xl font-semibold uppercase tracking-[0.16em] sm:text-5xl md:text-6xl",
+      );
   }
 }
 
@@ -152,7 +167,7 @@ export function GalleryHero({
 
       <div
         className={cn(
-          "relative z-10 flex px-5 sm:px-10",
+          "relative z-10 flex min-w-0 shell-pad pt-[env(safe-area-inset-top)]",
           minH,
           frameClassFor(layout),
           entered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
@@ -160,24 +175,24 @@ export function GalleryHero({
         )}
       >
         {layout === "split" ? (
-          <div className="mx-auto flex w-full max-w-[var(--public-max)] flex-col items-center gap-8 text-center sm:flex-row sm:items-end sm:justify-between sm:text-left">
-            <div>
+          <div className="mx-auto flex w-full min-w-0 max-w-[var(--public-max)] flex-col items-center gap-8 text-center roomy:flex-row roomy:items-end roomy:justify-between roomy:text-left">
+            <div className="min-w-0 max-w-full">
               <h1 className={titleClass}>{title}</h1>
               {dateEl ? <div className="mt-3">{dateEl}</div> : null}
               {daysEl ? <div className="mt-2">{daysEl}</div> : null}
-              <div className="sm:hidden">{cta}</div>
+              <div className="roomy:hidden">{cta}</div>
             </div>
-            <div className="hidden sm:block">{cta}</div>
+            <div className="hidden shrink-0 roomy:block">{cta}</div>
           </div>
         ) : layout === "minimal" ? (
-          <div className="mx-auto w-full max-w-[var(--public-max)] text-left">
+          <div className="mx-auto w-full min-w-0 max-w-[var(--public-max)] text-left">
             {dateEl ? <div className="mb-2">{dateEl}</div> : null}
             <h1 className={titleClass}>{title}</h1>
             {daysEl ? <div className="mt-3">{daysEl}</div> : null}
             {cta}
           </div>
         ) : layout === "cinematic" ? (
-          <div className="mx-auto flex w-full max-w-[var(--public-max)] flex-col items-center">
+          <div className="mx-auto flex w-full min-w-0 max-w-[var(--public-max)] flex-col items-center">
             {dateEl ? <div className="mb-4">{dateEl}</div> : null}
             <h1 className={titleClass}>{title}</h1>
             {daysEl ? <div className="mt-5">{daysEl}</div> : null}
@@ -186,7 +201,7 @@ export function GalleryHero({
         ) : (
           <div
             className={cn(
-              "mx-auto w-full max-w-[var(--public-max)]",
+              "mx-auto w-full min-w-0 max-w-[var(--public-max)]",
               layout === "centered" ? "flex flex-col items-center" : "",
             )}
           >

@@ -57,7 +57,7 @@ export function resolveGalleryBrandCssVars(
   });
 }
 
-/** Manifest / OS chrome colors from resolved brand. */
+/** Manifest / OS chrome colors from resolved brand (AURA-295: theme = canvas). */
 export function resolveGalleryBrandColors(
   design:
     | Pick<GalleryDesign, "themeId" | "brandSource" | "background" | "accent">
@@ -67,14 +67,16 @@ export function resolveGalleryBrandColors(
 ): { backgroundColor: string; themeColor: string } {
   const source = asGalleryBrandSource(design?.brandSource);
   if (source === "studio" && studioTheme) {
+    const backgroundColor = studioTheme.background;
     return {
-      backgroundColor: studioTheme.background,
-      themeColor: studioTheme.accent,
+      backgroundColor,
+      themeColor: backgroundColor,
     };
   }
   const theme = resolveGalleryTheme(design?.themeId);
+  const backgroundColor = design?.background || theme.bg;
   return {
-    backgroundColor: design?.background || theme.bg,
-    themeColor: design?.accent || theme.accent,
+    backgroundColor,
+    themeColor: backgroundColor,
   };
 }

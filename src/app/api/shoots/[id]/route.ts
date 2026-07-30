@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withApiDeprecation } from "@/lib/api-deprecation";
 import { requireAdmin } from "@/lib/auth";
 import { deleteShootCascade } from "@/lib/db/delete-shoot";
 import { getShootBundle, updateStudioDb } from "@/lib/db/store";
@@ -10,6 +11,11 @@ import {
 } from "@/lib/google-calendar";
 import type { ShootStatus } from "@/lib/types";
 
+function dep(res: NextResponse, id: string) {
+  return withApiDeprecation(res, `/api/sessions/${id}`);
+}
+
+/** @deprecated Use `/api/sessions/[id]` (AURA-273). */
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -27,13 +33,17 @@ export async function GET(
         return safe;
       })()
     : null;
-  return NextResponse.json({
-    shoot: bundle.shoot,
-    client: bundle.client,
-    gallery,
-  });
+  return dep(
+    NextResponse.json({
+      shoot: bundle.shoot,
+      client: bundle.client,
+      gallery,
+    }),
+    id,
+  );
 }
 
+/** @deprecated Use `/api/sessions/[id]` (AURA-273). */
 export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -150,12 +160,16 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({
-    shoot,
-    calendarSyncFailed: calendarSyncFailed || undefined,
-  });
+  return dep(
+    NextResponse.json({
+      shoot,
+      calendarSyncFailed: calendarSyncFailed || undefined,
+    }),
+    id,
+  );
 }
 
+/** @deprecated Use `/api/sessions/[id]` (AURA-273). */
 export async function DELETE(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -176,5 +190,5 @@ export async function DELETE(
       eventId,
     });
   }
-  return NextResponse.json({ ok: true, deleted: id });
+  return dep(NextResponse.json({ ok: true, deleted: id }), id);
 }

@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Checkbox,
   Field,
   FileUploadButton,
   Input,
@@ -27,8 +28,12 @@ export function StringListEditor({
       <Label>{label}</Label>
       <div className="space-y-2">
         {values.map((v, i) => (
-          <div key={i} className="flex gap-2">
+          <div
+            key={i}
+            className="flex min-w-0 flex-col gap-[var(--density-control-gap,0.5rem)] sm:flex-row"
+          >
             <Input
+              className="min-w-0 flex-1"
               value={v}
               onChange={(e) => {
                 const next = [...values];
@@ -39,6 +44,7 @@ export function StringListEditor({
             <Button
               type="button"
               tone="ghost"
+              className="min-h-11 w-full shrink-0 sm:w-auto"
               onClick={() => onChange(values.filter((_, j) => j !== i))}
             >
               Remove
@@ -180,9 +186,8 @@ export function IntakeListEditor({
                 <option value="select">Dropdown</option>
                 <option value="date">Date</option>
               </select>
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+              <label className="inline-flex min-h-11 items-center gap-2 text-sm">
+                <Checkbox
                   checked={Boolean(q.required)}
                   onChange={(e) => {
                     const next = [...questions];
@@ -290,9 +295,8 @@ export function PricingListEditor({
                 onChange(next);
               }}
             />
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <label className="inline-flex min-h-11 items-center gap-2 text-sm">
+              <Checkbox
                 checked={Boolean(t.highlighted)}
                 onChange={(e) => {
                   const next = [...tiers];
@@ -434,9 +438,8 @@ export function ShotItemsEditor({
                   onFiles={(files) => void uploadExample(i, files)}
                 />
               ) : null}
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+              <label className="inline-flex min-h-11 items-center gap-2 text-sm">
+                <Checkbox
                   checked={item.mustHave}
                   onChange={(e) => {
                     const next = [...items];

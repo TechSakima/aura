@@ -13,6 +13,7 @@ import {
   useConfirm,
   useToast,
 } from "@/components/ui";
+import { mutateJson } from "@/lib/client/mutation";
 import {
   clampWatermarkScale,
   DEFAULT_WATERMARK_SCALE,
@@ -102,40 +103,41 @@ export function SettingsWatermarks({
       return;
     }
     setWmBusy(true);
-    const form = new FormData();
-    form.set("name", wmName);
-    form.set("mode", wmMode);
-    form.set("text", wmText);
-    form.set("position", wmPosition);
-    form.set("opacity", wmOpacity);
-    form.set("scale", String(clampWatermarkScale(wmScale)));
-    if (wmFile) form.set("file", wmFile);
+    try {
+      const form = new FormData();
+      form.set("name", wmName);
+      form.set("mode", wmMode);
+      form.set("text", wmText);
+      form.set("position", wmPosition);
+      form.set("opacity", wmOpacity);
+      form.set("scale", String(clampWatermarkScale(wmScale)));
+      if (wmFile) form.set("file", wmFile);
 
-    const res = await fetch(
-      editingId ? `/api/watermarks/${editingId}` : "/api/watermarks",
-      { method: editingId ? "PATCH" : "POST", body: form },
-    );
-    setWmBusy(false);
-    if (!res.ok) {
-      push(
-        editingId ? "Could not update watermark" : "Could not add watermark",
-        "danger",
+      const result = await mutateJson<{ photosUpdated?: number }>(
+        editingId ? `/api/watermarks/${editingId}` : "/api/watermarks",
+        { method: editingId ? "PATCH" : "POST", body: form },
+        { action: editingId ? "update watermark" : "add watermark" },
       );
-      return;
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      const data = result.data;
+      if (editingId && data.photosUpdated != null) {
+        push(
+          `Watermark updated · refreshed ${data.photosUpdated} photo${
+            data.photosUpdated === 1 ? "" : "s"
+          }`,
+          "success",
+        );
+      } else {
+        push(editingId ? "Watermark updated" : "Watermark added", "success");
+      }
+      resetWmForm();
+      await load();
+    } finally {
+      setWmBusy(false);
     }
-    const data = await res.json().catch(() => ({}));
-    if (editingId && data.photosUpdated != null) {
-      push(
-        `Watermark updated · refreshed ${data.photosUpdated} photo${
-          data.photosUpdated === 1 ? "" : "s"
-        }`,
-        "success",
-      );
-    } else {
-      push(editingId ? "Watermark updated" : "Watermark added", "success");
-    }
-    resetWmForm();
-    await load();
   }
 
   async function deleteWatermark(preset: WatermarkPreset) {
@@ -146,11 +148,11 @@ export function SettingsWatermarks({
       tone: "danger",
     });
     if (!ok) return;
-    const res = await fetch(`/api/watermarks/${preset.id}`, {
+    const result = await mutateJson(`/api/watermarks/${preset.id}`, {
       method: "DELETE",
-    });
-    if (!res.ok) {
-      push("Could not delete watermark", "danger");
+    }, { action: "delete watermark" });
+    if (!result.ok) {
+      push(result.errorMessage, "danger");
       return;
     }
     if (editingId === preset.id) resetWmForm();

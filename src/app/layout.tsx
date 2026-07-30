@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import {
   Cormorant_Garamond,
   DM_Sans,
@@ -7,10 +7,20 @@ import {
   Newsreader,
   Syne,
 } from "next/font/google";
+import { OfflineStatus } from "@/components/pwa/OfflineStatus";
 import { RegisterSW } from "@/components/pwa/RegisterSW";
+import { StandaloneChrome } from "@/components/pwa/StandaloneChrome";
 import { ConfirmProvider } from "@/components/ui/confirm";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
+
+/** Notch / home-indicator insets (AURA-281). Default chrome matches Aura canvas (AURA-295). */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f3efe6",
+};
 
 /** Default admin display — also used by serif / display kits */
 const fraunces = Fraunces({
@@ -75,6 +85,8 @@ export default function RootLayout({
         <ToastProvider>
           <ConfirmProvider>
             <RegisterSW />
+            <StandaloneChrome />
+            <OfflineStatus />
             {children}
           </ConfirmProvider>
         </ToastProvider>

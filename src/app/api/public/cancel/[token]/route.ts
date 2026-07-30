@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
+import { COL } from "@/lib/db/collections";
 import {
   findStudioIdByProjectCancelToken,
+  patchStudioDoc,
   readStudioDb,
-  updateStudioDb,
 } from "@/lib/db/store";
 import {
   emailStudioBookingCanceled,
   notifyStudio,
 } from "@/lib/notify/send";
 import { deleteGoogleCalendarEvent } from "@/lib/google-calendar";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import type { CancelPolicy } from "@/lib/types";
 
 function canCancel(opts: {
@@ -84,6 +86,17 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
+  const limited = rateLimit(`cancel:${token}:${clientIp(req)}`, 5, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
+
   const body = await req.json().catch(() => ({}));
   const reason = String(body.reason || "").trim();
   if (!reason) {
@@ -131,31 +144,24 @@ export async function POST(
 
   const googleEventId = session?.googleEventId;
 
-  await updateStudioDb(studioId, (d) => {
-    const now = new Date().toISOString();
-    const p = d.projects.find((x) => x.id === project.id);
-    if (p) {
-      p.stage = "canceled";
-      p.workflowStep = "inquiry";
-      p.updatedAt = now;
-    }
-    const b = d.bookingRequests.find((x) => x.projectId === project.id);
-    if (b) {
-      b.status = "canceled";
-      b.cancelReason = reason;
-      b.updatedAt = now;
-    }
-    const s = session
-      ? d.sessions.find((x) => x.id === session.id)
-      : undefined;
-    if (s) {
-      s.status = "archived";
-      s.startsAt = undefined;
-      s.endsAt = undefined;
-      s.googleEventId = undefined;
-      s.updatedAt = now;
-    }
+  await patchStudioDoc(COL.projects, project.id, {
+    stage: "canceled",
+    workflowStep: "inquiry",
   });
+  if (booking) {
+    await patchStudioDoc(COL.bookingRequests, booking.id, {
+      status: "canceled",
+      cancelReason: reason,
+    });
+  }
+  if (session) {
+    await patchStudioDoc(COL.projectSessions, session.id, {
+      status: "archived",
+      startsAt: null,
+      endsAt: null,
+      googleEventId: null,
+    });
+  }
 
   if (googleEventId) {
     await deleteGoogleCalendarEvent({ studioId, eventId: googleEventId });
@@ -173,7 +179,7 @@ export async function POST(
     type: "booking_canceled",
     title: "Request canceled",
     body: `${project.name}: ${reason}`,
-    href: `/admin/projects/${project.id}`,
+    href: `/admin/projects/${project.id}#workflow`,
     emailStudio: false,
   });
 

@@ -2,34 +2,112 @@ import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
 import {
+  parseAdminListPage,
+  slicePage,
+} from "@/lib/admin-list-page";
+import { projectOrSessionDeliveryHref } from "@/lib/admin-deep-links";
+import {
   galleryExpiryFromNow,
   studioDeliveryDefaults,
 } from "@/lib/delivery-defaults";
-import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  listGalleriesForStudio,
+  listProjectsForStudio,
+  readStudioDb,
+  updateStudioDb,
+} from "@/lib/db/store";
 import {
   designFromPreset,
   normalizeGalleryDesign,
 } from "@/lib/gallery-design";
 import { hashPin, PinValidationError } from "@/lib/pin";
 import { publicToken } from "@/lib/tokens";
+import type { Gallery, GalleryStatus } from "@/lib/types";
 
-export async function GET() {
+function effectiveGalleryStatus(g: Gallery): GalleryStatus {
+  if (g.status === "archived" || g.status === "draft") return g.status;
+  if (g.status === "expired") return "expired";
+  const exp = new Date(g.expiresAt).getTime();
+  if (Number.isFinite(exp) && exp <= Date.now()) return "expired";
+  return g.status === "live" ? "live" : g.status;
+}
+
+/**
+ * Gallery list (AURA-064).
+ * `options=1` — slim rows for Settings. Default — paginated admin index.
+ */
+export async function GET(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await readStudioDb(admin.studioId);
+
+  const url = new URL(req.url);
+  const galleries = await listGalleriesForStudio(admin.studioId);
+
+  if (url.searchParams.get("options") === "1") {
+    const rows = galleries
+      .map(({ downloadPinHash: _, ...g }) => g)
+      .sort((a, b) =>
+        (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt),
+      );
+    return NextResponse.json({ galleries: rows });
+  }
+
+  const { offset, limit } = parseAdminListPage(url);
+  const q = (url.searchParams.get("q") || "").trim().toLowerCase();
+  const statusFilter = (url.searchParams.get("status") || "all").toLowerCase();
+  const projects = await listProjectsForStudio(admin.studioId);
+  const projectName = new Map(projects.map((p) => [p.id, p.name]));
+
+  let filtered = galleries.map((g) => {
+    const status = effectiveGalleryStatus(g);
+    const sessionId = g.sessionId || g.shootId;
+    const projectId = g.projectId || "";
+    return {
+      id: g.id,
+      title: g.title,
+      status,
+      expiresAt: g.expiresAt,
+      liveAt: g.liveAt,
+      projectId: projectId || undefined,
+      sessionId: sessionId || undefined,
+      projectName: projectId ? projectName.get(projectId) || "Project" : undefined,
+      publicToken: g.publicToken,
+      adminHref: projectOrSessionDeliveryHref({
+        projectId,
+        sessionId,
+        fallback: "/admin/projects",
+      }),
+      updatedAt: g.updatedAt,
+      createdAt: g.createdAt,
+    };
+  });
+
+  if (statusFilter !== "all") {
+    filtered = filtered.filter((g) => g.status === statusFilter);
+  }
+  if (q) {
+    filtered = filtered.filter(
+      (g) =>
+        g.title.toLowerCase().includes(q) ||
+        (g.projectName || "").toLowerCase().includes(q),
+    );
+  }
+  filtered = filtered.sort((a, b) => {
+    const aExp = a.expiresAt || "";
+    const bExp = b.expiresAt || "";
+    if (aExp && bExp && aExp !== bExp) return aExp.localeCompare(bExp);
+    return (b.updatedAt || b.createdAt).localeCompare(
+      a.updatedAt || a.createdAt,
+    );
+  });
+
+  const page = slicePage(filtered, offset, limit);
   return NextResponse.json({
-    galleries: db.galleries.map(({ downloadPinHash: _, ...g }) => g),
-    shoots: db.sessions,
-    clients: db.projects.map((c) => ({
-      id: c.id,
-      name: c.name,
-      email: c.email,
-    })),
-    watermarkPresets: db.watermarkPresets,
-    photoCounts: db.photos.reduce<Record<string, number>>((acc, p) => {
-      acc[p.galleryId] = (acc[p.galleryId] || 0) + 1;
-      return acc;
-    }, {}),
+    galleries: page.items,
+    total: page.total,
+    hasMore: page.hasMore,
+    offset,
+    limit,
   });
 }
 

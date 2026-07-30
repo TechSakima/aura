@@ -72,7 +72,7 @@ export function IconMessage({ size = 18 }: { size?: number }) {
   );
 }
 
-/** Gallery chrome: IconButton + label (AURA-217). */
+/** Gallery chrome: IconButton + label (AURA-217). Thumb bar uses icon-only (AURA-378). */
 export function GalleryNavItem({
   label,
   onClick,
@@ -80,6 +80,7 @@ export function GalleryNavItem({
   active,
   className,
   tone,
+  iconOnly,
 }: {
   label: string;
   onClick: () => void;
@@ -87,10 +88,13 @@ export function GalleryNavItem({
   active?: boolean;
   className?: string;
   tone?: "default" | "onAccent";
+  /** Hide visible label; keep aria-label (phone thumb bar). */
+  iconOnly?: boolean;
 }) {
   return (
     <IconButton
-      label={label}
+      label={iconOnly ? undefined : label}
+      aria-label={label}
       active={active}
       onClick={onClick}
       className={className}
@@ -101,7 +105,7 @@ export function GalleryNavItem({
   );
 }
 
-/** Photo tile: same IconButton recipe, on-media hover (≥44px). */
+/** Photo tile: icon-only ≥44px (labels crush 375 tiles — AURA-378). */
 export function GalleryTileAction({
   label,
   onClick,
@@ -113,9 +117,9 @@ export function GalleryTileAction({
 }) {
   return (
     <IconButton
-      label={label}
+      aria-label={label}
       onClick={onClick}
-      className="min-h-11 min-w-11 rounded-none text-[10px] tracking-[0.14em] hover:bg-ink/5"
+      className="size-11 min-h-11 min-w-11 rounded-none hover:bg-ink/5"
     >
       {children}
     </IconButton>

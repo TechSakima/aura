@@ -143,7 +143,16 @@ export function GalleryGuestState({
   onRetry?: () => void;
   className?: string;
 }) {
-  const copy = COPY[reason];
+  const offlineLoad =
+    (reason === "load_failed" || reason === "timeout") &&
+    typeof navigator !== "undefined" &&
+    !navigator.onLine;
+  const copy = offlineLoad
+    ? {
+        title: "You’re offline",
+        description: "Reconnect, then try again.",
+      }
+    : COPY[reason];
   const normalized = normalizeGalleryDesign(design);
   const themeStyle = resolveGalleryBrandCssVars(
     normalized,

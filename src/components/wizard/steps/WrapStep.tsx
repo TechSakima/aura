@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button, ButtonLink, useConfirm, useToast } from "@/components/ui";
+import {
+  confirmArchiveGallery,
+  confirmMarkDelivered,
+} from "@/lib/destructive-confirm";
 import type { Shoot } from "@/lib/types";
 import type { WizardGallery } from "@/components/wizard/useShootWizard";
 
@@ -54,7 +58,7 @@ export function WrapStep({
   const projectId = shoot.projectId || shoot.clientId;
 
   async function loadWrap() {
-    const res = await fetch(`/api/shoots/${shoot.id}/wrap`);
+    const res = await fetch(`/api/sessions/${shoot.id}/wrap`);
     if (!res.ok) return;
     const data = (await res.json()) as WrapSummary;
     setWrap(data);
@@ -80,8 +84,10 @@ export function WrapStep({
   }, [shoot.id, shoot.status, gallery?.id, gallery?.status, gallery?.showOnHomepage]);
 
   async function markDelivered() {
+    const ok = await confirm(confirmMarkDelivered());
+    if (!ok) return;
     setCompleting(true);
-    const res = await fetch(`/api/shoots/${shoot.id}/wrap`, { method: "POST" });
+    const res = await fetch(`/api/sessions/${shoot.id}/wrap`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
     setCompleting(false);
     if (!res.ok) {
@@ -101,12 +107,7 @@ export function WrapStep({
 
   async function archive() {
     if (!gallery) return;
-    const ok = await confirm({
-      title: "Archive gallery?",
-      message: "A zip will download and photos will be removed from the gallery.",
-      confirmLabel: "Archive",
-      tone: "danger",
-    });
+    const ok = await confirm(confirmArchiveGallery());
     if (!ok) return;
     setArchiving(true);
     const res = await fetch(`/api/galleries/${gallery.id}/archive`, {

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
 import { PublicShell } from "@/components/shells/PublicShell";
+import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
 import { Button, Field, Label, Textarea } from "@/components/ui";
 
@@ -91,9 +92,21 @@ export default function PublicCancelPage() {
         </p>
 
         {!canCancel ? (
-          <p className="mt-8 text-sm text-muted">
-            {blockReason || error || "This request can no longer be canceled here."}
-          </p>
+          <>
+            <p className="mt-8 text-sm text-muted">
+              {blockReason ||
+                error ||
+                "This request can no longer be canceled here."}
+            </p>
+            {studioName ? (
+              <PublicSoftFailureContact
+                studioName={studioName}
+                source="other"
+                cancelToken={token}
+                context={blockReason || name || "Cancel request"}
+              />
+            ) : null}
+          </>
         ) : (
           <form onSubmit={onSubmit} className="mt-8 space-y-4">
             <Field>

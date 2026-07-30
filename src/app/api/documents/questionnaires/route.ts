@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  parseAdminListPage,
+  slicePage,
+} from "@/lib/admin-list-page";
+import {
+  listContractTemplatesForStudio,
+  listPackageNameOptionsForStudio,
+  listQuestionnaireResponsesForStudio,
+  listQuestionnaireTemplatesForStudio,
+  readStudioDb,
+  updateStudioDb,
+} from "@/lib/db/store";
 import {
   absoluteUrl,
   emailQuestionnaireInvite,
@@ -14,18 +25,38 @@ import type {
   QuestionnaireTemplate,
 } from "@/lib/types";
 
-export async function GET() {
+/** Scoped reads + paginated responses (AURA-268). */
+export async function GET(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await readStudioDb(admin.studioId);
+
+  const url = new URL(req.url);
+  const { offset, limit } = parseAdminListPage(url);
+
+  const [templates, responses, contractTemplates, packageTemplates] =
+    await Promise.all([
+      listQuestionnaireTemplatesForStudio(admin.studioId),
+      listQuestionnaireResponsesForStudio(admin.studioId),
+      listContractTemplatesForStudio(admin.studioId),
+      listPackageNameOptionsForStudio(admin.studioId),
+    ]);
+
+  const sorted = [...responses].sort((a, b) =>
+    (b.submittedAt || b.createdAt || "").localeCompare(
+      a.submittedAt || a.createdAt || "",
+    ),
+  );
+  const page = slicePage(sorted, offset, limit);
+
   return NextResponse.json({
-    templates: db.questionnaireTemplates,
-    responses: db.questionnaireResponses,
-    contractTemplates: db.contractTemplates,
-    packageTemplates: db.packageTemplates.map((p) => ({
-      id: p.id,
-      name: p.name,
-    })),
+    templates,
+    responses: page.items,
+    contractTemplates,
+    packageTemplates,
+    total: page.total,
+    hasMore: page.hasMore,
+    offset,
+    limit,
   });
 }
 
@@ -173,13 +204,14 @@ export async function POST(req: Request) {
     clientName: project.name,
     title: response.title,
     token: response.token,
+    projectId,
   });
   await notifyStudio({
     studioId: admin.studioId,
     type: "questionnaire_sent",
     title: "Questionnaire sent",
     body: `${project.name} · ${response.title}`,
-    href: `/admin/projects/${projectId}`,
+    href: `/admin/projects/${projectId}#workflow`,
   });
 
   return NextResponse.json({ response, url });

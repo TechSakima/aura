@@ -1,5 +1,6 @@
-import { ShotListsPanel } from "@/components/admin/ShotListsPanel";
+import { redirect } from "next/navigation";
 
+/** Legacy URL — shot lists live under Library (AURA-062 / AURA-065). */
 export default function ShotListsPage() {
-  return <ShotListsPanel />;
+  redirect("/admin/prep?tab=shots");
 }

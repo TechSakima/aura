@@ -1,3 +1,14 @@
+/**
+ * When false, never read deprecated `clients` / `shoots` collections (AURA-273).
+ * Default true: empty-canonical studios still backfill once from legacy docs.
+ * Set `AURA_LEGACY_COLLECTIONS=0` after all tenants are on projects/projectSessions.
+ */
+export function legacyCollectionsEnabled(): boolean {
+  const v = process.env.AURA_LEGACY_COLLECTIONS?.trim().toLowerCase();
+  if (v === "0" || v === "false" || v === "off") return false;
+  return true;
+}
+
 /** Top-level Firestore collections for Aura (Admin SDK only). */
 export const COL = {
   /** @deprecated legacy single-studio doc — migrated into studios/ */

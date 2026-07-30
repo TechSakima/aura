@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ProjectMessagesTrail } from "@/components/admin/ProjectMessagesTrail";
 import { ProjectWorkflowPanel } from "@/components/admin/ProjectWorkflowPanel";
 import { ShootPublicLinks } from "@/components/admin/ShootPublicLinks";
 import {
@@ -19,9 +20,19 @@ import {
   useToast,
 } from "@/components/ui";
 
+import { mutateJson } from "@/lib/client/mutation";
+import {
+  confirmArchiveProject,
+  confirmDeleteProject,
+  confirmDeleteSession,
+  confirmUnarchiveProject,
+} from "@/lib/destructive-confirm";
 import type { Project, ProjectSession } from "@/lib/types";
 import { deriveWizardProgress } from "@/lib/wizard/steps";
-import { sessionToolsUnlocked } from "@/lib/workflow/path";
+import {
+  sessionToolsUnlocked,
+  workflowStepLabel,
+} from "@/lib/workflow/path";
 
 type SessionRow = ProjectSession & {
   currentStep?: string;
@@ -90,7 +101,7 @@ export default function ProjectDetailPage() {
     const rows = await Promise.all(
       summaries.map(async (shoot): Promise<SessionRow> => {
         try {
-          const wiz = await fetch(`/api/shoots/${shoot.id}/wizard`);
+          const wiz = await fetch(`/api/sessions/${shoot.id}/wizard`);
           if (!wiz.ok) {
             return {
               ...shoot,
@@ -137,17 +148,20 @@ export default function ProjectDetailPage() {
 
   async function saveProject(e: FormEvent) {
     e.preventDefault();
-    const res = await fetch(`/api/projects/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, phone, notes }),
-    });
-    if (!res.ok) {
-      push("Save failed", "danger");
+    const result = await mutateJson<{ project: Project }>(
+      `/api/projects/${id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, phone, notes }),
+      },
+      { action: "save" },
+    );
+    if (!result.ok) {
+      push(result.errorMessage, "danger");
       return;
     }
-    const data = await res.json();
-    setProject(data.project as Project);
+    setProject(result.data.project);
     setEditing(false);
     push("Project updated", "success");
   }
@@ -182,10 +196,10 @@ export default function ProjectDetailPage() {
     }
 
     const openPrep = await confirm({
-      title: "Open prep?",
+      title: `Open ${workflowStepLabel("prep")}?`,
       message:
-        "Booking steps aren’t finished yet. Stay on the project workflow, or open prep for this session.",
-      confirmLabel: "Open prep",
+        "Earlier steps aren’t finished yet. Stay on the project workflow, or open the plan for this session.",
+      confirmLabel: "Open plan",
       cancelLabel: "Stay on project",
       tone: "neutral",
     });
@@ -202,13 +216,11 @@ export default function ProjectDetailPage() {
   async function archiveProjectAction() {
     if (!project) return;
     const archiving = project.stage !== "archived";
-    const ok = await confirm({
-      title: archiving ? "Archive project?" : "Unarchive project?",
-      message: archiving
-        ? `“${project.name}” will be hidden from the default list.`
-        : `“${project.name}” will return to active projects.`,
-      confirmLabel: archiving ? "Archive" : "Unarchive",
-    });
+    const ok = await confirm(
+      archiving
+        ? confirmArchiveProject(project.name)
+        : confirmUnarchiveProject(project.name),
+    );
     if (!ok) return;
     const res = await fetch(`/api/projects/${id}`, {
       method: "PATCH",
@@ -227,12 +239,7 @@ export default function ProjectDetailPage() {
 
   async function deleteProjectAction() {
     if (!project) return;
-    const ok = await confirm({
-      title: "Delete permanently?",
-      message: `“${project.name}” and its sessions, quotes, and galleries will be removed.`,
-      confirmLabel: "Delete",
-      tone: "danger",
-    });
+    const ok = await confirm(confirmDeleteProject(project.name));
     if (!ok) return;
     const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
     if (!res.ok) {
@@ -244,13 +251,10 @@ export default function ProjectDetailPage() {
   }
 
   async function deleteSession(session: SessionRow) {
-    const label = [session.type, session.startsAt?.slice(0, 10)].filter(Boolean).join(" · ");
-    const ok = await confirm({
-      title: "Delete session?",
-      message: `“${label}” and its quote, plan, and gallery photos will be removed.`,
-      confirmLabel: "Delete",
-      tone: "danger",
-    });
+    const label =
+      [session.type, session.startsAt?.slice(0, 10)].filter(Boolean).join(" · ") ||
+      "Session";
+    const ok = await confirm(confirmDeleteSession(label));
     if (!ok) return;
     const res = await fetch(`/api/sessions/${session.id}`, { method: "DELETE" });
     if (!res.ok) {
@@ -362,17 +366,16 @@ export default function ProjectDetailPage() {
         )}
       </section>
 
+      <ProjectMessagesTrail projectId={id} />
+
       <section className="space-y-5">
-        <SectionIntro
-          title="New session"
-          description="Add a dated occurrence. Prep opens after deposit, or when you choose."
-        />
+        <SectionIntro title="New session" />
         <form
           onSubmit={createSession}
           className="grid max-w-3xl gap-4 sm:grid-cols-3"
         >
           <Field>
-            <Label>Type</Label>
+            <Label>Session label</Label>
             <Input
               value={sessionType}
               onChange={(e) => setSessionType(e.target.value)}

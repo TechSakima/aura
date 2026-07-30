@@ -3,6 +3,8 @@ import { COL } from "@/lib/db/collections";
 import { appendStudioDoc } from "@/lib/db/store";
 import type { AnalyticsEvent, AnalyticsEventType } from "@/lib/types";
 
+export { analyticsEventLabel } from "@/lib/analytics-labels";
+
 /** Append-only analytics write — never full-studio RMW (AURA-003). */
 export async function recordEvent(input: {
   type: AnalyticsEventType;

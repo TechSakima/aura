@@ -13,6 +13,7 @@ import {
   useToast,
 } from "@/components/ui";
 
+import { mutateJson } from "@/lib/client/mutation";
 import {
   DATE_FORMATS,
   formatStudioDate,
@@ -63,18 +64,25 @@ export function SettingsSection({ section }: { section: SettingsSectionId }) {
   async function saveStudio(e?: FormEvent) {
     e?.preventDefault();
     setSaving(true);
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ section: "studio", timeZone, dateFormat }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+    try {
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ section: "studio", timeZone, dateFormat }),
+        },
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setStudioDirty(false);
+      push("Studio saved", "success");
+    } finally {
+      setSaving(false);
     }
-    setStudioDirty(false);
-    push("Studio saved", "success");
   }
 
   const tzOptions = timeZoneSelectOptions(timeZone);

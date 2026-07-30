@@ -14,7 +14,7 @@ const toneClass: Record<Tone, string> = {
 };
 
 const sizeClass: Record<Size, string> = {
-  sm: "min-h-9 px-3 text-sm",
+  sm: "min-h-11 px-3 text-sm",
   md: "min-h-11 px-4 text-sm",
   lg: "min-h-12 px-5 text-base",
 };

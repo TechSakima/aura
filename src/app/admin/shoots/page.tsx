@@ -1,12 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-
+/** Legacy → projects (AURA-063). */
 export default function ShootsIndexRedirect() {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace("/admin/projects");
-  }, [router]);
-  return <p className="text-muted">Redirecting to projects…</p>;
+  redirect("/admin/projects");
 }

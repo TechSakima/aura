@@ -42,12 +42,26 @@ export function AlbumView({
     title || onBack || backHref || actions || subtitle || headerExtra,
   );
   const backControl = backHref ? (
-    <ButtonLink href={backHref} tone="ghost" size="sm" className="min-h-11 px-0">
-      ← {backLabel}
+    <ButtonLink
+      href={backHref}
+      tone="ghost"
+      size="sm"
+      className="min-h-11 px-0"
+      aria-label={backLabel}
+    >
+      <span className="sm:hidden">←</span>
+      <span className="hidden sm:inline">← {backLabel}</span>
     </ButtonLink>
   ) : onBack ? (
-    <Button tone="ghost" size="sm" className="min-h-11 px-0" onClick={onBack}>
-      ← {backLabel}
+    <Button
+      tone="ghost"
+      size="sm"
+      className="min-h-11 px-0"
+      onClick={onBack}
+      aria-label={backLabel}
+    >
+      <span className="sm:hidden">←</span>
+      <span className="hidden sm:inline">← {backLabel}</span>
     </Button>
   ) : null;
 
@@ -57,23 +71,32 @@ export function AlbumView({
         <header
           className={
             stickyHeader
-              ? "sticky top-0 z-20 border-b border-line bg-canvas/95 pt-[env(safe-area-inset-top)] backdrop-blur"
+              ? /* Short landscape: don't pin back+title+actions+AlbumNav (AURA-286) */
+                "sticky top-0 z-20 border-b border-line bg-canvas/95 pt-[env(safe-area-inset-top)] backdrop-blur short-vh:static"
               : "border-b border-line bg-canvas/95 pt-[env(safe-area-inset-top)]"
           }
         >
-          <div className="shell-pad mx-auto flex max-w-[var(--public-max)] flex-wrap items-center justify-between gap-3 py-3">
-            <div className="min-w-0">
-              {backControl}
-              {title ? (
-                <h1 className="font-display text-2xl sm:text-3xl">{title}</h1>
-              ) : null}
-              {subtitle ? (
-                <p className="text-sm text-muted">{subtitle}</p>
+          <div className="shell-pad mx-auto max-w-[var(--public-max)] py-2 sm:py-3">
+            <div className="flex min-w-0 items-start gap-2">
+              <div className="min-w-0 flex-1">
+                {backControl}
+                {title ? (
+                  <h1 className="truncate font-display text-xl short-vh:text-lg sm:text-3xl">
+                    {title}
+                  </h1>
+                ) : null}
+                {subtitle ? (
+                  <p className="mt-0.5 line-clamp-2 text-sm text-muted short-vh:hidden">
+                    {subtitle}
+                  </p>
+                ) : null}
+              </div>
+              {actions ? (
+                <div className="flex shrink-0 flex-col items-stretch gap-1 sm:flex-row sm:flex-wrap sm:items-center">
+                  {actions}
+                </div>
               ) : null}
             </div>
-            {actions ? (
-              <div className="flex flex-wrap gap-2">{actions}</div>
-            ) : null}
           </div>
           {headerExtra}
         </header>
@@ -112,7 +135,7 @@ export function AlbumShareButton({
   label?: string;
 }) {
   return (
-    <Button size="sm" tone="ghost" onClick={onShare}>
+    <Button size="sm" tone="ghost" className="min-h-11" onClick={onShare}>
       {label}
     </Button>
   );

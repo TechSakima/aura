@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MediaGrid } from "@/components/media/MediaGrid";
 import { HomepageCoverImage } from "@/components/public/homepage/HomepageCoverImage";
+import { ScrollRail } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { homepageLayoutToMediaMode } from "@/lib/media-grid";
 import type { HomepageGalleryCard } from "@/lib/homepage-payload";
@@ -33,7 +34,7 @@ export function HomepageCollections({
             <li key={g.token}>
               <Link
                 href={`/g/${g.token}`}
-                className="flex min-h-11 items-center gap-4 py-4 no-underline"
+                className="flex min-h-11 min-w-0 items-center gap-4 py-4 no-underline"
               >
                 <div className="h-16 w-16 shrink-0 overflow-hidden bg-line sm:h-20 sm:w-20">
                   <HomepageCoverImage
@@ -42,7 +43,7 @@ export function HomepageCollections({
                     className="h-full w-full"
                   />
                 </div>
-                <p className="font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
+                <p className="min-w-0 break-words font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
                   {g.title}
                 </p>
               </Link>
@@ -55,20 +56,22 @@ export function HomepageCollections({
 
   if (layout === "cinematic") {
     return (
-      <section className="relative py-14 sm:py-16">
-        <ul
-          className={cn(
-            "flex gap-3 overflow-x-auto overscroll-x-contain snap-x snap-mandatory",
-            "scroll-px-5 px-5 pb-3 sm:gap-4 sm:scroll-px-10 sm:px-10",
-            "[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+      <section className="py-14 sm:py-16">
+        <ScrollRail
+          fadeFrom="canvas"
+          fadeWidthClass="w-12 sm:w-16"
+          aria-label="Collections"
+          contentClassName={cn(
+            "gap-3 snap-x snap-mandatory scroll-px-5 px-5 pb-3",
+            "sm:gap-4 sm:scroll-px-10 sm:px-10",
           )}
         >
           {galleries.map((g) => (
-            <li
+            <div
               key={g.token}
               className="w-[min(78vw,22rem)] shrink-0 snap-start sm:w-[min(42vw,26rem)]"
             >
-              <Link href={`/g/${g.token}`} className="block no-underline">
+              <Link href={`/g/${g.token}`} className="block min-w-0 no-underline">
                 <div className="overflow-hidden bg-line">
                   {g.coverThumbUrl || g.coverPhotoUrl ? (
                     <HomepageCoverImage
@@ -80,17 +83,13 @@ export function HomepageCollections({
                     <div className="aspect-[3/4] bg-line" />
                   )}
                 </div>
-                <p className="mt-3 font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
+                <p className="mt-3 break-words font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
                   {g.title}
                 </p>
               </Link>
-            </li>
+            </div>
           ))}
-        </ul>
-        <div
-          className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-canvas to-transparent sm:w-16"
-          aria-hidden
-        />
+        </ScrollRail>
       </section>
     );
   }
@@ -126,7 +125,7 @@ export function HomepageCollections({
               "block no-underline",
               ctx.itemClassName,
               mode === "masonry" && "mb-4 sm:mb-5",
-              mode === "justified" && "min-w-[140px] sm:min-w-[180px]",
+              mode === "justified" && "min-w-0 sm:min-w-[180px]",
             )}
             style={{ animationDelay: ctx.animationDelay }}
           >
@@ -157,7 +156,7 @@ export function HomepageCollections({
             </div>
             <p
               className={cn(
-                "mt-3 font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink",
+                "mt-3 max-w-full break-words font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink",
                 mode === "diary" && "text-center",
               )}
             >

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
 import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
+import { InstallHint } from "@/components/pwa/InstallHint";
 import { PublicShell } from "@/components/shells/PublicShell";
 import { Button, Field, Input, Label } from "@/components/ui";
 import { grossUpAmount } from "@/lib/stripe-fees";
@@ -132,6 +133,11 @@ export default function PublicPayPage() {
 
   return (
     <PublicShell>
+      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-md">
+          <InstallHint storageKey={`aura-install-dismiss-pay-${params.id}`} />
+        </div>
+      </div>
       <div className="mx-auto max-w-md">
         {link.studioName ? (
           <StudioMark name={link.studioName} tone="dark" className="mb-2" />

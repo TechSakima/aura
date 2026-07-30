@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import { Button, Field, Input, Label } from "@/components/ui";
 import { firebaseConfigured, getFirebaseAuth } from "@/lib/firebase/client";
+import { mergeAdminNextWithLast } from "@/lib/admin-last-route";
 
 type Mode = "signin" | "signup";
 
@@ -28,13 +29,13 @@ function LoginForm() {
 
     try {
       if (!firebaseConfigured()) {
-        setError("Firebase is not configured.");
+        setError("Sign-in is unavailable. Try again later.");
         return;
       }
 
       const auth = getFirebaseAuth();
       if (!auth) {
-        setError("Firebase Auth is unavailable.");
+        setError("Sign-in is unavailable. Try again later.");
         return;
       }
 
@@ -74,7 +75,7 @@ function LoginForm() {
         }
       }
 
-      router.push(params.get("next") || "/admin");
+      router.push(mergeAdminNextWithLast(params.get("next") || "/admin"));
       router.refresh();
     } catch {
       setError(
@@ -182,7 +183,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="shell-pad flex min-h-full flex-1 items-center justify-center py-16">
+    <div className="shell-pad flex min-h-full flex-1 items-center justify-center pt-[max(4rem,env(safe-area-inset-top))] pb-[max(4rem,env(safe-area-inset-bottom))]">
       <Suspense>
         <LoginForm />
       </Suspense>

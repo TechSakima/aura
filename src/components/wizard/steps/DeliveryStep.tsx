@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  ActionStack,
   Button,
   ButtonLink,
   EmptyState,
@@ -18,6 +19,11 @@ import {
 import { GalleryDesignPanel } from "@/components/admin/GalleryDesignPanel";
 import { DeliveryPublishChecklist } from "@/components/wizard/DeliveryPublishChecklist";
 import { cn } from "@/lib/cn";
+import { mutateJson } from "@/lib/client/mutation";
+import {
+  confirmDeletePhotos,
+  confirmGoLive,
+} from "@/lib/destructive-confirm";
 import { deliveryPublishItems } from "@/lib/delivery-publish";
 import type {
   DownloadPinPolicy,
@@ -35,6 +41,8 @@ export function DeliveryStep({
   photos,
   watermarkPresets,
   onChanged,
+  /** When Layout tab is open — parent hides wizard Back/Continue (AURA-284). */
+  onDesignFocusChange,
 }: {
   shoot: Shoot;
   clientName: string;
@@ -43,6 +51,7 @@ export function DeliveryStep({
   photos: WizardPhoto[];
   watermarkPresets: WatermarkPreset[];
   onChanged: () => Promise<unknown>;
+  onDesignFocusChange?: (focused: boolean) => void;
 }) {
   const { push } = useToast();
   const { confirm } = useConfirm();
@@ -77,6 +86,11 @@ export function DeliveryStep({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    onDesignFocusChange?.(tab === "design");
+    return () => onDesignFocusChange?.(false);
+  }, [tab, onDesignFocusChange]);
 
   const peekPhotos = useMemo(
     () => photos.filter((p) => p.kind === "peek"),
@@ -134,42 +148,56 @@ export function DeliveryStep({
             ? "Uploading video"
             : "Uploading photos",
       files,
-      uploadFile: async (file) => {
+      uploadFile: async (file, { onProgress }) => {
         // Unified: every file goes direct → R2 (presigned or multipart).
         // Photos get Sharp derivatives on complete; video registers only.
+        // Parallel file pool + progress via useUploadSession (AURA-267).
         const { uploadGalleryFileDirect } = await import(
           "@/lib/client/direct-upload"
         );
-        await uploadGalleryFileDirect(gallery.id, file, kind);
+        await uploadGalleryFileDirect(
+          gallery.id,
+          file,
+          kind,
+          (uploaded, total) => {
+            onProgress(total ? (uploaded / total) * 100 : 0);
+          },
+        );
       },
     });
     await onChanged();
   }
 
-  async function patch(body: Record<string, unknown>) {
-    if (!gallery) return;
+  async function patch(body: Record<string, unknown>): Promise<boolean> {
+    if (!gallery) return false;
     const watermarkTouch =
       "watermarkEnabled" in body || "watermarkPresetId" in body;
     if (watermarkTouch) push("Refreshing watermarks…", "neutral");
-    const res = await fetch(`/api/galleries/${gallery.id}`, {
+    const result = await mutateJson(`/api/galleries/${gallery.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      push(data.error || "Update failed", "danger");
-      return;
+    }, { action: "update" });
+    if (!result.ok) {
+      push(result.errorMessage, "danger");
+      return false;
     }
     if (watermarkTouch) push("Watermark previews updated", "success");
     await onChanged();
+    return true;
   }
 
   async function goLive() {
+    if (!gallery) return;
+    const ok = await confirm(confirmGoLive(gallery.title));
+    if (!ok) return;
     setGoingLive(true);
-    await patch({ goLive: true });
-    setGoingLive(false);
-    push("Gallery is live", "success");
+    try {
+      const saved = await patch({ goLive: true });
+      if (saved) push("Gallery is live", "success");
+    } finally {
+      setGoingLive(false);
+    }
   }
 
   function galleryPublicUrl() {
@@ -189,7 +217,7 @@ export function DeliveryStep({
   async function emailGalleryLink() {
     if (!gallery) return;
     const to = shoot.projectId
-      ? (await fetch(`/api/clients/${shoot.projectId}`).then((r) =>
+      ? (await fetch(`/api/projects/${shoot.projectId}`).then((r) =>
           r.ok ? r.json() : null,
         ).then((d) => (d?.project || d?.client)?.email)) || ""
       : "";
@@ -251,12 +279,7 @@ export function DeliveryStep({
 
   async function deleteIds(ids: string[]) {
     if (!ids.length) return;
-    const ok = await confirm({
-      title: ids.length === 1 ? "Delete photo?" : `Delete ${ids.length} photos?`,
-      message: "This cannot be undone.",
-      confirmLabel: "Delete",
-      tone: "danger",
-    });
+    const ok = await confirm(confirmDeletePhotos(ids.length));
     if (!ok) return;
     setDeleting(true);
     const res = await fetch("/api/photos", {
@@ -368,50 +391,55 @@ export function DeliveryStep({
             {photos.length} {photos.length === 1 ? "file" : "files"}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <a
-            href={`/g/${gallery.publicToken}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-11 items-center px-1 text-sm text-muted no-underline hover:text-ink"
-          >
-            Preview
-          </a>
-          <Button
-            type="button"
-            tone="neutral"
-            className="min-h-11"
-            onClick={() => void copyGalleryLink()}
-          >
-            Copy link
-          </Button>
-          <Button
-            type="button"
-            tone="neutral"
-            className="min-h-11"
-            pending={emailBusy}
-            pendingLabel="Sending…"
-            onClick={() => void emailGalleryLink()}
-          >
-            Email link
-          </Button>
-          {isDraft ? (
-            <Button
-              className="min-h-11"
-              pending={goingLive}
-              pendingLabel="Publishing…"
-              onClick={() => void goLive()}
-            >
-              Go live
-            </Button>
-          ) : null}
+        <div className={cn("min-w-0 sm:max-w-xs", tab === "design" && "max-md:hidden")}>
+          <ActionStack
+            primaryId={isDraft ? "live" : "preview"}
+            moreLabel="Share"
+            actions={[
+              ...(isDraft
+                ? [
+                    {
+                      id: "live",
+                      label: "Go live",
+                      tone: "accent" as const,
+                      pending: goingLive,
+                      pendingLabel: "Publishing…",
+                      onClick: () => void goLive(),
+                    },
+                  ]
+                : []),
+              {
+                id: "preview",
+                label: "Preview",
+                href: `/g/${gallery.publicToken}`,
+                external: true,
+                tone: isDraft ? ("neutral" as const) : ("accent" as const),
+              },
+              {
+                id: "copy",
+                label: "Copy link",
+                tone: "neutral",
+                onClick: () => void copyGalleryLink(),
+              },
+              {
+                id: "email",
+                label: "Email link",
+                tone: "neutral",
+                pending: emailBusy,
+                pendingLabel: "Sending…",
+                onClick: () => void emailGalleryLink(),
+              },
+            ]}
+          />
         </div>
       </header>
 
-      <DeliveryPublishChecklist
-        items={publishItems}
-        onAction={onPublishAction}
-      />
+      <div className={cn(tab === "design" && "max-md:hidden")}>
+        <DeliveryPublishChecklist
+          items={publishItems}
+          onAction={onPublishAction}
+        />
+      </div>
 
       <div
         role="tablist"
@@ -444,12 +472,13 @@ export function DeliveryStep({
 
       {tab === "design" ? (
         <GalleryDesignPanel
+          embedded
           design={gallery.design}
           coverPhotoUrl={gallery.coverPhotoUrl}
           studioTheme={studioTheme}
           onSave={async (body) => {
-            await patch(body);
-            push("Design saved", "success");
+            const saved = await patch(body);
+            if (saved) push("Design saved", "success");
           }}
         />
       ) : null}
@@ -660,7 +689,8 @@ export function DeliveryStep({
                           push("PIN must be 4 digits", "danger");
                           return;
                         }
-                        await patch({ pin: resetPin });
+                        const saved = await patch({ pin: resetPin });
+                        if (!saved) return;
                         setResetPin("");
                         push("PIN updated", "success");
                       }}
@@ -730,8 +760,8 @@ export function DeliveryStep({
                             tone: "danger",
                           });
                           if (!ok) return;
-                          await patch({ expireEarly: true });
-                          push("Gallery expired", "success");
+                          const saved = await patch({ expireEarly: true });
+                          if (saved) push("Gallery expired", "success");
                         }}
                       >
                         Expire now

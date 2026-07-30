@@ -13,6 +13,7 @@ import {
   Switch,
   useToast,
 } from "@/components/ui";
+import { mutateJson } from "@/lib/client/mutation";
 import {
   DEFAULT_DELIVERY_DEFAULTS,
   normalizeDeliveryDefaults,
@@ -94,42 +95,49 @@ export function SettingsDelivery() {
   async function save(e?: FormEvent) {
     e?.preventDefault();
     setSaving(true);
-    const deliveryDefaults = normalizeDeliveryDefaults({
-      commentsEnabled,
-      watermarkEnabled,
-      expiryDays: Number(expiryDays),
-      selectLimit: selectLimit.trim() === "" ? null : Number(selectLimit),
-      downloadPinPolicy,
-      coverStyle,
-      themeId,
-      gridMode,
-    });
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "delivery",
-        defaultWatermarkPresetId,
-        deliveryDefaults: {
-          ...deliveryDefaults,
-          selectLimit:
-            selectLimit.trim() === "" ? null : deliveryDefaults.selectLimit,
+    try {
+      const deliveryDefaults = normalizeDeliveryDefaults({
+        commentsEnabled,
+        watermarkEnabled,
+        expiryDays: Number(expiryDays),
+        selectLimit: selectLimit.trim() === "" ? null : Number(selectLimit),
+        downloadPinPolicy,
+        coverStyle,
+        themeId,
+        gridMode,
+      });
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "delivery",
+            defaultWatermarkPresetId,
+            deliveryDefaults: {
+              ...deliveryDefaults,
+              selectLimit:
+                selectLimit.trim() === "" ? null : deliveryDefaults.selectLimit,
+            },
+          }),
         },
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setExpiryDays(String(deliveryDefaults.expiryDays));
+      setSelectLimit(
+        deliveryDefaults.selectLimit != null
+          ? String(deliveryDefaults.selectLimit)
+          : "",
+      );
+      setDirty(false);
+      push("Delivery defaults saved", "success");
+    } finally {
+      setSaving(false);
     }
-    setExpiryDays(String(deliveryDefaults.expiryDays));
-    setSelectLimit(
-      deliveryDefaults.selectLimit != null
-        ? String(deliveryDefaults.selectLimit)
-        : "",
-    );
-    setDirty(false);
-    push("Delivery defaults saved", "success");
   }
 
   if (loading) {

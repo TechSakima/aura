@@ -30,7 +30,6 @@ export function SettingsShell({ children }: { children: ReactNode }) {
       <PageHeader
         eyebrow="Studio"
         title="Settings"
-        description="Brand, booking, delivery, payments, and more."
         actions={
           <Button
             tone="ghost"

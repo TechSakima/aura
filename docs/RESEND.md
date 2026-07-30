@@ -19,8 +19,11 @@ Tier 3 (inbound)      Client emails slug@inbound… → Resend MX → webhook �
 | Who | What they see |
 |-----|----------------|
 | **From** | Studio display name, but mailbox is Aura’s verified address (`RESEND_FROM_EMAIL`) |
-| **Reply-To** (contact) | The client’s email — Reply in the studio’s mail app goes to the client |
+| **Reply-To** (contact → studio) | The client’s email — Reply in the studio’s mail app goes to the client |
+| **Reply-To** (transactional → client) | `p-{projectId}@inbound…` when project + inbound domain are set (AURA-372); else owner email. Display name = studio |
 | **Deliver to** | Settings → Notifications → Contact (defaults to owner email) |
+
+**Thread drift caveat:** If the studio replies From their personal mailbox (instead of keeping Reply-To on the project inbound address), the client’s next reply can leave Aura’s inbound route.
 
 Never commit API keys or webhook secrets. Put them in **`.env.local`** (local) and App Hosting secrets (prod).
 
@@ -181,9 +184,15 @@ Lets people email Aura-managed addresses; Aura stores the message, forwards to t
 |-----------------|-------------|
 | `{homepageSlug}@inbound…` | Studio whose homepage slug matches |
 | `s-{studioId}@inbound…` | That studio id (stable) |
+| `p-{projectId}@inbound…` | Studio + project (AURA-371) — stored on `contactMessages`, notify → project |
+| `sess-{sessionId}@inbound…` | Studio + session (+ project when known) |
 
 Example: studio homepage slug `wildflower` →  
 `wildflower@inbound.aura.stroburm.app`
+
+Catch-all local-parts — no per-address provisioning in Resend. Client transactional mail sets Reply-To to `p-{projectId}@…` when possible (**AURA-372**).
+
+**Send reply (AURA-374):** Project → Messages → **Send** posts a one-shot Resend email (From = studio display / platform address, Reply-To = project inbound). Not an Inbox — no threads UI.
 
 Use a **subdomain** for receiving (e.g. `inbound.aura.stroburm.app`) so you don’t replace MX on the main company domain.
 

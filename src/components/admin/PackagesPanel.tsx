@@ -8,6 +8,7 @@ import {
 } from "@/components/admin/ListEditor";
 import {
   Button,
+  ButtonLink,
   Card,
   Field,
   Input,
@@ -88,48 +89,60 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
         <PageHeader
           title="Package templates"
           actions={
-            <Button
-              onClick={async () => {
-                const res = await fetch("/api/packages", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    name: "New package",
-                    contractTerms: "",
-                    inclusions: ["Online gallery for 60 days"],
-                    defaultPricing: [
-                      {
-                        id: crypto.randomUUID(),
-                        name: "Standard",
-                        price: 0,
-                        description: "Customize this tier",
-                        highlighted: true,
-                      },
-                    ],
-                    intakeQuestions: [],
-                  }),
-                });
-                if (!res.ok) {
-                  push("Create failed", "danger");
-                  return;
-                }
-                push("Package created", "success");
-                await load();
-              }}
-            >
-              New package
-            </Button>
+            <>
+              <ButtonLink
+                href="/admin/settings/booking#types"
+                tone="ghost"
+                className="min-h-11"
+              >
+                Session types
+              </ButtonLink>
+              <Button
+                onClick={async () => {
+                  const res = await fetch("/api/packages", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      name: "New package",
+                      contractTerms: "",
+                      inclusions: ["Online gallery for 60 days"],
+                      defaultPricing: [
+                        {
+                          id: crypto.randomUUID(),
+                          name: "Standard",
+                          price: 0,
+                          description: "Customize this tier",
+                          highlighted: true,
+                        },
+                      ],
+                      intakeQuestions: [],
+                    }),
+                  });
+                  if (!res.ok) {
+                    push("Create failed", "danger");
+                    return;
+                  }
+                  push("Package created", "success");
+                  await load();
+                }}
+              >
+                New package
+              </Button>
+            </>
           }
-          description="Quote tiers for projects (after-intake pricing). Bookable session types are under Bookings."
         />
       ) : (
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <h2 className="font-display text-2xl">Quote packages</h2>
-            <p className="mt-1 text-sm text-muted">
-              Pricing tiers and terms for project quotes. Session length and
-              online booking use Bookings → Session types.
-            </p>
+            <ButtonLink
+              href="/admin/settings/booking#types"
+              tone="ghost"
+              size="sm"
+              className="min-h-11"
+            >
+              Session types
+            </ButtonLink>
           </div>
           <Button
             size="sm"
@@ -168,21 +181,27 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
         <ul className="space-y-3">
           {packages.map((pkg) => (
             <li key={pkg.id}>
-              <Card className="flex items-center justify-between gap-3 p-4">
-                <div>
+              <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <p className="font-medium">{pkg.name}</p>
                   <p className="text-sm text-muted">
                     {pkg.defaultPricing.length} tiers · {pkg.intakeQuestions.length}{" "}
                     questions
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button size="sm" tone="ghost" onClick={() => setEditing(pkg)}>
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:shrink-0">
+                  <Button
+                    size="sm"
+                    tone="ghost"
+                    className="min-h-11 w-full sm:w-auto"
+                    onClick={() => setEditing(pkg)}
+                  >
                     Edit
                   </Button>
                   <Button
                     size="sm"
                     tone="ghost"
+                    className="min-h-11 w-full sm:w-auto"
                     onClick={() => void removePackage(pkg)}
                   >
                     Delete

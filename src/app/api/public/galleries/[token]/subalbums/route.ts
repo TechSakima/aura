@@ -1,17 +1,31 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
+import { COL } from "@/lib/db/collections";
 import {
+  appendStudioDoc,
   findGalleryByPublicToken,
-  updateStudioDb,
 } from "@/lib/db/store";
 import { assertPublicGalleryAccess } from "@/lib/public-access";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { publicToken } from "@/lib/tokens";
+import type { SubAlbum } from "@/lib/types";
 
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
+  const limited = rateLimit(`subalbum:${token}:${clientIp(req)}`, 5, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
+
   const body = await req.json();
   const label = String(body.label || "Shared album").trim();
   const photoIds: string[] = Array.isArray(body.photoIds) ? body.photoIds : [];
@@ -35,22 +49,15 @@ export async function POST(
     );
   }
 
-  const sub = await updateStudioDb(hit.studioId, (db) => {
-    const gallery = db.galleries.find((g) => g.publicToken === token);
-    if (!gallery) return null;
-    const album = {
-      id: nanoid(),
-      studioId: gallery.studioId,
-      galleryId: gallery.id,
-      token: publicToken(),
-      label,
-      photoIds,
-      createdAt: new Date().toISOString(),
-    };
-    db.subAlbums.push(album);
-    return album;
-  });
-
-  if (!sub) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ subAlbum: sub });
+  const album: SubAlbum = {
+    id: nanoid(),
+    studioId: hit.studioId,
+    galleryId: hit.id,
+    token: publicToken(),
+    label,
+    photoIds,
+    createdAt: new Date().toISOString(),
+  };
+  await appendStudioDoc(COL.subAlbums, album);
+  return NextResponse.json({ subAlbum: album });
 }

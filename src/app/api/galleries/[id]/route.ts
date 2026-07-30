@@ -170,15 +170,20 @@ export async function PATCH(
             clientName: project.name,
             galleryTitle: g.title,
             publicToken: g.publicToken,
+            projectId: project.id,
+            sessionId: g.sessionId || g.shootId,
           });
         }
+        const sessionId = g.sessionId || g.shootId;
         await notifyStudio({
           studioId: admin.studioId,
           type: "gallery_live",
           title: "Gallery live",
           body: g.title,
           href: project
-            ? `/admin/projects/${project.id}`
+            ? sessionId
+              ? `/admin/projects/${project.id}/sessions/${sessionId}?step=delivery`
+              : `/admin/projects/${project.id}#workflow`
             : `/g/${g.publicToken}`,
           emailStudio: false,
         });

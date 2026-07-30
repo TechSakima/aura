@@ -49,18 +49,18 @@ async function createSessionCookie(opts: {
 /** Verify Firebase Auth ID token and open an Aura session for an existing studio member. */
 export async function loginWithFirebaseIdToken(idToken: string) {
   if (!firebaseReady()) {
-    return { ok: false as const, error: "Firebase is not configured" };
+    return { ok: false as const, error: "Sign-in is unavailable. Try again later." };
   }
   const auth = getAdminAuth();
   if (!auth) {
-    return { ok: false as const, error: "Firebase Admin not configured" };
+    return { ok: false as const, error: "Sign-in is unavailable. Try again later." };
   }
   try {
     const decoded = await auth.verifyIdToken(idToken);
     const email = decoded.email?.toLowerCase();
     const uid = decoded.uid;
     if (!email || !uid) {
-      return { ok: false as const, error: "Token missing email" };
+      return { ok: false as const, error: "Sign-in failed. Try again." };
     }
 
     let member = await getMemberByUid(uid);
@@ -81,7 +81,7 @@ export async function loginWithFirebaseIdToken(idToken: string) {
     });
     return { ok: true as const, studioId: member.studioId };
   } catch {
-    return { ok: false as const, error: "Invalid Firebase token" };
+    return { ok: false as const, error: "Invalid email or password" };
   }
 }
 
@@ -91,11 +91,11 @@ export async function signupWithFirebaseIdToken(opts: {
   studioName: string;
 }) {
   if (!firebaseReady()) {
-    return { ok: false as const, error: "Firebase is not configured" };
+    return { ok: false as const, error: "Sign-up is unavailable. Try again later." };
   }
   const auth = getAdminAuth();
   if (!auth) {
-    return { ok: false as const, error: "Firebase Admin not configured" };
+    return { ok: false as const, error: "Sign-up is unavailable. Try again later." };
   }
 
   const name = opts.studioName.trim();
@@ -108,7 +108,7 @@ export async function signupWithFirebaseIdToken(opts: {
     const email = decoded.email?.toLowerCase();
     const uid = decoded.uid;
     if (!email || !uid) {
-      return { ok: false as const, error: "Token missing email" };
+      return { ok: false as const, error: "Could not create account. Try again." };
     }
 
     const existing = await getMemberByUid(uid);
@@ -152,13 +152,25 @@ export async function getSessionToken(): Promise<string | null> {
   return jar.get(COOKIE)?.value || null;
 }
 
+function clearSessionCookie(
+  jar: Awaited<ReturnType<typeof cookies>>,
+) {
+  jar.set(COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 0,
+  });
+}
+
 export async function logout() {
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;
   if (token) {
     await deleteSession(token).catch(() => undefined);
   }
-  jar.delete(COOKIE);
+  clearSessionCookie(jar);
 }
 
 export async function requireAdmin(): Promise<AdminContext | null> {
@@ -168,6 +180,8 @@ export async function requireAdmin(): Promise<AdminContext | null> {
   if (!token) return null;
 
   const session = await getSession(token);
+  // Do not mutate cookies here — layout/RSC cannot set cookies (AURA-294).
+  // Admin layout redirects to /admin/login?next=… when this returns null.
   if (!session || new Date(session.expiresAt) <= new Date()) {
     return null;
   }

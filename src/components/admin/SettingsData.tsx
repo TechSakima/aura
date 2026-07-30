@@ -188,14 +188,8 @@ export function SettingsData() {
       <Card className="min-w-0 p-5">
         <h2 className="font-display text-2xl">Data</h2>
         <p className="mt-1 text-sm text-muted">
-          Export studio profile, projects, and sessions as JSON.
+          JSON export — profile and projects, no photo files.
         </p>
-
-        <ul className="mt-6 list-inside list-disc space-y-2 text-sm text-muted">
-          <li>Includes profile, projects, sessions, and gallery counts</li>
-          <li>Excludes passwords, calendar tokens, and payment secrets</li>
-          <li>Photo files are not included — download from each gallery</li>
-        </ul>
 
         <div className="mt-6">
           <Button

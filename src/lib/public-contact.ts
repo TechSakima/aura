@@ -25,6 +25,8 @@ export type PublicContactPayload = {
   proposalToken?: string;
   /** Pay soft-failure resolve (AURA-309) */
   paymentLinkId?: string;
+  /** Cancel soft-failure resolve (AURA-382) */
+  cancelToken?: string;
 };
 
 export class PublicContactError extends Error {

@@ -29,7 +29,7 @@ export function SettingsOverview() {
       const [studioRes, connectRes, typesRes] = await Promise.all([
         fetch("/api/studio"),
         fetch("/api/payments/connect"),
-        fetch("/api/bookings/session-types"),
+        fetch("/api/bookings/session-types?view=requests"),
       ]);
       if (cancelled) return;
       setLoading(false);

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { COL } from "@/lib/db/collections";
 import { assertFirebaseReady } from "@/lib/db/require-firebase";
-import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { getProjectById, patchStudioDoc, readStudioDb } from "@/lib/db/store";
 import { notifyStudio } from "@/lib/notify/send";
 import { resolveBrowseMediaUrl } from "@/lib/media-url-server";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import type { QuestionnaireResponse } from "@/lib/types";
 
 async function findByToken(token: string): Promise<{
@@ -65,6 +66,17 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
+  const limited = rateLimit(`questionnaire:${token}:${clientIp(req)}`, 10, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
+
   const hit = await findByToken(token);
   if (!hit) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (hit.response.submittedAt) {
@@ -83,25 +95,30 @@ export async function POST(
   }
   const now = new Date().toISOString();
 
-  await updateStudioDb(hit.studioId, (db) => {
-    const r = db.questionnaireResponses.find((x) => x.token === token);
-    if (!r || r.submittedAt) return;
-    r.answers = answers;
-    r.submittedAt = now;
-    r.updatedAt = now;
-    const p = db.projects.find((x) => x.id === hit.response.projectId);
-    if (p && (p.workflowStep === "questionnaire" || !p.workflowStep)) {
-      p.workflowStep = "pricing";
-      p.updatedAt = now;
-    }
+  await patchStudioDoc(COL.questionnaireResponses, hit.response.id, {
+    answers,
+    submittedAt: now,
   });
+
+  const projectId = hit.response.projectId;
+  if (projectId) {
+    const project = await getProjectById(projectId);
+    if (
+      project &&
+      (project.workflowStep === "questionnaire" || !project.workflowStep)
+    ) {
+      await patchStudioDoc(COL.projects, projectId, {
+        workflowStep: "pricing",
+      });
+    }
+  }
 
   await notifyStudio({
     studioId: hit.studioId,
     type: "questionnaire_submitted",
     title: "Questionnaire completed",
     body: hit.response.title,
-    href: `/admin/projects/${hit.response.projectId}`,
+    href: `/admin/projects/${hit.response.projectId}#workflow`,
   });
 
   return NextResponse.json({ ok: true });

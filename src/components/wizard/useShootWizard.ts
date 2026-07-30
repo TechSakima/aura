@@ -67,7 +67,7 @@ export function useShootWizard(shootId: string, requestedStep?: string | null) {
   const [step, setStep] = useState<WizardStepId>("intake");
 
   const reload = useCallback(async () => {
-    const res = await fetch(`/api/shoots/${shootId}/wizard`);
+    const res = await fetch(`/api/sessions/${shootId}/wizard`);
     if (!res.ok) {
       setError("Could not load workflow");
       setData(null);

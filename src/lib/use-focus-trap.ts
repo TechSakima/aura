@@ -7,17 +7,49 @@ const FOCUSABLE =
 
 function focusableIn(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true",
+    (el) =>
+      !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true",
   );
 }
 
+function resolveInitialFocus(
+  root: HTMLElement,
+  initialFocusRef?: RefObject<HTMLElement | null>,
+): HTMLElement {
+  const explicit = initialFocusRef?.current;
+  if (explicit && root.contains(explicit)) return explicit;
+
+  const autofocus = root.querySelector<HTMLElement>(
+    "[autofocus], [data-autofocus]",
+  );
+  if (
+    autofocus &&
+    root.contains(autofocus) &&
+    !autofocus.hasAttribute("disabled") &&
+    autofocus.getAttribute("aria-hidden") !== "true"
+  ) {
+    return autofocus;
+  }
+
+  const items = focusableIn(root);
+  const preferred = items.find(
+    (el) => !el.hasAttribute("data-focus-trap-skip-initial"),
+  );
+  return preferred || items[0] || root;
+}
+
 /**
- * Trap focus inside a modal root; restore prior focus on cleanup (AURA-253).
+ * Trap focus inside a modal root; restore prior focus on cleanup (AURA-253 / AURA-092).
+ * Initial focus: explicit ref → autofocus → first focusable (skipping
+ * `data-focus-trap-skip-initial`) → root.
  */
 export function useFocusTrap(
   active: boolean,
   containerRef: RefObject<HTMLElement | null>,
-  opts?: { onEscape?: () => void; initialFocusRef?: RefObject<HTMLElement | null> },
+  opts?: {
+    onEscape?: () => void;
+    initialFocusRef?: RefObject<HTMLElement | null>;
+  },
 ) {
   const onEscape = opts?.onEscape;
   const initialFocusRef = opts?.initialFocusRef;
@@ -32,13 +64,12 @@ export function useFocusTrap(
         ? document.activeElement
         : null;
 
-    const initial =
-      initialFocusRef?.current || focusableIn(root)[0] || root;
-    initial.focus();
+    resolveInitialFocus(root, initialFocusRef).focus();
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         onEscape?.();
         return;
       }

@@ -16,6 +16,7 @@ import {
   DEFAULT_CONTACT_AUTO_REPLY,
   normalizeContactPrefs,
 } from "@/lib/contact-prefs";
+import { mutateJson } from "@/lib/client/mutation";
 import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 
 type PrefKey =
@@ -159,21 +160,28 @@ export function SettingsNotifications() {
   async function save(e?: FormEvent) {
     e?.preventDefault();
     setSaving(true);
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "notifications",
-        notificationPrefs: prefs,
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+    try {
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "notifications",
+            notificationPrefs: prefs,
+          }),
+        },
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setDirty(false);
+      push("Notifications saved", "success");
+    } finally {
+      setSaving(false);
     }
-    setDirty(false);
-    push("Notifications saved", "success");
   }
 
   async function saveContact(e?: FormEvent) {
@@ -192,35 +200,42 @@ export function SettingsNotifications() {
       }
     }
     setSavingContact(true);
-    const contactPrefs = normalizeContactPrefs({
-      recipientEmail: trimmed || undefined,
-      showGalleryContactForm,
-      autoReplyEnabled,
-      autoReplyMessage,
-    });
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "contact",
-        contactPrefs: {
-          ...contactPrefs,
-          recipientEmail: trimmed ? contactPrefs.recipientEmail : null,
+    try {
+      const contactPrefs = normalizeContactPrefs({
+        recipientEmail: trimmed || undefined,
+        showGalleryContactForm,
+        autoReplyEnabled,
+        autoReplyMessage,
+      });
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "contact",
+            contactPrefs: {
+              ...contactPrefs,
+              recipientEmail: trimmed ? contactPrefs.recipientEmail : null,
+            },
+            homepage: { showContactForm },
+          }),
         },
-        homepage: { showContactForm },
-      }),
-    });
-    setSavingContact(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setRecipientEmail(contactPrefs.recipientEmail || "");
+      setAutoReplyMessage(
+        contactPrefs.autoReplyMessage || DEFAULT_CONTACT_AUTO_REPLY,
+      );
+      setContactDirty(false);
+      push("Contact prefs saved", "success");
+    } finally {
+      setSavingContact(false);
     }
-    setRecipientEmail(contactPrefs.recipientEmail || "");
-    setAutoReplyMessage(
-      contactPrefs.autoReplyMessage || DEFAULT_CONTACT_AUTO_REPLY,
-    );
-    setContactDirty(false);
-    push("Contact prefs saved", "success");
   }
 
   if (loading) {

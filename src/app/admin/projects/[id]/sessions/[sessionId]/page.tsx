@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { ProjectMessagesTrail } from "@/components/admin/ProjectMessagesTrail";
 import { ShootWizardShell } from "@/components/wizard/ShootWizardShell";
 import { useShootWizard } from "@/components/wizard/useShootWizard";
 import { DeliveryStep } from "@/components/wizard/steps/DeliveryStep";
@@ -24,6 +24,7 @@ function WizardInner() {
   const search = useSearchParams();
   const router = useRouter();
   const { push } = useToast();
+  const [hideWizardFooter, setHideWizardFooter] = useState(false);
   const requested = search.get("step");
   const safeRequested =
     requested && TOOL_IDS.has(requested as WizardStepId) ? requested : "prep";
@@ -32,6 +33,10 @@ function WizardInner() {
     sessionId,
     safeRequested,
   );
+
+  useEffect(() => {
+    if (step !== "delivery") setHideWizardFooter(false);
+  }, [step]);
 
   useEffect(() => {
     if (requested === "intake" || requested === "proposal") {
@@ -47,7 +52,7 @@ function WizardInner() {
   }, [loading, data, step]);
 
   async function patchSession(body: Record<string, unknown>) {
-    const res = await fetch(`/api/shoots/${sessionId}`, {
+    const res = await fetch(`/api/sessions/${sessionId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -146,63 +151,69 @@ function WizardInner() {
   const toolUnlocked = data.unlocked.filter((id) => TOOL_IDS.has(id));
 
   return (
-    <ShootWizardShell
-      projectId={projectId}
-      projectName={projectName}
-      sessionType={session.type}
-      sessionDate={
-        session.startsAt?.slice(0, 10) ||
-        (session as { shootDate?: string }).shootDate
-      }
-      quoteToken={data.proposal?.token}
-      galleryToken={data.gallery?.publicToken}
-      step={TOOL_IDS.has(step) ? step : "prep"}
-      completed={data.completed}
-      unlocked={toolUnlocked.length ? toolUnlocked : ["prep"]}
-      steps={SESSION_TOOL_STEPS}
-      onStepChange={selectStep}
-      onBack={() => goRelative(-1)}
-      onNext={() => void onNext()}
-      onSkip={step === "prep" ? () => void onSkip() : undefined}
-      canSkip={step === "prep"}
-      nextLabel={step === "wrap" ? "Done" : "Continue"}
-    >
-      {step === "prep" ? (
-        <PrepStep
-          shoot={session}
-          plan={data.plan}
-          templates={data.templates}
-          onChanged={reload}
-        />
-      ) : null}
-      {step === "shoot-day" ? (
-        <ShootDayStep
-          shoot={session}
-          plan={data.plan}
-          onChanged={reload}
-        />
-      ) : null}
-      {step === "delivery" ? (
-        <DeliveryStep
-          shoot={session}
-          clientName={projectName}
-          projectEmail={project?.email}
-          gallery={data.gallery}
-          photos={data.photos}
-          watermarkPresets={data.watermarkPresets}
-          onChanged={reload}
-        />
-      ) : null}
-      {step === "wrap" ? (
-        <WrapStep
-          shoot={session}
-          gallery={data.gallery}
-          photoCount={data.photoCount}
-          favoriteCount={data.gallery?.favoritePhotoIds?.length || 0}
-          onChanged={reload}
-        />
-      ) : null}
-    </ShootWizardShell>
+    <div className="space-y-10 sm:space-y-12">
+      <ShootWizardShell
+        projectId={projectId}
+        projectName={projectName}
+        sessionType={session.type}
+        sessionDate={
+          session.startsAt?.slice(0, 10) ||
+          (session as { shootDate?: string }).shootDate
+        }
+        quoteToken={data.proposal?.token}
+        galleryToken={data.gallery?.publicToken}
+        step={TOOL_IDS.has(step) ? step : "prep"}
+        completed={data.completed}
+        unlocked={toolUnlocked.length ? toolUnlocked : ["prep"]}
+        steps={SESSION_TOOL_STEPS}
+        onStepChange={selectStep}
+        onBack={() => goRelative(-1)}
+        onNext={() => void onNext()}
+        onSkip={step === "prep" ? () => void onSkip() : undefined}
+        canSkip={step === "prep"}
+        nextLabel={step === "wrap" ? "Done" : "Continue"}
+        hideFooter={hideWizardFooter}
+      >
+        {step === "prep" ? (
+          <PrepStep
+            shoot={session}
+            plan={data.plan}
+            templates={data.templates}
+            onChanged={reload}
+          />
+        ) : null}
+        {step === "shoot-day" ? (
+          <ShootDayStep
+            shoot={session}
+            plan={data.plan}
+            onChanged={reload}
+          />
+        ) : null}
+        {step === "delivery" ? (
+          <DeliveryStep
+            shoot={session}
+            clientName={projectName}
+            projectEmail={project?.email}
+            gallery={data.gallery}
+            photos={data.photos}
+            watermarkPresets={data.watermarkPresets}
+            onChanged={reload}
+            onDesignFocusChange={setHideWizardFooter}
+          />
+        ) : null}
+        {step === "wrap" ? (
+          <WrapStep
+            shoot={session}
+            gallery={data.gallery}
+            photoCount={data.photoCount}
+            favoriteCount={data.gallery?.favoritePhotoIds?.length || 0}
+            onChanged={reload}
+          />
+        ) : null}
+      </ShootWizardShell>
+
+      <ProjectMessagesTrail projectId={projectId} sessionId={sessionId} />
+    </div>
   );
 }
 

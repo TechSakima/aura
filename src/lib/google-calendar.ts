@@ -1,4 +1,12 @@
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { notifyDeliveryIssue } from "@/lib/notify/send";
+
+function calendarDeliveryBody(raw: string): string {
+  if (/oauth is not configured/i.test(raw)) return "Calendar sync unavailable";
+  if (/token refresh/i.test(raw)) return "Couldn’t refresh calendar connection";
+  if (/freeBusy/i.test(raw)) return "Couldn’t read calendar availability";
+  return raw.slice(0, 200);
+}
 
 /** Persist GCal health for Settings (not called from freeBusy hot path). */
 export async function recordGoogleCalendarHealth(
@@ -6,6 +14,7 @@ export async function recordGoogleCalendarHealth(
   result: { ok: boolean; error?: string },
 ): Promise<void> {
   const now = new Date().toISOString();
+  let alertError: string | null = null;
   await updateStudioDb(studioId, (db) => {
     if (result.ok) {
       db.studio.googleCalendarLastSyncAt = now;
@@ -13,9 +22,23 @@ export async function recordGoogleCalendarHealth(
       return;
     }
     if (result.error) {
-      db.studio.googleCalendarLastSyncError = result.error.slice(0, 200);
+      const next = result.error.slice(0, 200);
+      const prev = db.studio.googleCalendarLastSyncError || "";
+      if (next && next !== prev) alertError = next;
+      db.studio.googleCalendarLastSyncError = next;
     }
   });
+  if (alertError) {
+    await notifyDeliveryIssue({
+      studioId,
+      kind: "calendar",
+      title: "Calendar sync failed",
+      body: calendarDeliveryBody(alertError),
+      href: "/admin/settings/integrations",
+    }).catch((err) => {
+      console.error("[google-calendar] notify delivery", err);
+    });
+  }
 }
 
 export type BusyInterval = { start: string; end: string };

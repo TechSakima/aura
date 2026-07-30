@@ -64,7 +64,7 @@ export async function POST(
     `Client: ${project?.name || "—"}`,
     `Email: ${project?.email || "—"}`,
     `Phone: ${project?.phone || "—"}`,
-    `Shoot type: ${session?.type || "—"}`,
+    `Session label: ${session?.type || "—"}`,
     `Shoot date: ${session?.startsAt || "—"}`,
     `Status: ${session?.status || "—"}`,
     "",

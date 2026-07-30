@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
+import { COL } from "@/lib/db/collections";
 import {
   findProposalByToken,
+  getProjectById,
+  getSessionById,
+  patchStudioDoc,
   readStudioDb,
-  updateStudioDb,
 } from "@/lib/db/store";
 import { recordEvent } from "@/lib/analytics";
 import { resolveBrowseMediaUrl, resolveBrowseMediaUrls } from "@/lib/media-url-server";
 import { notifyQuoteAccepted } from "@/lib/notify/send";
 import { assertPublicProposalAccess } from "@/lib/public-access";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { resolveQuoteAcceptNext } from "@/lib/workflow/quote-next";
+import type { Proposal } from "@/lib/types";
 
 export async function GET(
   _req: Request,
@@ -84,6 +89,17 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
+  const limited = rateLimit(`proposal-accept:${token}:${clientIp(req)}`, 10, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
+
   const body = await req.json();
   const now = new Date().toISOString();
 
@@ -100,70 +116,71 @@ export async function POST(
     );
   }
 
-  const result = await updateStudioDb(hit.studioId, (db) => {
-    const proposal = db.proposals.find((p) => p.token === token);
-    if (!proposal) return null;
-    if (proposal.status === "accepted") {
-      return {
-        proposal,
-        already: true,
-        projectId: proposal.projectId as string | undefined,
-        clientName: null as string | null,
-      };
-    }
-    if (proposal.status !== "sent") {
-      return null;
-    }
-    proposal.intakeAnswers = body.intakeAnswers || {};
-    proposal.selectedTierId = body.selectedTierId;
-    proposal.status = "accepted";
-    proposal.depositStatus = "awaited";
-    proposal.updatedAt = now;
-    const session = db.sessions.find(
-      (s) => s.id === (proposal.sessionId || proposal.shootId),
-    );
-    if (session) {
-      session.status = "booked";
-      session.intakeAnswers = proposal.intakeAnswers;
-      session.updatedAt = now;
-    }
-    const projectId = proposal.projectId || session?.projectId;
-    const project = projectId
-      ? db.projects.find((p) => p.id === projectId)
-      : null;
-    if (project) {
-      project.stage = "booked";
-      project.workflowStep = "contract";
-      project.updatedAt = now;
-    }
-    return {
-      proposal,
-      already: false,
-      projectId,
-      clientName: project?.name || null,
+  let proposal: Proposal = hit;
+  let already = false;
+  let projectId = proposal.projectId as string | undefined;
+  let clientName: string | null = null;
+
+  if (proposal.status === "accepted") {
+    already = true;
+  } else if (proposal.status !== "sent") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  } else {
+    const intakeAnswers = body.intakeAnswers || {};
+    const selectedTierId = body.selectedTierId;
+    await patchStudioDoc(COL.proposals, proposal.id, {
+      intakeAnswers,
+      selectedTierId,
+      status: "accepted",
+      depositStatus: "awaited",
+    });
+    proposal = {
+      ...proposal,
+      intakeAnswers,
+      selectedTierId,
+      status: "accepted",
+      depositStatus: "awaited",
+      updatedAt: now,
     };
-  });
 
-  if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const sessionId = proposal.sessionId || proposal.shootId;
+    if (sessionId) {
+      await patchStudioDoc(COL.projectSessions, sessionId, {
+        status: "booked",
+        intakeAnswers,
+      });
+      const session = await getSessionById(sessionId);
+      if (session?.projectId) projectId = session.projectId;
+    }
 
-  if (!result.already) {
+    if (projectId) {
+      await patchStudioDoc(COL.projects, projectId, {
+        stage: "booked",
+        workflowStep: "contract",
+      });
+      const project = await getProjectById(projectId);
+      clientName = project?.name || null;
+    }
+  }
+
+  if (!already) {
     await recordEvent({
       type: "proposal_accept",
-      studioId: result.proposal.studioId,
-      proposalId: result.proposal.id,
-      shootId: result.proposal.shootId,
+      studioId: proposal.studioId,
+      proposalId: proposal.id,
+      shootId: proposal.shootId,
     });
     await notifyQuoteAccepted({
-      studioId: result.proposal.studioId,
-      proposalId: result.proposal.id,
-      projectId: result.projectId,
-      title: result.proposal.title,
-      clientName: result.clientName || undefined,
+      studioId: proposal.studioId,
+      proposalId: proposal.id,
+      projectId,
+      title: proposal.title,
+      clientName: clientName || undefined,
     });
   }
 
   const db = await readStudioDb(hit.studioId);
-  const next = resolveQuoteAcceptNext(db, result.projectId);
+  const next = resolveQuoteAcceptNext(db, projectId);
 
-  return NextResponse.json({ proposal: result.proposal, next });
+  return NextResponse.json({ proposal, next });
 }

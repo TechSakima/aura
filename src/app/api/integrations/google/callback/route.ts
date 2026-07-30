@@ -6,27 +6,35 @@ import { appOrigin } from "@/lib/notify/send";
 /** OAuth callback — stores this studio's Google Calendar refresh token. */
 export async function GET(req: Request) {
   const admin = await requireAdmin();
-  const origin = appOrigin();
-  const settingsUrl = `${origin}/admin/settings/integrations`;
+  const reqUrl = new URL(req.url);
+  /** Stay on request host so installed admin PWA does not bounce origins (AURA-294). */
+  const browserOrigin = reqUrl.origin;
+  const settingsPath = "/admin/settings/integrations";
+  const loginUrl = new URL("/admin/login", browserOrigin);
+  loginUrl.searchParams.set("next", settingsPath);
 
   if (!admin) {
-    return NextResponse.redirect(`${origin}/admin/login`);
+    return NextResponse.redirect(loginUrl);
   }
 
-  const url = new URL(req.url);
-  const code = url.searchParams.get("code");
-  const err = url.searchParams.get("error");
+  const code = reqUrl.searchParams.get("code");
+  const err = reqUrl.searchParams.get("error");
   if (err || !code) {
-    return NextResponse.redirect(`${settingsUrl}?gcal=error`);
+    return NextResponse.redirect(
+      new URL(`${settingsPath}?gcal=error`, browserOrigin),
+    );
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(`${settingsUrl}?gcal=error`);
+    return NextResponse.redirect(
+      new URL(`${settingsPath}?gcal=error`, browserOrigin),
+    );
   }
 
-  const redirectUri = `${origin}/api/integrations/google/callback`;
+  // Must match the authorize redirect_uri (APP_URL / appOrigin).
+  const redirectUri = `${appOrigin()}/api/integrations/google/callback`;
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -40,7 +48,9 @@ export async function GET(req: Request) {
   });
 
   if (!tokenRes.ok) {
-    return NextResponse.redirect(`${settingsUrl}?gcal=error`);
+    return NextResponse.redirect(
+      new URL(`${settingsPath}?gcal=error`, browserOrigin),
+    );
   }
 
   const tokens = (await tokenRes.json()) as {
@@ -52,7 +62,9 @@ export async function GET(req: Request) {
   const refreshToken =
     tokens.refresh_token || existing.studio.googleCalendarRefreshToken;
   if (!refreshToken) {
-    return NextResponse.redirect(`${settingsUrl}?gcal=error`);
+    return NextResponse.redirect(
+      new URL(`${settingsPath}?gcal=error`, browserOrigin),
+    );
   }
 
   await updateStudioDb(admin.studioId, (db) => {
@@ -62,5 +74,7 @@ export async function GET(req: Request) {
     delete db.studio.googleCalendarLastSyncError;
   });
 
-  return NextResponse.redirect(`${settingsUrl}?gcal=connected`);
+  return NextResponse.redirect(
+    new URL(`${settingsPath}?gcal=connected`, browserOrigin),
+  );
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { readIdempotencyKey, withIdempotency } from "@/lib/idempotency";
 import { grossUpAmount } from "@/lib/stripe";
 import { absoluteUrl, emailPaymentLink } from "@/lib/notify/send";
 import type { PaymentLinkMode, PaymentLinkTemplate } from "@/lib/types";
@@ -46,37 +47,45 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    const db = await readStudioDb(admin.studioId);
-    const link = db.paymentLinks.find((l) => l.id === id && !l.archived);
-    if (!link) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    const project = link.projectId
-      ? db.projects.find((p) => p.id === link.projectId)
-      : undefined;
-    const result = await emailPaymentLink({
-      studioId: admin.studioId,
-      to,
-      clientName: project?.name,
-      title: link.title,
-      paymentLinkId: link.id,
-      publicUrl: link.publicUrl || publicLinkUrl(link.id),
-      isDeposit: /^deposit\b/i.test(link.title || ""),
-    });
-    if (!result.ok && "skipped" in result && result.skipped) {
-      return NextResponse.json({
-        ok: true,
-        emailed: false,
-        reason: "prefs_or_missing_key",
-      });
-    }
-    if (!result.ok) {
-      return NextResponse.json(
-        { error: "error" in result ? result.error : "Send failed" },
-        { status: 502 },
-      );
-    }
-    return NextResponse.json({ ok: true, emailed: true });
+    const idempotencyKey = readIdempotencyKey(req);
+    return withIdempotency(
+      idempotencyKey,
+      `pay-email/${admin.studioId}/${id}/${to}`,
+      async () => {
+        const db = await readStudioDb(admin.studioId);
+        const link = db.paymentLinks.find((l) => l.id === id && !l.archived);
+        if (!link) {
+          return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+        const project = link.projectId
+          ? db.projects.find((p) => p.id === link.projectId)
+          : undefined;
+        const result = await emailPaymentLink({
+          studioId: admin.studioId,
+          to,
+          clientName: project?.name,
+          title: link.title,
+          paymentLinkId: link.id,
+          publicUrl: link.publicUrl || publicLinkUrl(link.id),
+          isDeposit: /^deposit\b/i.test(link.title || ""),
+          projectId: link.projectId || project?.id,
+        });
+        if (!result.ok && "skipped" in result && result.skipped) {
+          return NextResponse.json({
+            ok: true,
+            emailed: false,
+            reason: "prefs_or_missing_key",
+          });
+        }
+        if (!result.ok) {
+          return NextResponse.json(
+            { error: "error" in result ? result.error : "Send failed" },
+            { status: 502 },
+          );
+        }
+        return NextResponse.json({ ok: true, emailed: true });
+      },
+    );
   }
 
   const title = String(body.title || "").trim();

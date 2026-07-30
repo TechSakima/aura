@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  parseAdminListPage,
+  slicePage,
+} from "@/lib/admin-list-page";
+import {
+  listContractsForStudio,
+  listContractTemplatesForStudio,
+  listQuestionnaireTemplatesForStudio,
+  readStudioDb,
+  updateStudioDb,
+} from "@/lib/db/store";
+import { readIdempotencyKey, withIdempotency } from "@/lib/idempotency";
 import { publicToken } from "@/lib/tokens";
 import type { CancelPolicy, Contract, ContractTemplate } from "@/lib/types";
 import { defaultContractBody } from "@/lib/contracts/defaults";
@@ -31,15 +42,36 @@ function parseCancelPolicy(raw: unknown): CancelPolicy | undefined {
   };
 }
 
-export async function GET() {
+/** Scoped reads + paginated contract summaries without bodies (AURA-268). */
+export async function GET(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await readStudioDb(admin.studioId);
+
+  const url = new URL(req.url);
+  const { offset, limit } = parseAdminListPage(url);
+
+  const [contracts, templates, questionnaires] = await Promise.all([
+    listContractsForStudio(admin.studioId),
+    listContractTemplatesForStudio(admin.studioId),
+    listQuestionnaireTemplatesForStudio(admin.studioId),
+  ]);
+
+  const sorted = [...contracts].sort((a, b) =>
+    (b.createdAt || "").localeCompare(a.createdAt || ""),
+  );
+  const page = slicePage(sorted, offset, limit);
+  const summaries = page.items.map(({ body: _body, ...rest }) => rest);
+
   return NextResponse.json({
-    contracts: db.contracts,
-    templates: db.contractTemplates,
-    questionnaires: db.questionnaireTemplates,
-    responses: db.questionnaireResponses,
+    contracts: summaries,
+    templates,
+    questionnaires,
+    /** Responses paginate via `/api/documents/questionnaires` (AURA-268). */
+    responses: [],
+    total: page.total,
+    hasMore: page.hasMore,
+    offset,
+    limit,
   });
 }
 
@@ -50,6 +82,7 @@ export async function POST(req: Request) {
   const action = String(body.action || "send");
   const now = new Date().toISOString();
   const cancelPolicy = parseCancelPolicy(body.cancelPolicy);
+  const idempotencyKey = readIdempotencyKey(req);
 
   if (action === "create_template") {
     const name = String(body.name || body.title || "").trim() || "Photography agreement";
@@ -102,62 +135,68 @@ export async function POST(req: Request) {
     );
   }
 
-  const db0 = await readStudioDb(admin.studioId);
-  const templateId = body.templateId ? String(body.templateId) : undefined;
-  const fromTemplate = templateId
-    ? db0.contractTemplates.find((t) => t.id === templateId)
-    : resolveDefaultContractTemplate(db0);
-  const title =
-    String(body.title || "").trim() ||
-    fromTemplate?.name ||
-    "Photography agreement";
-  const contractBody =
-    String(body.body || "").trim() ||
-    fromTemplate?.body ||
-    defaultContractBody();
-  const policy = cancelPolicy || fromTemplate?.cancelPolicy;
+  return withIdempotency(
+    idempotencyKey,
+    `contract-send/${admin.studioId}/${projectId}`,
+    async () => {
+      const db0 = await readStudioDb(admin.studioId);
+      const templateId = body.templateId ? String(body.templateId) : undefined;
+      const fromTemplate = templateId
+        ? db0.contractTemplates.find((t) => t.id === templateId)
+        : resolveDefaultContractTemplate(db0);
+      const title =
+        String(body.title || "").trim() ||
+        fromTemplate?.name ||
+        "Photography agreement";
+      const contractBody =
+        String(body.body || "").trim() ||
+        fromTemplate?.body ||
+        defaultContractBody();
+      const policy = cancelPolicy || fromTemplate?.cancelPolicy;
 
-  const contract: Contract = {
-    id: nanoid(),
-    studioId: admin.studioId,
-    projectId,
-    templateId: fromTemplate?.id,
-    title,
-    body: contractBody,
-    token: publicToken(),
-    status: "awaiting_signature",
-    cancelPolicy: policy,
-    createdAt: now,
-    updatedAt: now,
-  };
-  let projectEmail = "";
-  let projectName = "";
-  await updateStudioDb(admin.studioId, (db) => {
-    db.contracts.unshift(contract);
-    const project = db.projects.find((p) => p.id === projectId);
-    projectEmail = project?.email || "";
-    projectName = project?.name || "";
-    if (project) {
-      project.workflowStep = "contract";
-      project.updatedAt = now;
-    }
-  });
-  const url = absoluteUrl(`/c/${contract.token}`);
-  if (projectEmail) {
-    await emailContractToSign({
-      studioId: admin.studioId,
-      to: projectEmail,
-      clientName: projectName,
-      title,
-      token: contract.token,
-    });
-  }
-  await notifyStudio({
-    studioId: admin.studioId,
-    type: "contract_sent",
-    title: "Contract sent",
-    body: title,
-    href: `/admin/projects/${projectId}`,
-  });
-  return NextResponse.json({ contract, url });
+      const contract: Contract = {
+        id: nanoid(),
+        studioId: admin.studioId,
+        projectId,
+        templateId: fromTemplate?.id,
+        title,
+        body: contractBody,
+        token: publicToken(),
+        status: "awaiting_signature",
+        cancelPolicy: policy,
+        createdAt: now,
+        updatedAt: now,
+      };
+      let projectEmail = "";
+      let projectName = "";
+      await updateStudioDb(admin.studioId, (db) => {
+        db.contracts.unshift(contract);
+        const project = db.projects.find((p) => p.id === projectId);
+        projectEmail = project?.email || "";
+        projectName = project?.name || "";
+        if (project) {
+          project.workflowStep = "contract";
+          project.updatedAt = now;
+        }
+      });
+      const url = absoluteUrl(`/c/${contract.token}`);
+      if (projectEmail) {
+        await emailContractToSign({
+          studioId: admin.studioId,
+          to: projectEmail,
+          clientName: projectName,
+          title,
+          token: contract.token,
+        });
+      }
+      await notifyStudio({
+        studioId: admin.studioId,
+        type: "contract_sent",
+        title: "Contract sent",
+        body: title,
+        href: `/admin/projects/${projectId}`,
+      });
+      return NextResponse.json({ contract, url });
+    },
+  );
 }

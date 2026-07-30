@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Button,
   Card,
@@ -16,6 +17,7 @@ import {
   useUploadSession,
 } from "@/components/ui";
 import { normalizeBrandKit } from "@/lib/brand-kit";
+import { mutateJson } from "@/lib/client/mutation";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 import type {
@@ -70,6 +72,7 @@ const LOGO_SLOTS: {
 ];
 
 export function SettingsBrand() {
+  const router = useRouter();
   const { push } = useToast();
   const uploadSession = useUploadSession();
   const [loading, setLoading] = useState(true);
@@ -247,31 +250,39 @@ export function SettingsBrand() {
     e.preventDefault();
     if (!brandKit) return;
     setSaving(true);
-    const preset = resolveStudioThemePreset({
-      presetId: brandKit.basePresetId,
-      background: brandKit.background,
-      accent: brandKit.accent,
-      fontPreset: brandKit.fonts.pairingId,
-    });
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "brand",
-        name,
-        brandTagline,
-        socialLinks,
-        brandKit,
-        theme: studioThemeFromPreset(preset, brandKit.fonts.pairingId),
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+    try {
+      const preset = resolveStudioThemePreset({
+        presetId: brandKit.basePresetId,
+        background: brandKit.background,
+        accent: brandKit.accent,
+        fontPreset: brandKit.fonts.pairingId,
+      });
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "brand",
+            name,
+            brandTagline,
+            socialLinks,
+            brandKit,
+            theme: studioThemeFromPreset(preset, brandKit.fonts.pairingId),
+          }),
+        },
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setDirty(false);
+      push("Brand saved", "success");
+      router.refresh();
+    } finally {
+      setSaving(false);
     }
-    setDirty(false);
-    push("Brand saved", "success");
   }
 
   if (loading || !brandKit) {

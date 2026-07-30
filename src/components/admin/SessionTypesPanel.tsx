@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import {
   Button,
   Card,
+  Checkbox,
   Field,
   Input,
   Label,
@@ -48,7 +49,7 @@ export function SessionTypesPanel() {
 
   async function load() {
     const [typesRes, studioRes] = await Promise.all([
-      fetch("/api/bookings/session-types"),
+      fetch("/api/bookings/session-types?view=requests"),
       fetch("/api/studio"),
     ]);
     if (!typesRes.ok) {
@@ -307,11 +308,10 @@ export function SessionTypesPanel() {
 
       <section>
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <h2 className="font-display text-2xl">Your types</h2>
+          <h2 className="font-display text-2xl">Your session types</h2>
           {archivedTypes.length > 0 ? (
             <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-muted">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={showArchivedTypes}
                 onChange={(e) => setShowArchivedTypes(e.target.checked)}
               />

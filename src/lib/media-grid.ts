@@ -46,7 +46,7 @@ export function mediaGridContainerClass(mode: MediaGridMode): string {
     case "columns":
       return "grid grid-cols-2 gap-[var(--gallery-grid-gap,0.125rem)] sm:grid-cols-3 lg:grid-cols-4";
     case "justified":
-      return "flex flex-wrap gap-[var(--gallery-grid-gap,0.125rem)]";
+      return "flex min-w-0 flex-wrap gap-[var(--gallery-grid-gap,0.125rem)]";
     case "diary":
       return "mx-auto flex w-full max-w-3xl flex-col gap-[var(--gallery-diary-gap,2rem)] px-[var(--gallery-pad-x,1rem)] sm:px-0";
     case "masonry":
@@ -58,7 +58,7 @@ export function mediaGridContainerClass(mode: MediaGridMode): string {
 export function mediaGridItemClass(mode: MediaGridMode): string {
   switch (mode) {
     case "justified":
-      return "h-40 grow basis-[140px] sm:h-52 sm:basis-[180px]";
+      return "h-40 min-w-0 grow basis-[min(140px,100%)] sm:h-52 sm:basis-[180px]";
     case "diary":
       return "w-full";
     case "columns":

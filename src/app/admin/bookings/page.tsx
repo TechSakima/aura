@@ -71,6 +71,8 @@ function BookingsPageInner() {
   const [declineId, setDeclineId] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState("");
   const [conflict, setConflict] = useState<ConflictInfo | null>(null);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
 
   function setTab(id: string) {
     if (!isBookingTab(id)) return;
@@ -87,17 +89,41 @@ function BookingsPageInner() {
     });
   }
 
-  async function load() {
-    const res = await fetch("/api/bookings/session-types");
+  async function load(opts?: { historyOffset?: number; appendHistory?: boolean }) {
+    const view = tab === "calendar" ? "calendar" : "requests";
+    const params = new URLSearchParams({ view });
+    if (view === "requests") {
+      params.set("offset", String(opts?.historyOffset ?? 0));
+    }
+    if (opts?.appendHistory) setHistoryLoadingMore(true);
+    const res = await fetch(`/api/bookings/session-types?${params}`);
     if (!res.ok) {
+      setHistoryLoadingMore(false);
       push("Could not load bookings", "danger");
       return;
     }
     const data = await res.json();
-    setSessions(data.sessions || []);
-    setRequests(data.bookingRequests || []);
+    if (view === "calendar") {
+      setSessions(data.sessions || []);
+    } else {
+      const next = (data.bookingRequests || []) as BookingRow[];
+      if (opts?.appendHistory) {
+        const pending = next.filter((r) => r.status === "pending");
+        const historyChunk = next.filter((r) => r.status !== "pending");
+        setRequests((prev) => {
+          const prevPending = prev.filter((r) => r.status === "pending");
+          const prevHistory = prev.filter((r) => r.status !== "pending");
+          // Prefer fresh pending; append new history rows
+          return [...(pending.length ? pending : prevPending), ...prevHistory, ...historyChunk];
+        });
+      } else {
+        setRequests(next);
+      }
+      setHistoryHasMore(Boolean(data.hasMore));
+    }
     setSlug(data.homepageSlug || "");
     setGcalConnected(Boolean(data.gcalConnected));
+    setHistoryLoadingMore(false);
   }
 
   useEffect(() => {
@@ -148,7 +174,7 @@ function BookingsPageInner() {
           "success",
         );
       }
-      router.push(`${href}#workflow`);
+      router.push(href.includes("#") ? href : `${href}#workflow`);
       return;
     }
     if (!data.calendarPushFailed) {
@@ -195,16 +221,10 @@ function BookingsPageInner() {
       : { id: t.id, label: t.label },
   );
 
-  const headerDescription =
-    tab === "calendar"
-      ? "Sessions on the calendar."
-      : "Confirm inquiries, then continue on the project.";
-
   return (
     <div className="space-y-8">
       <PageHeader
         title="Bookings"
-        description={headerDescription}
         actions={
           <>
             <ButtonLink
@@ -260,10 +280,15 @@ function BookingsPageInner() {
                           })}
                         </p>
                         <p className="break-all text-sm">
-                          <a className="text-accent" href={`mailto:${r.email}`}>
+                          <a
+                            className="inline-flex min-h-11 items-center text-accent no-underline"
+                            href={`mailto:${r.email}`}
+                          >
                             {r.email}
                           </a>
-                          {r.phone ? ` · ${r.phone}` : ""}
+                          {r.phone ? (
+                            <span className="text-muted"> · {r.phone}</span>
+                          ) : null}
                         </p>
                         {r.notes ? (
                           <p className="mt-2 text-sm text-muted">{r.notes}</p>
@@ -317,38 +342,57 @@ function BookingsPageInner() {
           ) : null}
 
           {others.length > 0 ? (
-            <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
-              {others.map((r) => (
-                <li
-                  key={r.id}
-                  className="border border-line bg-surface p-4 text-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:border-0 sm:bg-transparent sm:p-0 sm:py-4"
-                >
-                  <div className="min-w-0">
-                    <p className="flex flex-wrap items-center gap-2 font-medium">
-                      <span>{r.name}</span>
-                      <StatusBadge domain="bookingRequest" value={r.status} />
-                    </p>
-                    <p className="text-muted">
-                      {r.sessionTypeName} ·{" "}
-                      {new Date(r.startsAt).toLocaleString()}
-                    </p>
-                    {r.declineReason ? (
-                      <p className="mt-1 text-muted">
-                        Reason: {r.declineReason}
+            <div className="space-y-4">
+              <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
+                {others.map((r) => (
+                  <li
+                    key={r.id}
+                    className="border border-line bg-surface p-4 text-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:border-0 sm:bg-transparent sm:p-0 sm:py-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="flex flex-wrap items-center gap-2 font-medium">
+                        <span>{r.name}</span>
+                        <StatusBadge domain="bookingRequest" value={r.status} />
                       </p>
+                      <p className="text-muted">
+                        {r.sessionTypeName} ·{" "}
+                        {new Date(r.startsAt).toLocaleString()}
+                      </p>
+                      {r.declineReason ? (
+                        <p className="mt-1 text-muted">
+                          Reason: {r.declineReason}
+                        </p>
+                      ) : null}
+                    </div>
+                    {r.projectHref ? (
+                      <Link
+                        className="mt-2 inline-flex min-h-11 items-center text-sm text-accent no-underline sm:mt-0"
+                        href={r.projectHref}
+                      >
+                        Open project
+                      </Link>
                     ) : null}
-                  </div>
-                  {r.projectHref ? (
-                    <Link
-                      className="mt-2 inline-block text-accent sm:mt-0"
-                      href={r.projectHref}
-                    >
-                      Open project
-                    </Link>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+              {historyHasMore ? (
+                <Button
+                  type="button"
+                  tone="neutral"
+                  className="min-h-11 w-full sm:w-auto"
+                  pending={historyLoadingMore}
+                  pendingLabel="Loading…"
+                  onClick={() =>
+                    void load({
+                      historyOffset: others.length,
+                      appendHistory: true,
+                    })
+                  }
+                >
+                  Load more
+                </Button>
+              ) : null}
+            </div>
           ) : null}
         </section>
       ) : null}

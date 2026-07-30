@@ -1,26 +1,18 @@
 import { NextResponse } from "next/server";
 import { COL } from "@/lib/db/collections";
-import { assertFirebaseReady } from "@/lib/db/require-firebase";
-import { getStudioDoc, readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  findContractByToken,
+  getProjectById,
+  getStudioDoc,
+  patchStudioDoc,
+} from "@/lib/db/store";
 import {
   emailContractSignedCopy,
   notifyStudio,
 } from "@/lib/notify/send";
-
-import type { Contract } from "@/lib/types";
-
-async function findContract(token: string) {
-  const { db } = assertFirebaseReady();
-  await getStudioDoc("noop").catch(() => null);
-  const snap = await db
-    .collection(COL.contracts)
-    .where("token", "==", token)
-    .limit(1)
-    .get();
-  if (snap.empty) return null;
-  const d = snap.docs[0]!;
-  return { id: d.id, ...d.data() } as Contract;
-}
+import { assertPublicContractAccess } from "@/lib/public-access";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { workflowStepAfterContractSigned } from "@/lib/workflow/state-rules";
 
 function parseSignedDate(raw: unknown): string | null {
   const s = String(raw || "").trim();
@@ -35,8 +27,15 @@ export async function GET(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const contract = await findContract(token);
+  const contract = await findContractByToken(token);
   if (!contract) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const access = await assertPublicContractAccess(contract);
+  if (!access.ok) {
+    return NextResponse.json(
+      { error: access.error },
+      { status: access.status },
+    );
+  }
   const studio = await getStudioDoc(contract.studioId);
   return NextResponse.json({
     contract: {
@@ -49,6 +48,7 @@ export async function GET(
       acknowledgedTerms: contract.acknowledgedTerms,
     },
     studio: { name: studio?.name },
+    preview: access.preview,
   });
 }
 
@@ -57,6 +57,17 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
+  const limited = rateLimit(`contract-sign:${token}:${clientIp(req)}`, 10, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
+
   const body = await req.json();
   const signerName = String(body.signerName || "").trim();
   if (!signerName) {
@@ -73,37 +84,39 @@ export async function POST(
     return NextResponse.json({ error: "Valid date required" }, { status: 400 });
   }
 
-  const contract = await findContract(token);
+  const contract = await findContractByToken(token);
   if (!contract) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (contract.status === "completed") {
-    return NextResponse.json({ error: "Already signed" }, { status: 400 });
+  const access = await assertPublicContractAccess(contract, { sign: true });
+  if (!access.ok) {
+    return NextResponse.json(
+      { error: access.error },
+      { status: access.status },
+    );
   }
   const signedAt = new Date().toISOString();
-  await updateStudioDb(contract.studioId, (db) => {
-    const c = db.contracts.find((x) => x.id === contract.id);
-    if (!c) return;
-    c.status = "completed";
-    c.signerName = signerName;
-    c.signedAt = signedAt;
-    c.signedDate = signedDate;
-    c.acknowledgedTerms = true;
-    c.updatedAt = signedAt;
-    const p = db.projects.find((x) => x.id === c.projectId);
-    if (p) {
-      p.workflowStep = "deposit";
-      p.updatedAt = signedAt;
-    }
+  await patchStudioDoc(COL.contracts, contract.id, {
+    status: "completed",
+    signerName,
+    signedAt,
+    signedDate,
+    acknowledgedTerms: true,
   });
+  const project = contract.projectId
+    ? await getProjectById(contract.projectId)
+    : null;
+  const nextStep = workflowStepAfterContractSigned(project?.workflowStep);
+  if (contract.projectId && nextStep) {
+    await patchStudioDoc(COL.projects, contract.projectId, {
+      workflowStep: nextStep,
+    });
+  }
   await notifyStudio({
     studioId: contract.studioId,
     type: "contract_signed",
     title: "Contract signed",
     body: `${contract.title} signed by ${signerName}`,
-    href: `/admin/projects/${contract.projectId}`,
+    href: `/admin/projects/${contract.projectId}#workflow`,
   });
-
-  const db = await readStudioDb(contract.studioId);
-  const project = db.projects.find((p) => p.id === contract.projectId);
   if (project?.email) {
     await emailContractSignedCopy({
       studioId: contract.studioId,
@@ -114,6 +127,7 @@ export async function POST(
       signerName,
       signedDate,
       token,
+      projectId: contract.projectId,
     });
   }
 

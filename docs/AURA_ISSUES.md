@@ -1,12 +1,15 @@
 # Aura — Master Issues Backlog
 
 **Purpose:** Single ordered backlog that fully refines Aura — product, UX, UI, workflow, polish, architecture, reliability, performance, BE/FE unification, modular studio website + client gallery, **Cloudflare R2 media**, **unified studio Settings**, **client→studio contact via Resend**, **fully responsive**, and **PWA-ready** (admin + public).  
-**Rules:**  
-- One open item per prompt → [`.cursor/rules/aura-one-issue-at-a-time.mdc`](../.cursor/rules/aura-one-issue-at-a-time.mdc)  
-- Unified UI → [`.cursor/rules/aura-unified-ui.mdc`](../.cursor/rules/aura-unified-ui.mdc)  
-- Design tokens → [`.cursor/rules/aura-design-system.mdc`](../.cursor/rules/aura-design-system.mdc)  
-- Responsive → [`.cursor/rules/aura-responsive.mdc`](../.cursor/rules/aura-responsive.mdc)  
-- PWA → [`.cursor/rules/aura-pwa.mdc`](../.cursor/rules/aura-pwa.mdc)
+**Rules (all always-apply; peer weight):**  
+
+- One open item per prompt → `[.cursor/rules/aura-one-issue-at-a-time.mdc](../.cursor/rules/aura-one-issue-at-a-time.mdc)`  
+- Unified UI → `[.cursor/rules/aura-unified-ui.mdc](../.cursor/rules/aura-unified-ui.mdc)`  
+- Design tokens → `[.cursor/rules/aura-design-system.mdc](../.cursor/rules/aura-design-system.mdc)`  
+- Responsive → `[.cursor/rules/aura-responsive.mdc](../.cursor/rules/aura-responsive.mdc)`  
+- PWA → `[.cursor/rules/aura-pwa.mdc](../.cursor/rules/aura-pwa.mdc)` · SW strategy → `[docs/PWA_SERVICE_WORKER.md](PWA_SERVICE_WORKER.md)`  
+- UI copy → `[.cursor/rules/aura-ui-copy.mdc](../.cursor/rules/aura-ui-copy.mdc)`  
+- Domain + persist ADR → [`docs/ADR-dual-model-retirement.md`](ADR-dual-model-retirement.md) · agent entry → [`AGENTS.md`](../AGENTS.md)
 
 **Status legend:** `[ ]` open · `[~]` in progress · `[x]` done · `[!]` cancelled / superseded (do not implement)  
 **Severity:** P0 ship-blocker / data-loss / security · P1 important · P2 polish · P3 nice-to-have
@@ -28,36 +31,40 @@
 
 Work top → bottom. Within a wave, keep listed sequence.
 
-| Wave | Goal | Do these (open / remaining) | Do not start until |
-|------|------|-----------------------------|--------------------|
-| **W0** | Data honesty & security | **001** → **152** → **002** → **003** → **004** → **005** → **006** → **007** → **008** | — |
-| **W1** | Cloudflare R2 delivery | **358** (verify `.env.local` + smoke upload) → **355** → **356** → **357** → **359** → **360** → **362** (361 optional) | W0 done (persist safe before media cutover) |
-| **W2** | Money truth | **009** → **016** (Phase 1), then **365** pay idempotency | W0 |
-| **W3** | Happy-path pipeline | **017** → **030** (Phase 2), then **369** GCal scope | W0; W2 for deposit/pay honesty |
-| **W4** | Public client surfaces | **031**–**050** except **037** (downloads) runs **after W1 355/356**, then **364** zip TTL/skips | W0; W1 for download-related |
-| **W5** | Admin load/perf | **051**–**057**, then **367** null email | W0 (002/003 especially) |
-| **W6** | Delivery / wrap polish | **366** archive egress, then **073**–**081** | W1 for upload/download paths |
-| **W7** | BE/FE unification | **153**–**200** (**151** is `[!]` — folded into 001) | W0 (001/152/002) |
-| **W8** | Unified UI primitives | **201**–**221**, then **363** (Dialog viewport portal) | Prefer before mega UI rebuilds; may land earlier when a screen is touched |
-| **W9** | Settings OS | **349**–**353** (**317**–**348**/ **070**/ **087**/ **090**/ **091**/ **098**/ **123**/ **121**/ **265**/ **310** done) | W8 where ThemeSwatch etc. noted |
-| **W10** | Website + gallery designer | **222**–**259** | W8 tokens; W9 Brand/Website; W1 media |
-| **W11** | Contact (Resend) | **304**–**316** | W0; **041** escape before **306** |
-| **W12** | Responsive + PWA productization | **281**–**303**, then **368** SW scope/R2 | Continuous bar always; this wave closes systemic gaps |
-| **W13** | No-headache workflows + DoD | **260**–**280**, then remaining Phase 5/7/8/9/10/11 debt in ID order | Prior foundations |
-| **W14** | Leftover polish | Any still-open IDs not pulled into earlier waves | — |
 
-**Next to implement:** first open checkbox in **W11** → currently **AURA-316**.
+| Wave    | Goal                            | Do these (open / remaining)                                                                                             | Do not start until                                                        |
+| ------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **W0**  | Data honesty & security         | **001** → **152** → **002** → **003** → **004** → **005** → **006** → **007** → **008**                                 | —                                                                         |
+| **W1**  | Cloudflare R2 delivery          | **358** (verify `.env.local` + smoke upload) → **355** → **356** → **357** → **359** → **360** → **362** (361 optional) | W0 done (persist safe before media cutover)                               |
+| **W2**  | Money truth                     | **009** → **016** (Phase 1), then **365** pay idempotency                                                               | W0                                                                        |
+| **W3**  | Happy-path pipeline             | **017** → **030** (Phase 2), then **369** GCal scope                                                                    | W0; W2 for deposit/pay honesty                                            |
+| **W4**  | Public client surfaces          | **031**–**050** except **037** (downloads) runs **after W1 355/356**, then **364** zip TTL/skips                        | W0; W1 for download-related                                               |
+| **W5**  | Admin load/perf                 | **051**–**057**, then **367** null email                                                                                | W0 (002/003 especially)                                                   |
+| **W6**  | Delivery / wrap polish          | **366** archive egress, then **073**–**081**                                                                            | W1 for upload/download paths                                              |
+| **W7**  | BE/FE unification               | **153**–**200** (**151** is `[!]` — folded into 001)                                                                    | W0 (001/152/002)                                                          |
+| **W8**  | Unified UI primitives           | **201**–**221**, then **363** (Dialog viewport portal)                                                                  | Prefer before mega UI rebuilds; may land earlier when a screen is touched |
+| **W9**  | Settings OS                     | **349**–**353** (**317**–**348**/ **070**/ **087**/ **090**/ **091**/ **098**/ **123**/ **121**/ **265**/ **310** done) | W8 where ThemeSwatch etc. noted                                           |
+| **W10** | Website + gallery designer      | **222**–**259**                                                                                                         | W8 tokens; W9 Brand/Website; W1 media                                     |
+| **W11** | Contact (Resend)                | **304**–**316**, then **371**–**374** (project inbound Reply-To)                                                        | W0; **041** escape before **306**; **315** before **371**                 |
+| **W12** | Responsive + PWA productization | **281**–**287**, pull **088**/**089**, then **375**–**383** (deep audit), then **288**–**303**, **368**                 | Continuous bar always; this wave closes systemic gaps                     |
+| **W13** | No-headache workflows + DoD     | **260**–**280** done; remaining Phase 5/7/8/9/10/11 debt in ID order (**095** next; skip blocked **055**)               | Prior foundations                                                         |
+| **W14** | Leftover polish                 | **384** (remove clients/shoots API aliases), then any still-open IDs not pulled into earlier waves                       | —                                                                         |
 
-**R2:** **W1 complete** incl. **361** unified direct upload. **W2 complete** (**009–016**, **365**). **W3 complete** (**017–030**). **W4 complete** (**031–050**, **364**). **W5 complete** (**051–057**, **367**; 055 blocked). **W6 complete** (**366**, **073–081**). **W7 complete** (**153–199**). **W8 complete** (**201–221**, **363**). **W9 complete** (**349**–**353**). **W10 complete** (**222**–**259**). → **W11 AURA-316**.
+
+**Next to implement:** first open checkbox in **W13** residual debt → currently **AURA-095**.
+
+**R2:** **W1 complete** incl. **361** unified direct upload. **W2 complete** (**009–016**, **365**). **W3 complete** (**017–030**). **W4 complete** (**031–050**, **364**). **W5 complete** (**051–057**, **367**; 055 blocked). **W6 complete** (**366**, **073–081**). **W7 complete** (**153–199**). **W8 complete** (**201–221**, **363**). **W9 complete** (**349**–**353**). **W10 complete** (**222**–**259**). **W11 complete** (**304**–**316**, **371**–**374**). **W12 complete** (**281**–**303**, **088**/**089**, **375**–**383**, **368**). **W13 DoD 260–280 complete** → residual **AURA-095** (skip **055**).
 
 **Dedup (do not double-implement):**
 
-| Keep | Superseded |
-|------|------------|
-| **001** (+ regression test) | **151** → `[!]` |
-| **317+** Settings IA | **070** closed with 317 stopgap routes |
-| **355/356** download architecture | **037** polish **after** 355/356 |
-| **202** theme var parity | covers much of **031** — close 031 via 202 when fixing dark gallery |
+
+| Keep                              | Superseded                                                          |
+| --------------------------------- | ------------------------------------------------------------------- |
+| **001** (+ regression test)       | **151** → `[!]`                                                     |
+| **317+** Settings IA              | **070** closed with 317 stopgap routes                              |
+| **355/356** download architecture | **037** polish **after** 355/356                                    |
+| **202** theme var parity          | covers much of **031** — close 031 via 202 when fixing dark gallery |
+
 
 ### Performance bar (applies to every item)
 
@@ -86,9 +93,9 @@ When implementing any AURA-###:
 - Installable where intended: valid **manifest** (name, icons 192/512 + maskable, `theme_color` / `background_color` from brand/theme — not hardcoded light Aura defaults on branded galleries).
 - **Service worker** registered; updates don’t brick the app; offline fallback is honest (cached shell or clear “you’re offline” — never a silent blank).
 - Standalone / installed mode: no broken auth redirects, no content under the notch, bottom nav / CTAs clear of home-indicator.
-- Scope manifests correctly: studio admin vs gallery token vs (later) homepage/book — clients should not get a confusing “Aura Studio” install when viewing a wedding gallery.
-- Do not cache authenticated admin API responses carelessly; prefer network-first for studio data, cache-first only for static/public assets.
-- Full contract: `aura-pwa.mdc`.
+- Scope manifests correctly: studio admin vs gallery token vs homepage/book vs lightweight quote/contract/pay — clients should not get a confusing “Aura Studio” install when viewing a wedding gallery.
+- Do not cache authenticated admin API responses carelessly; prefer network-first for studio data. Media SW cache = thumbs/previews only under budget (never originals).
+- Full contract: `aura-pwa.mdc` · `docs/PWA_SERVICE_WORKER.md`.
 
 ---
 
@@ -327,50 +334,63 @@ When implementing any AURA-###:
 
 ## Phase 5 — Admin IA, dual model, dead code
 
-- [ ] **AURA-058** · P1 · Architecture · API rename cutover  
+- [x] **AURA-058** · P1 · Architecture · API rename cutover  
   Stop calling Projects “clients” in primary UI code paths; introduce `/api/projects` (or fully alias) and remove `data.project || data.client` soup over time.
+  **Done:** With W7 / **AURA-273** — `/api/projects` + `/api/sessions`; admin FE cutover; alias delete → **384**.
 
-- [ ] **AURA-059** · P1 · Architecture · Dual Firestore collections  
+- [x] **AURA-059** · P1 · Architecture · Dual Firestore collections  
   After migration confidence, stop dual-writing `clients`/`shoots`; single source `projects`/`projectSessions`.
+  **Done:** With **AURA-168** / **197** / **273** — no dual-write; legacy flag; ADR.
 
-- [ ] **AURA-060** · P1 · Architecture · Dead wizard steps  
+- [x] **AURA-060** · P1 · Architecture · Dead wizard steps  
   Session tools already quarantine intake/quote (redirect to project). Delete orphan `IntakeStep.tsx` / `QuoteStep.tsx`; confirm no imports (pairs AURA-192).
+  **Done:** Verified with **AURA-192** — files absent; no imports remain.
 
-- [ ] **AURA-061** · P1 · Architecture · Dead IdeasPanel  
+- [x] **AURA-061** · P1 · Architecture · Dead IdeasPanel  
   Either revive Ideas inside Prep properly (FileUploadButton, no raw file input) or delete dead code + `/admin/ideas` confusion.
+  **Done:** Deleted unused `IdeasPanel` + `/api/ideas`; `/admin/ideas` → Prep; shot lists remain the hub. `ideaCards` collection kept for existing data.
 
-- [ ] **AURA-062** · P1 · Architecture · Packages / shot-lists dual entry  
+- [x] **AURA-062** · P1 · Architecture · Packages / shot-lists dual entry  
   Make Prep the only hub; redirect `/admin/packages` and `/admin/shot-lists` (or vice versa — pick one).
+  **Done:** Prep `?tab=shots|packages`; legacy routes redirect; Settings Library links updated.
 
-- [ ] **AURA-063** · P1 · Architecture · Legacy admin redirects cleanup  
+- [x] **AURA-063** · P1 · Architecture · Legacy admin redirects cleanup  
   Clients / shoots / proposals / galleries index redirects: keep aliases but stop nav highlighting weirdness; document canonical URLs.
+  **Done:** Server `redirect()` for legacy indexes + detail aliases; Projects nav matches `/admin/projects` + `/admin/shoots*` (helper); `docs/ADMIN_ROUTES.md` + ADR pointer.
 
-- [ ] **AURA-064** · P1 · Architecture · Gallery admin index  
+- [x] **AURA-064** · P1 · Architecture · Gallery admin index  
   Photographers need a way to find galleries (search/expiry) without knowing the project — Settings “Design” links into Delivery redirect is not enough.
+  **Done:** `/admin/galleries` list (search/status/expiry); paginated GET via `listGalleriesForStudio`; More nav; Settings Website → `options=1`.
 
-- [ ] **AURA-065** · P1 · UX · Prep vs session Prep naming  
+- [x] **AURA-065** · P1 · UX · Prep vs session Prep naming  
   Rename nav “Prep” library (shot lists + packages) so it doesn’t collide with session prep step.
+  **Done:** More nav + `/admin/prep` page titled Library; session wizard step stays Prep; hub copy updated.
 
-- [ ] **AURA-066** · P1 · UX · Admin mobile “More”  
+- [x] **AURA-066** · P1 · UX · Admin mobile “More”  
   Payments / Documents / pending bookings need faster access (badge counts, smarter More menu, or primary slots).
+  **Done:** More drawer = ops-first moreNav only (Payments/Documents top); Bookings pending badge via `view=badges`; desktop badges too.
 
 - [x] **AURA-067** · P1 · UX · Session wizard mobile step jump  
   On 375px, allow jumping among unlocked steps (not only Back/Continue). *(Done with AURA-215 Tabs progress variant.)*
 
-- [ ] **AURA-068** · P1 · Architecture · Shoot-day duplication  
+- [x] **AURA-068** · P1 · Architecture · Shoot-day duplication  
   Consolidate `ShootDayStep` and `/admin/shoots/[id]/helper` into one implementation (wake lock / localStorage / mark complete parity).
+  **Done:** Shared `SessionShootDay` (wake lock, optimistic saves, mark complete, filter prefs in localStorage); wizard + helper thin wrappers.
 
-- [ ] **AURA-069** · P2 · Architecture · Documents mega-page  
+- [x] **AURA-069** · P2 · Architecture · Documents mega-page  
   Split contracts vs questionnaires vs templates; stop shared `projectId` silently coupling two forms.
+  **Done:** Tabs `contracts` / `questionnaires` / `templates`; separate `contractProjectId` + `questionnaireProjectId`; Settings Library links updated.
 
 - [x] **AURA-070** · P2 · Architecture · Settings mega-page
   Stopgap routed sections via **AURA-317** (Studio | Homepage | Notifications | Integrations | Watermarks). Full Settings IA continues in Phase 20.
 
-- [ ] **AURA-071** · P2 · Workflow · Duplicate document/payment entry points  
+- [x] **AURA-071** · P2 · Workflow · Duplicate document/payment entry points  
   Decide canonical: project workflow for happy path; hubs for templates/setup only — remove redundant send UIs or deep-link them.
+  **Done:** Documents/Payments hubs = inventory + templates; send only from project workflow; deep-links to projects.
 
-- [ ] **AURA-072** · P2 · Terminology · Type systems  
+- [x] **AURA-072** · P2 · Terminology · Type systems  
   Unify project type vs session type vs shot-list “shoot type” vs booking session type labeling.
+  **Done:** Copy-only labels — Project type / Session label / Applies to / Session type (booking); `type-systems.ts` map; archive zip “Session label”.
 
 ---
 
@@ -410,29 +430,36 @@ When implementing any AURA-###:
 
 ## Phase 7 — Design system, responsive, copy
 
-- [ ] **AURA-082** · P1 · UI · Replace raw checkboxes/selects  
+- [x] **AURA-082** · P1 · UI · Replace raw checkboxes/selects  
   Projects archived toggle, Settings homepage/notifications, ListEditor, ShootDay filters → `Checkbox` / `Switch` / `Select`.
+  **Done:** Verified with AURA-274 — admin surfaces use Checkbox/Switch/Select; ShootDay/helper toggles on Checkbox.
 
-- [ ] **AURA-083** · P1 · UI · Ad-hoc buttons  
+- [x] **AURA-083** · P1 · UI · Ad-hoc buttons  
   `ShootPublicLinks`, helper Exit link, calendar mode toggles, GalleryHero CTA, cover-none CTA → `Button` / shared primitives.
+  **Done:** With AURA-274 — ShootPublicLinks/ButtonLink; helper Exit + ShootDay helper link; GalleryHero PublicCta; helper/ShootDay preview controls → Button/Checkbox.
 
-- [ ] **AURA-084** · P1 · UI · Card overuse  
+- [x] **AURA-084** · P1 · UI · Card overuse  
   Analytics, workflow step chrome, payments lists — prefer divider lists / composition; cards only when interaction needs a container.
+  **Done:** Analytics + payments → `List`/`ListRow` (photo tiles keep `Panel` interactive); workflow outer Card + per-step boxes → section + divide-y.
 
-- [ ] **AURA-085** · P1 · Copy · Infra leakage  
+- [x] **AURA-085** · P1 · Copy · Infra leakage  
   Remove Firebase / Resend / Stripe product narration from user-facing strings (login errors, settings notifications, payments).
+  **Done:** With AURA-278 — login/auth/connect/stripeErrorMessage sanitized.
 
-- [ ] **AURA-086** · P1 · Copy · Client / Shoot terminology  
+- [x] **AURA-086** · P1 · Copy · Client / Shoot terminology  
   Dashboard, analytics filter, helper, shot lists, notification prefs — Project / Session only in studio admin UI.
+  **Done:** With AURA-278 — dashboard/analytics/helper/shot lists/workflow/documents labels.
 
 - [x] **AURA-087** · P1 · Responsive · Settings address grid  
   City/state/ZIP must stack on 375px (not `grid-cols-3` crushed).
 
-- [ ] **AURA-088** · P1 · Responsive · Documents / workflow button stacks  
-  Reduce vertical button spam on project workflow steps at 375px (menus / primary+overflow).
+- [x] **AURA-088** · P1 · Responsive · Documents / workflow button stacks  
+  Reduce vertical button spam on project workflow steps at 375px (menus / primary+overflow).  
+  **Done:** `ActionStack` primitive — primary + More below `sm`, full stack from `sm`. Wired questionnaire/pricing/contract/deposit/delivery (+ balance) in `ProjectWorkflowPanel`; Delivery header Share overflow.
 
-- [ ] **AURA-089** · P1 · Responsive · Calendar density  
-  Month chips/labels usable at 375px; add scroll affordance where horizontal scroll remains.
+- [x] **AURA-089** · P1 · Responsive · Calendar density  
+  Month chips/labels usable at 375px; add scroll affordance where horizontal scroll remains.  
+  **Done:** Below `md`, month/3-month use compact number+dot grid (tap → day) + agenda day-list; chip grid from `md`. Week day-list unchanged. No H-scroll rails left.
 
 - [x] **AURA-090** · P1 · UX · Time zone input  
   Replace free-text timezone with a validated picker / common IANA list.
@@ -440,14 +467,17 @@ When implementing any AURA-###:
 - [x] **AURA-091** · P1 · UX · Cover logo URL field  
   Use `FileUploadButton` + upload session like studio logo — not raw URL typing.
 
-- [ ] **AURA-092** · P2 · A11y · Dialog / lightbox  
+- [x] **AURA-092** · P2 · A11y · Dialog / lightbox  
   Focus trap, Escape, initial focus for `Dialog` and `PhotoLightbox`.
+  **Done:** Trap honors autofocus / skip-initial close; Dialog `aria-labelledby` + Escape stopPropagation; lightbox keeps Close as initial focus.
 
-- [ ] **AURA-093** · P2 · UI · Analytics human labels  
+- [x] **AURA-093** · P2 · UI · Analytics human labels  
   Event type keys and “Filter by shoot” → Session; show project names, not id slices.
+  **Done:** `analyticsEventLabel`; session filter = project · label · date; recent events show project name.
 
-- [ ] **AURA-094** · P2 · Copy · Sparse headers  
+- [x] **AURA-094** · P2 · Copy · Sparse headers  
   Shorten Bookings / Prep / Projects PageHeader essays to label-first Aura tone.
+  **Done:** Bookings header description removed; Library/Projects already title-only; projects empty essay dropped.
 
 - [ ] **AURA-095** · P2 · Design system · ListEditor  
   Use design-system controls throughout intake/questionnaire editors.
@@ -533,32 +563,33 @@ When implementing any AURA-###:
 - [ ] **AURA-117** · P2 · Reliability · Analytics retention  
   Bound/compacts `analyticsEvents` growth.
 
-- [ ] **AURA-118** · P2 · Workflow · Triple state machines  
+- [x] **AURA-118** · P2 · Workflow · Triple state machines  
   Document and sync `project.stage`, `session.status`, `workflowStep` — reduce contradictory badges.
+  **Done:** Covered by AURA-173 + AURA-277 helpers; UI badges use readiness (018), not bare stage vs step conflict.
 
-- [ ] **AURA-119** · P2 · Bug · Payment advances workflow to prep  
+- [x] **AURA-119** · P2 · Bug · Payment advances workflow to prep  
   Don’t jump past unfinished questionnaire/contract when recording payment.
+  **Done:** With AURA-277 — `workflowStepAfterDepositPaid` only advances deposit→prep.
 
-- [ ] **AURA-120** · P2 · Bug · Contract sign forces deposit step  
+- [x] **AURA-120** · P2 · Bug · Contract sign forces deposit step  
   Don’t regress workflow if already paid / further along.
+  **Done:** With AURA-277 — `workflowStepAfterContractSigned` skips patch when already at deposit+.
 
 - [x] **AURA-121** · P2 · Incomplete · Team roles  
   Single-owner product decision via AURA-346 — no multi-role / invite UI.
 
 - [!] **AURA-122** · P2 · Incomplete · Selects workflow  
-  Superseded by **AURA-248** (X of Y + submit + Wrap review).
+Superseded by **AURA-248** (X of Y + submit + Wrap review).
 
 - [x] **AURA-123** · P3 · Incomplete · Currency  
   USD-only declared in Settings → Payments (`DEFAULT_PAYMENT_CURRENCY`); multi-currency deferred.
-
 - [ ] **AURA-124** · P3 · Polish · Command palette / jump-to-project  
   Scale aid once project counts grow.
-
 - [ ] **AURA-125** · P3 · TechDebt · Dead stubs  
   Remove or implement `firestore-store` stubs, unused Countdown divergence, unused hashPassword paths, empty `firestore.indexes.json` when needed.
-
-- [ ] **AURA-126** · P3 · TechDebt · ADR  
+- [x] **AURA-126** · P3 · TechDebt · ADR  
   Write a short architecture note: target persistence model (per-entity writes), so agents stop extending the document-document antipattern.
+  **Done:** With **AURA-280** — persistence section in `ADR-dual-model-retirement.md`.
 
 ---
 
@@ -645,14 +676,12 @@ Goal: **Project / Session / Quote** everywhere — APIs, Firestore, types, UI �
 ### U0 — Field truth & dual-write dampening
 
 - [!] **AURA-151** · P0 · DataModel · Project field round-trip  
-  **Superseded by AURA-001** (includes regression check). Do not implement separately.
+**Superseded by AURA-001** (includes regression check). Do not implement separately.
 
 - [x] **AURA-152** · P0 · DataModel · Session field round-trip  
   Hardened `coerceSession` (wizard flags / intakeAnswers); PATCH `/api/shoots/[id]` now accepts `endsAt`, `proposalId`, `galleryId`, `googleEventId`, `intakeAnswers`. `sessionRoundTripPreserved()` helper. **W0: after AURA-001.**
-
 - [x] **AURA-153** · P0 · Reliability · Dual-collection merge rules  
   Document and harden: `projects`/`projectSessions` win; legacy `clients`/`shoots` fill gaps only. Prevent resurrect-on-persist after delete. Tests for cascade delete.
-
 - [x] **AURA-154** · P0 · Performance · Dual-write dampening  
   Until per-doc writes (AURA-002): do not dual-write `clients`/`shoots` on analytics/photo hot paths; or feature-flag dual-write off for append-only mutations. Every RMW today rewrites four entity collections for projects/sessions alone. *(Per-doc writes landed in 002/003; dual-write remains only on full `persistStudioDatabase` — append/patch/updateStudioDoc and `appendStudioPhotos` bypass it. Documented.)*
 
@@ -771,20 +800,16 @@ Goal: **Project / Session / Quote** everywhere — APIs, Firestore, types, UI �
   Quotes, contracts, questionnaires, payment links, invoices for one project — stop studio-wide list+filter.
 
 - [!] **AURA-189** · P1 · Performance · Batch session summaries  
-  Same as AURA-161; no full photo arrays for cards. *(Superseded — keep 161 only.)*
+Same as AURA-161; no full photo arrays for cards. *(Superseded — keep 161 only.)*
 
 - [x] **AURA-190** · P1 · API · Session `endsAt` on PATCH  
   Calendar duration stays accurate. *(Shipped in AURA-152/026.)*
-
 - [x] **AURA-191** · P2 · Performance · Quotes `?projectId=`  
   Don’t ship full studio graph for workflow panel.
-
 - [x] **AURA-192** · P2 · Dead dual entry cleanup  
   Quarantine unused Intake/Quote steps; convert→gallery lands on Delivery.
-
 - [x] **AURA-193** · P2 · Legacy URL matrix  
   Canonical `/admin/projects/.../sessions/...`; update dashboard helperHref.
-
 - [x] **AURA-194** · P2 · Docs · Public route noun map  
   `/p` quote, `/q` questionnaire, `/c` contract, `/g` gallery, `/pay`, `/book`, `/cancel`, `/h` homepage.
 
@@ -807,7 +832,10 @@ Goal: **Project / Session / Quote** everywhere — APIs, Firestore, types, UI �
 - [x] **AURA-199** · P2 · Tests · Unification contracts  
   Bundle shapes, normalize field preservation, delete cascades, no dual-write when flag off.
 
-- [ ] **AURA-200** · P3 · Optional · Rename collection `proposals` → `quotes`  
+- [ ] **AURA-384** · P2 · Cutover · Remove `/api/clients` + `/api/shoots`  
+  After AURA-273 admin FE cutover: delete alias routes (or 410); keep `AURA_LEGACY_COLLECTIONS` for Firestore backfill only. **W14.**
+
+- [ ] **AURA-200** · P3 · not Optional · Rename collection `proposals` → `quotes`  
   Only after API stable; prefer noun “quote” with collection `proposals` if migration costly.
 
 - [ ] **AURA-370** · P2 · UX · Pretty admin URLs  
@@ -1025,38 +1053,48 @@ Goal: one visual language — tokens, primitives, shells — so admin and public
 
 ## Phase 16 — Cross-cutting “no headache” studio workflows
 
-- [ ] **AURA-260** · P1 · UX · Guided first project  
+- [x] **AURA-260** · P1 · UX · Guided first project  
   After signup/Connect: create project → send quote → contract → deposit checklist with progress, not empty dashboards.
+  **Done:** `buildFirstProjectGuide` + dashboard `FirstProjectChecklist` (hides after deposit); projects `?new=1` + empty CTA.
 
-- [ ] **AURA-261** · P1 · UX · Single progress spine  
+- [x] **AURA-261** · P1 · UX · Single progress spine  
   One UI that spans project workflow + session tools (AURA-017) with plain labels (“Get paid”, “Deliver photos”).
+  **Done:** Plain `path.ts` labels; dropped Book/Session section headers; one-spine copy + `workflowStepLabel`; project create-session confirm aligned.
 
-- [ ] **AURA-262** · P1 · UX · Undo / confirm on destructive  
+- [x] **AURA-262** · P1 · UX · Undo / confirm on destructive  
   Archive, delete, replace quote, refresh plan, go live — consistent ConfirmProvider + consequence copy.
+  **Done:** `destructive-confirm` copy helpers; Go live + mark delivered confirms; archive/delete/replace/refresh wired; Ideas delete confirm.
 
-- [ ] **AURA-263** · P1 · UX · Deep links everywhere  
+- [x] **AURA-263** · P1 · UX · Deep links everywhere  
   Notifications, dashboard flags, analytics rows → exact admin screen + step (Bookings for new booking — already fixed pattern).
+  **Done:** `admin-deep-links` helper; notifyStudio → `#workflow` / delivery; dashboard expiring → Open delivery; analytics rows linked; `#workflow` scroll.
 
-- [ ] **AURA-264** · P2 · UX · Offline / slow network honesty  
+- [x] **AURA-264** · P2 · UX · Offline / slow network honesty  
   Uploads and saves show pending/error; no silent success.
+  **Done:** `mutateJson` + upload offline copy; DeliveryStep/Prep success gated; settings + website builder + project save try/finally.
 
 - [x] **AURA-265** · P2 · UX · Permissions clarity  
   Single-owner only via AURA-346 — no teased team invites.
 
-- [ ] **AURA-266** · P2 · Docs · In-app sparse help  
+- [x] **AURA-266** · P2 · Docs · In-app sparse help  
   One-line help only where control is unclear (aura-ui-copy) — link to deeper docs if needed, never essays in PageHeader.
+  **Done:** Trimmed PageHeader/SectionIntro essays; Session types via ButtonLink; removed restating Field hints; aura-ui-copy PageHeader rule.
 
-- [ ] **AURA-267** · P1 · Performance · Upload pipeline  
+- [x] **AURA-267** · P1 · Performance · Upload pipeline  
   Parallelize safe uploads within limits; clear progress; timeout messaging; don’t hold studio write lock during Sharp (pairs AURA-002/061).
+  **Done:** `FILE_UPLOAD_CONCURRENCY=3` + per-file %; upload timeouts; `appendStudioPhotos` assigns sortOrder/cover in writeQueue; Sharp stays outside lock (002/361). AURA-061 unrelated.
 
-- [ ] **AURA-268** · P1 · Performance · Admin list virtualization  
+- [x] **AURA-268** · P1 · Performance · Admin list virtualization  
   Projects/Bookings/Documents grow — virtualize or paginate before they feel broken.
+  **Done:** Server pagination (`admin-list-page`, limit 50) + scoped collection reads (no full-studio); Load more on Projects/Bookings history/Documents; contract bodies omitted; `?options=1` for selects.
 
-- [ ] **AURA-269** · P2 · Reliability · Idempotent admin actions  
+- [x] **AURA-269** · P2 · Reliability · Idempotent admin actions  
   Send quote / send contract / email pay link — safe retries, no duplicate spam.
+  **Done:** `Idempotency-Key` + in-process cache/singleflight (15m); quote/contract/pay email routes + workflow/payments UI; intentional re-send uses new key.
 
-- [ ] **AURA-270** · P2 · Security · Public write amplification  
+- [x] **AURA-270** · P2 · Security · Public write amplification  
   Comments/favorites/book submissions can’t DoS studio writes once persist is fixed; rate limit + cheap paths.
+  **Done:** `clientIp` + rate limits on comments/photo-view/subalbums/book/questionnaire/proposal/contract/cancel; public POSTs use `appendStudioDoc`/`patchStudioDoc` (no public `updateStudioDb`).
 
 ---
 
@@ -1064,35 +1102,45 @@ Goal: one visual language — tokens, primitives, shells — so admin and public
 
 Use this as the exit criteria before calling the backlog “complete enough” for a major release:
 
-- [ ] **AURA-271** · P1 · DoD · Data honesty  
+- [x] **AURA-271** · P1 · DoD · Data honesty  
   No dropped fields; no fake payments; no global favorites overwrite; draft tokens gated.
+  **Done:** Verified 001/152 round-trip, 004 fail-closed pay, 005 per-visitor favorites, 006 gallery/quote gates; added `assertPublicContractAccess` for draft/canceled contracts.
 
-- [ ] **AURA-272** · P1 · DoD · Persist performance  
+- [x] **AURA-272** · P1 · DoD · Persist performance  
   Hot paths are per-entity; public gallery traffic cannot wipe uploads; measured OK at multi-instance.
+  **Done:** Public routes = append/patch/`recordEvent` only (no `updateStudioDb`); upsert-only `writeStudioCollection` + `appendStudioPhotos` prevent wipe under multi-instance. Shared rate-limit store remains **AURA-107** (per-process limits are not a wipe risk).
 
-- [ ] **AURA-273** · P1 · DoD · One domain language  
+- [x] **AURA-273** · P1 · DoD · One domain language  
   Admin + API + types say Project/Session/Quote; dual collections gone or flagged off.
+  **Done:** `AURA_LEGACY_COLLECTIONS=0` flag; `/api/sessions/[id]/{plan,wizard,wrap}`; admin FE → projects/sessions; clients/shoots Deprecation headers; ADR updated. UI copy leftovers → **086**/**278**; delete alias routes → **384**.
 
-- [ ] **AURA-274** · P1 · DoD · Unified UI  
+- [x] **AURA-274** · P1 · DoD · Unified UI  
   No ad-hoc button/input recipes; PublicShell on public surfaces; theme vars complete; primitives cover lists/metrics/swatches/CTAs.
+  **Done:** PublicShell on all public routes; theme var parity (202); List/MetricTile/ThemeSwatch/PublicCta/ButtonLink present; cleared 082/083 leftovers (helper/ShootDay). Card density → **084**.
 
-- [ ] **AURA-275** · P1 · DoD · Website builder MVP  
+- [x] **AURA-275** · P1 · DoD · Website builder MVP  
   Module schema + renderer + admin reorder/preview/publish + brand kit — not checkbox soup alone.
+  **Done:** Verified 222–237 (schema/renderer/builder/preview/publish/brand kit/375 DeviceFramePreview). Settings Website → Site builder primary; contact-detail toggles only (bio/social/order in builder).
 
-- [ ] **AURA-276** · P1 · DoD · Gallery designer MVP  
+- [x] **AURA-276** · P1 · DoD · Gallery designer MVP  
   Experience schema + presets-as-packages + data-driven hero/chrome/grid + publish checklist + mobile-proof client UX.
+  **Done:** Verified 239–258: design v2 + preset packages; data-driven GalleryHero/Chrome/MediaGrid; GalleryDesignPanel 375 DeviceFramePreview + undo; DeliveryPublishChecklist; no themeId hero branches; guest/coach/PWA from W10/W12.
 
-- [ ] **AURA-277** · P1 · DoD · Happy path demo  
+- [x] **AURA-277** · P1 · DoD · Happy path demo  
   Book → confirm → quote → contract → deposit → prep → shoot day → delivery → wrap works on phone without scavenger hunt or contradictory badges.
+  **Done:** Spine 017/261 + mobile workflow/wizard; fixed 119/120 advance rules in `state-rules` + payments/contract sign; closed 118. Residual stage-label polish → copy pass **278** if needed.
 
-- [ ] **AURA-278** · P2 · DoD · Copy & a11y pass  
+- [x] **AURA-278** · P2 · DoD · Copy & a11y pass  
   No infra leakage; Project/Session terminology; touch targets; dialogs focus-trapped.
+  **Done:** Dialog `useFocusTrap` + Escape; closed 085/086; touch ≥44 via primitives/W12. Residual “Shoot day” wizard step label kept as activity language.
 
-- [ ] **AURA-279** · P2 · DoD · Observability  
+- [x] **AURA-279** · P2 · DoD · Observability  
   Failed emails/payments/calendar sync visible to studio without reading server logs.
+  **Done:** `notifyDeliveryIssue` on dead contact outbox, calendar health error change, Connect lastError change; dashboard Delivery issues; Settings Integrations still surfaces payments/calendar.
 
-- [ ] **AURA-280** · P3 · DoD · ADR + agent rules current  
+- [x] **AURA-280** · P3 · DoD · ADR + agent rules current  
   AURA_ISSUES, unified-ui, one-issue, design-system, responsive, PWA, copy rules all agree.
+  **Done:** ADR expanded (persist + agent contract); rules cross-link peers; `AGENTS.md` entry; closed 126/058/059 as already satisfied.
 
 ---
 
@@ -1102,83 +1150,145 @@ Goal: every admin and public surface is **phone-first** and a **real installable
 
 ### R0 — Responsive system
 
-- [ ] **AURA-281** · P1 · Responsive · Safe-area + viewport  
+- [x] **AURA-281** · P1 · Responsive · Safe-area + viewport  
   Root shells use `viewport-fit=cover` + padding from `env(safe-area-inset-*)` on sticky headers, bottom nav, gallery chrome, Dialog sheets. No content under notch/home indicator in browser or standalone.
 
-- [ ] **AURA-282** · P1 · Responsive · Admin 375px audit pass  
+- [x] **AURA-282** · P1 · Responsive · Admin 375px audit pass  
   Dashboard, Projects, Bookings, Calendar, Documents, Payments, Settings, Analytics — no horizontal page scroll; hamburger/bottom tabs; tables → cards; ≥44px targets. Log residual gaps as new IDs only if found after pass.
 
-- [ ] **AURA-283** · P1 · Responsive · Public 375px audit pass  
-  `/book`, `/g`, `/p`, `/c`, `/q`, `/pay`, `/h`, `/cancel`, sub-album, peek — one-handed CTAs; sticky chrome budget; forms stack; no landscape required.
+- [x] **AURA-283** · P1 · Responsive · Public 375px audit pass  
+  `/book`, `/g`, `/p`, `/c`, `/q`, `/pay`, `/h`, `/cancel`, sub-album, peek — one-handed CTAs; sticky chrome budget; forms stack; no landscape required.  
+  **Audit OK:** book / pay / q / cancel happy-path forms, ContactStudio, soft-failure contact (book/pay/quote), Dialog/PinModal.  
+  **Done:** `html`/`body` + PublicShell/`StudioHomepageView` `overflow-x-clip` + `min-w-0`; homepage hero `split` stacks to `lg` with column `min-w-0`; HeroMark/`GalleryHero` titles `break-words`; gallery vertical type + split row from `md` only; quote hero + homepage type/lockup safe-area retained at `sm+`; contract sticky Sign `min-w-0` + `md:hidden`; justified grid `min-w-0`; AlbumNav/cinematic edge fades (full affordance pass → **377**). Gallery chrome density → **378**.
 
-- [ ] **AURA-284** · P1 · Responsive · Wizard / workflow chrome  
-  Shoot wizard + project workflow: progress + current step only on small screens; Continue/Back always visible; no horizontal step scavenger hunt (pairs AURA-067/088).
+- [x] **AURA-284** · P1 · Responsive · Wizard / workflow chrome  
+  Shoot wizard + project workflow: progress + current step only on small screens; Continue/Back always visible; no horizontal step scavenger hunt (pairs AURA-067/088).  
+  **Done:** Sticky Back/Skip/Continue above AdminShell tabs + safe-area; `ProjectWorkflowPanel` mobile progress + jump Select (one step card); Delivery Layout hides publish farm/checklist + wizard footer, `GalleryDesignPanel` `embedded` + progress module tabs; `ShootPublicLinks` header density (Copy from `md`). Button-stack farms → **088**.
 
-- [ ] **AURA-285** · P1 · Responsive · Builder/designer preview  
-  Website module builder + gallery designer ship a forced **375px** preview mode as primary; desktop preview secondary.
+- [x] **AURA-285** · P1 · Responsive · Builder/designer preview  
+  Website module builder + gallery designer ship a forced **375px** preview mode as primary; desktop preview secondary.  
+  **Done:** shared `DeviceFramePreview` — logical 375 / 960 + `transform: scale` to fit column; Phone/Desktop toggle (Phone default); WebsiteBuilder preview-first below `lg`. Sticky designer under AdminShell → **381**.
 
-- [ ] **AURA-286** · P2 · Responsive · Landscape phone / tablet  
-  Critical paths usable in landscape (gallery lightbox, contract sign, pay) without clipped CTAs.
+- [x] **AURA-286** · P2 · Responsive · Landscape phone / tablet  
+  Critical paths usable in landscape (gallery lightbox, contract sign, pay) without clipped CTAs.  
+  **Done:** `roomy` (768×560+) / `short-vh` (≤560h) variants; GalleryChrome thumb bar unified on `roomy`; contract Sign sticky until roomy; lightbox short-vh side rail for footer; AlbumView unsticks + denser header on short-vh; vertical-rl / split CTA only when roomy. Admin content height → **376**.
 
-- [ ] **AURA-287** · P2 · Responsive · Density tokens  
-  Spacing/type scale that stays readable at 375 without crushing; avoid fixed `min-w-[640px]` layouts anywhere in app shells.
+- [x] **AURA-287** · P2 · Responsive · Density tokens  
+  Spacing/type scale that stays readable at 375 without crushing; avoid fixed `min-w-[640px]` layouts anywhere in app shells.  
+  **Done:** `--density-`* / `--field-min-width` / `--text-display` clamp; SegmentedControl 2-col grow below `sm`; ShootDayStep field stacks; StringListEditor Remove stacks; PageHeader + AdminShell use density spacing. No `min-w-[640px]` shells. Prep panel action farms / bare links → **376**.
+
+### Deep responsive audit residuals (2026-07-30)
+
+Parallel audit of admin + public + wizard/builder + CSS anti-patterns. Enrich existing IDs above; **do not** re-file OK surfaces (AdminShell hamburger/tabs, Settings mobile Select, list→cards, Button `sm` ≥44px after 282).
+
+- [x] **AURA-375** · P1 · Responsive · Switch / Checkbox hit areas  
+  `Switch` track `h-7` and `Checkbox` `size-5` under 44px even when row is tall. Grow control or invisible hit padding. Pairs AURA-082 (raw inputs → primitives).  
+  **Done:** Switch control `h-11`/`w-14` with centered `h-7` track; Checkbox `p-3 -m-3` hit expand (visual `size-5`).
+
+- [x] **AURA-376** · P1 · Responsive · Admin residual touch + list crush  
+  Bare `text-sm text-accent` links without `min-h-11`: `ProjectWorkflowPanel` (Client link / Preview / Manage packages / Open gallery), shoot helper “View example”, bookings pending `mailto`. Prep `PackagesPanel` / `ShotListsPanel` row actions. `StringListEditor` stack done with **287**. ShootDayStep native checkboxes → ≥44px (pairs 068/082).  
+  **Done:** Workflow links already ActionStack (**088**); helper View example + bookings mailto `min-h-11`; Packages/ShotLists row actions stack below `sm`; ShootDay/ListEditor/SessionTypes/Projects → `Checkbox` primitive.
+
+- [x] **AURA-377** · P1 · Responsive · Contained scroll affordances  
+  Horizontal rails must show fade/swipe hint (not only hide scrollbar): shoot helper category chips (`overflow-x-auto`), `AlbumNav`, homepage cinematic collections. Contained scroll OK; invisible edge is not.  
+  **Done:** `ScrollRail` — L/R fades track scroll overflow; helper categories, `AlbumNav`, cinematic collections.
+
+- [x] **AURA-378** · P1 · Responsive · Public gallery phone chrome  
+  (1) `AlbumView` sticky header on peek/sub-album: safe-area + back + title + up to 4 actions + AlbumNav — collapse budget. (2) `GalleryChrome` bottom labels (`Submitted (12)`, favorites count, Download/Share/Message) overflow 375 — compact/icon-primary. (3) Masonry tile actions always-on with long labels crush tiles — icon-only or sheet. (4) GalleryChrome / GalleryHero / lightbox chevrons: L/R `shell-pad` or safe-area (not raw `px-*` / `left-1`). (5) Unify floating (`sm`) vs sticky/branded (`md`) bottom-bar breakpoints.  
+  **Done:** AlbumView compact back/title/actions; AlbumNav label from `sm`; thumb bar `iconOnly`; tile actions icon-only; chrome/hero `shell-pad`; lightbox chevrons safe-area; breakpoints already `roomy` (**286**).
+
+- [x] **AURA-379** · P1 · Responsive · Bare public safe-area residuals  
+  Closed with **AURA-283**: `/p` quote hero top safe-area; `/h` type/lockup/fullBleed-fallback + footer bottom inset; PublicShell `sm` padding keeps `max(..., env(...))`.
+
+- [x] **AURA-380** · P2 · Responsive · Dialog / sheet max-height
+  Shared `Dialog` (upload status, tall confirms) needs `max-h` + internal scroll for short/landscape viewports (363 portal done; height not).  
+  **Done:** `max-h-full` + flex column; sticky title; body `overflow-y-auto`; removed local `85vh` workarounds.
+
+- [x] **AURA-381** · P2 · Responsive · Sticky under AdminShell
+  Admin sticky panels (e.g. `GalleryDesignPanel` `lg:sticky lg:top-4`) must offset below sticky header + `safe-area-inset-top`.  
+  **Done:** `--admin-sticky-top` / `--admin-header-inner` tokens; GalleryDesignPanel `lg:top-[var(--admin-sticky-top)]`.
+
+- [x] **AURA-382** · P2 · UX · Cancel soft-failure Message
+  `/cancel/[token]` blocked/unavailable state: offer Message studio (`PublicSoftFailureContact`) like book/pay/quote — not only dead-end copy.  
+  **Done:** cancel page soft-fail + `cancelToken` contact resolve.
+
+- [x] **AURA-383** · P2 · Responsive · Designer module nav at 375
+  Gallery designer 6 module Tabs wrap into scavenger rows — reuse Tabs `progress` / Select pattern below `md` (pairs 285).  
+  **Done:** GalleryDesignPanel always `variant="progress"` (phone Select + desktop tabs).
 
 ### P0 — PWA foundation
 
-- [ ] **AURA-288** · P1 · PWA · Manifest matrix  
-  Distinct, correct manifests: (1) studio admin app, (2) per-gallery token, (3) studio homepage/book when installable. Each has correct `start_url`, `scope`, name, icons, theme colors from brand/design.
+- [x] **AURA-288** · P1 · PWA · Manifest matrix
+  Distinct, correct manifests: (1) studio admin app, (2) per-gallery token, (3) studio homepage/book when installable. Each has correct `start_url`, `scope`, name, icons, theme colors from brand/design.  
+  **Done:** `/admin`, `/g/{token}`, `/h/{slug}`, `/book/{slug}` manifests + wiring; root = Aura fallback; `studio-pwa-manifest` helper.
 
-- [ ] **AURA-289** · P1 · PWA · Icons + maskable  
-  192/512 + `purpose: "maskable"` (and any) generated from studio logo / Aura mark; no broken MIME; gallery can override with brand mark when set.
+- [x] **AURA-289** · P1 · PWA · Icons + maskable
+  192/512 + `purpose: "maskable"` (and any) generated from studio logo / Aura mark; no broken MIME; gallery can override with brand mark when set.  
+  **Done:** `/api/pwa-icon` sharp PNG (any + maskable pad); static Aura icons committed; manifests use same-origin URLs; gallery `appIconUrl` override.
 
-- [ ] **AURA-290** · P1 · PWA · Service worker strategy  
-  Document + implement: precache shell/static; network-first for APIs; never cache Set-Cookie auth mistakes; versioned updates with controlled activate (no stuck old SW after deploy).
+- [x] **AURA-290** · P1 · PWA · Service worker strategy
+  Document + implement: precache shell/static; network-first for APIs; never cache Set-Cookie auth mistakes; versioned updates with controlled activate (no stuck old SW after deploy).  
+  **Done:** `sw.js` v3 + `docs/PWA_SERVICE_WORKER.md`; API network-only; `/offline.html` navigate fallback; `updateViaCache: "none"` + SKIP_WAITING.
 
-- [ ] **AURA-291** · P1 · PWA · Offline honesty  
-  Offline page / toast for admin and public: clear message + retry. Gallery may show last-cached thumbnails if safe; never claim “saved” when a mutation failed offline. **Navigate fallback currently uses studio `/` shell for public routes** — add offline public fallback / copy.
+- [x] **AURA-291** · P1 · PWA · Offline honesty
+  Offline page / toast for admin and public: clear message + retry. Gallery may show last-cached thumbnails if safe; never claim “saved” when a mutation failed offline. **Navigate fallback currently uses studio `/` shell for public routes** — add offline public fallback / copy.  
+  **Done:** OfflineStatus toasts; gallery mutation catches + offline guest copy; helper optimistic revert; navigate fallback already `/offline.html` (290).
 
-- [ ] **AURA-368** · P1 · PWA · SW scope + R2 media  
-  Root `sw.js` registers globally (incl. under `/g/{token}`); cache strategy still assumes `/api/media/` cache-first while browse uses R2 signed URLs. Scope per surface; update fetch strategy post-R2 (pairs 290/297).
+- [x] **AURA-368** · P1 · PWA · SW scope + R2 media  
+  Root `sw.js` registers globally (incl. under `/g/{token}`); cache strategy still assumes `/api/media/` cache-first while browse uses R2 signed URLs. Scope per surface; update fetch strategy post-R2 (pairs 290/297).  
+  **Done:** RegisterSW scopes `/admin/` `/g/` `/h/` `/book/`; drop legacy `/`; sw v4 never caches R2/`X-Amz-`*/`/api/media`.
 
-- [ ] **AURA-292** · P1 · PWA · Standalone chrome  
-  Detect `display-mode: standalone` (and iOS `navigator.standalone`): hide redundant browser-only UI; keep logout/account reachable; bottom tabs clear of home indicator.
+- [x] **AURA-292** · P1 · PWA · Standalone chrome  
+  Detect `display-mode: standalone` (and iOS `navigator.standalone`): hide redundant browser-only UI; keep logout/account reachable; bottom tabs clear of home indicator.  
+  **Done:** `useDisplayModeStandalone` + `data-standalone` / `.browser-only`; AdminShell Account + Log out when installed; tab `pb` max with safe-area.
 
-- [ ] **AURA-293** · P1 · PWA · Install UX  
-  Optional sparse “Add to Home Screen” hint on gallery + admin (dismissible, not naggy). iOS Safari path documented in UI one-liner where install prompt unavailable.
+- [x] **AURA-293** · P1 · PWA · Install UX
+  Optional sparse “Add to Home Screen” hint on gallery + admin (dismissible, not naggy). iOS Safari path documented in UI one-liner where install prompt unavailable.  
+  **Done:** `InstallHint` — BIP Install + iOS Share one-liner; Not now persists; `.browser-only` / standalone hidden.
 
-- [ ] **AURA-294** · P1 · PWA · Auth in installed app  
-  Cookie/session works in standalone; login → return to intended admin route; no bounce to wrong origin/scope.
+- [x] **AURA-294** · P1 · PWA · Auth in installed app
+  Cookie/session works in standalone; login → return to intended admin route; no bounce to wrong origin/scope.  
+  **Done:** `safeAdminNext`; middleware keeps query; layout bounce on expired session; logout clears cookie with path; Google callback stays on request host.
 
-- [ ] **AURA-295** · P1 · PWA · Theme color sync  
-  `theme-color` meta + manifest track active studio/gallery theme (light/dark kits) so OS chrome matches experience (extends AURA-043).
+- [x] **AURA-295** · P1 · PWA · Theme color sync
+  `theme-color` meta + manifest track active studio/gallery theme (light/dark kits) so OS chrome matches experience (extends AURA-043).  
+  **Done:** theme-color / theme_color = kit canvas; apple statusBar from bg; Brand save `router.refresh()`.
 
 ### P1 — Surface-specific PWA
 
-- [ ] **AURA-296** · P1 · PWA · Admin as daily driver  
-  Installed admin opens to Dashboard (or last useful route); push/email deep links open correct in-app screens when possible.
+- [x] **AURA-296** · P1 · PWA · Admin as daily driver
+  Installed admin opens to Dashboard (or last useful route); push/email deep links open correct in-app screens when possible.  
+  **Done:** last-route resume in standalone; `launch_handler` + `handle_links`; safe `#messages` hash through login.
 
-- [ ] **AURA-297** · P1 · PWA · Client gallery install  
-  Installed gallery scoped to `/g/{token}`; favorites/selects survive reload; download flows work from standalone (no broken blob/window assumptions).
+- [x] **AURA-297** · P1 · PWA · Client gallery install
+  Installed gallery scoped to `/g/{token}`; favorites/selects survive reload; download flows work from standalone (no broken blob/window assumptions).  
+  **Done:** `preferExistingWindow` on gallery manifest; `downloadSignedUrl` blob/iframe (no `_blank`); favorites already cookie+API.
 
-- [ ] **AURA-298** · P2 · PWA · Booking + homepage install  
+- [x] **AURA-298** · P2 · PWA · Booking + homepage install
   Optional install for `/h/{slug}` / book flow with studio name/icons — clients get studio brand, not generic Aura.
+  **Done:** `preferExistingWindow` on `/h` + `/book` manifests; dismissible `InstallHint` (per-slug keys); brand/icons/theme from existing 288/289/295 paths.
 
-- [ ] **AURA-299** · P2 · PWA · Quote / contract / pay  
+- [x] **AURA-299** · P2 · PWA · Quote / contract / pay
   Lightweight: correct viewport + theme-color + Add-to-Home optional; no requirement for heavy offline caching of legal/pay pages.
+  **Done:** `/p` `/c` `/pay` layouts + manifests (studio theme-color/icons); InstallHint; no SW (`pwaSwSurfaceForPath` none); `proposal`/`contract`/`pay` pwa-icon keys.
 
-- [ ] **AURA-300** · P2 · PWA · Media cache budget  
+- [x] **AURA-300** · P2 · PWA · Media cache budget
   Cap cached gallery bytes; prefer preview/thumb URLs; don’t fill device storage with originals.
+  **Done:** SW v5 `aura-media-`* 48MiB; cache-first `-thumb`/`-web`/`-wm` only (R2 + `/api/media`); never `/originals/`; preview-first eviction.
 
 ### DoD add-on (responsive + PWA)
 
-- [ ] **AURA-301** · P1 · DoD · Responsive everywhere  
-  Happy-path + builders pass 375px/768px gates; safe-area respected; no page-level horizontal scroll on audited routes.
+- [x] **AURA-301** · P1 · DoD · Responsive everywhere  
+  Happy-path + builders pass 375px/768px gates; safe-area respected; no page-level horizontal scroll on audited routes. Close when **283**–**287**, **088**/**089**, **375**–**383** are done (or superseded).
+  **Done:** Prerequisites verified closed — **281**/**282**, **283**–**287**, **088**/**089**, **375**–**383** (incl. **379** with 283). No open responsive residuals in that set.
 
-- [ ] **AURA-302** · P1 · DoD · PWA installable  
+- [x] **AURA-302** · P1 · DoD · PWA installable  
   Lighthouse/installability criteria met for admin + gallery (manifest, SW, icons, HTTPS); branding correct per surface; offline honest; standalone usable.
+  **Done:** Prerequisites verified — **288**–**300**, **368** (manifest matrix, icons/maskable, SW v5 + scopes, offline honesty, standalone, install UX, auth, theme-color, admin/gallery/h/book surfaces). HTTPS via production host.
 
-- [ ] **AURA-303** · P2 · DoD · Responsive + PWA in agent rules  
+- [x] **AURA-303** · P2 · DoD · Responsive + PWA in agent rules  
   Every UI fix checked against responsive + PWA bars; `aura-responsive.mdc` + `aura-pwa.mdc` enforced like unified-ui.
+  **Done:** Rules alwaysApply + peer-weight language; build/DoD checklists; SW/media budget + surface matrix current; one-issue #6 + issues Rules/PWA bar updated; W12 closed.
 
 ---
 
@@ -1230,8 +1340,26 @@ Do not narrate “Aura / Resend / Firebase” in UI copy — labels like “Mess
 - [x] **AURA-315** · P3 · Email · Resend inbound receiving  
   If studios want `hello@studio.com` on Aura-managed receiving: Resend inbound webhook → verify signature → store/forward to owner. Treat as untrusted input (agent-email-inbox patterns). **Not required** for MVP contact — form + outbound Resend is the foundation.
 
-- [ ] **AURA-316** · P2 · DoD · Client can always reach studio  
+- [x] **AURA-316** · P2 · DoD · Client can always reach studio  
   From homepage (when contact enabled) and from a live gallery: client can send a message; studio receives it in email with working Reply; no dependency on the client’s local mail app.
+
+### Project-routed inbound (no in-app compose)
+
+**Problem:** Transactional mail sets Reply-To to the studio owner’s personal address, so client replies never hit Aura and can be missed relative to the project. Studio-level inbound (`slug@` / `s-{id}@`) exists but is not project-scoped.
+
+**Product goal:** Each project gets an Aura-assigned inbound address. Client correspondence for Aura-driven work Reply-To’s that address → Resend webhook → in-app notify + Messages trail on the project. Studio may still reply from their mail client; **do not** build in-app compose / Inbox (forever out). Optional forward copy to owner inbox.
+
+- [x] **AURA-371** · P2 · Email · Per-project inbound address  
+  Resolve `p-{projectId}@RESEND_INBOUND_DOMAIN` (and optional `sess-…`) in inbound webhook; store `contactMessages` with `projectId` / `sessionId`; notify with href to project. Catch-all local-part; no per-address Resend provisioning. Sanitize as AURA-315.
+
+- [x] **AURA-372** · P2 · Email · Transactional Reply-To → project inbound  
+  Quote / gallery / booking / contract / pay client emails: when a project is known, set Reply-To to the project inbound address (display name = studio), not `ownerEmail`. Keep From on verified sending domain. Document caveat: studio reply From personal mail can drift the thread.
+
+- [x] **AURA-373** · P2 · Admin · Project Messages trail  
+  Project (and optional session) page: read-only list of linked `contactMessages` + Reply (`mailto:` to client). Dashboard Messages can filter / deep-link by project. No compose UI.
+
+- [x] **AURA-374** · P3 · Email · Optional “Reply via Aura” send-only  
+  From project Messages: send a Resend email From studio display / platform address with Reply-To = project inbound so the loop stays on the routed address. Still not Inbox — one-shot send, no threads UI. After 371–373.
 
 ---
 
@@ -1246,20 +1374,22 @@ Do not narrate “Aura / Resend / Firebase” in UI copy — labels like “Mess
 
 ### Recommended IA (`/admin/settings` + `/admin/settings/[section]`)
 
-| Section | Purpose |
-|---------|---------|
-| **Account** | Owner identity, email, logout, password/sessions (future) |
-| **Brand** | Name, tagline, logos, theme kits, typography, social |
-| **Business** | Phone, website, address (+ country/line2), TZ, date format, print partners |
-| **Website** | Enable, slug, password, modules/builder, layout, featured collections, contact, preview/publish |
-| **Delivery defaults** | Watermark default, gallery theme/grid, comments, expiry, select limit, PIN policy |
-| **Booking** | Public book URL, buffers, session-types manage/deep-link |
-| **Payments** | Stripe Connect status/manage, currency, default deposit/link templates (deep-link ledger) |
-| **Notifications** | Studio + client email toggles; contact recipient / auto-reply |
-| **Integrations** | Google Calendar, Stripe status, future |
-| **Library** | Index/links: contracts, questionnaires, packages, shot lists, watermarks |
-| **Team** | Members/roles when productized (or honest single-owner) |
-| **Data & danger** | Export, disconnect integrations, delete studio |
+
+| Section               | Purpose                                                                                         |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| **Account**           | Owner identity, email, logout, password/sessions (future)                                       |
+| **Brand**             | Name, tagline, logos, theme kits, typography, social                                            |
+| **Business**          | Phone, website, address (+ country/line2), TZ, date format, print partners                      |
+| **Website**           | Enable, slug, password, modules/builder, layout, featured collections, contact, preview/publish |
+| **Delivery defaults** | Watermark default, gallery theme/grid, comments, expiry, select limit, PIN policy               |
+| **Booking**           | Public book URL, buffers, session-types manage/deep-link                                        |
+| **Payments**          | Stripe Connect status/manage, currency, default deposit/link templates (deep-link ledger)       |
+| **Notifications**     | Studio + client email toggles; contact recipient / auto-reply                                   |
+| **Integrations**      | Google Calendar, Stripe status, future                                                          |
+| **Library**           | Index/links: contracts, questionnaires, packages, shot lists, watermarks                        |
+| **Team**              | Members/roles when productized (or honest single-owner)                                         |
+| **Data & danger**     | Export, disconnect integrations, delete studio                                                  |
+
 
 ### S0 — Shell & save model
 
@@ -1402,257 +1532,346 @@ Do not narrate “Aura / Resend / Firebase” in UI copy — labels like “Mess
 
 ## Completion log
 
-| ID | Completed | Notes |
-|----|-----------|-------|
-| AURA-354 | 2026-07-28 | MediaStore + R2/Firebase backends; upload path wired |
-| — | 2026-07-28 | Canonical execution waves W0–W14; Phase 0b R2 after W0; AURA-151 superseded |
-| AURA-001 | 2026-07-28 | coerceProject keeps workflowStep + cancelToken; projectRoundTripPreserved |
-| AURA-152 | 2026-07-28 | coerceSession hardened; shoots PATCH endsAt/proposalId/galleryId/googleEventId/intakeAnswers |
-| AURA-002 | 2026-07-28 | upsert-only collection writes; deleteStudioDocs + per-doc helpers; hot path migrations |
-| AURA-003 | 2026-07-28 | recordEvent → appendStudioDoc (no full-studio RMW on views) |
-| AURA-004 | 2026-07-28 | Public pay fail-closed; no local fake payment when Connect/Stripe missing |
-| AURA-005 | 2026-07-29 | Per-visitor gallery favorites (cookie + galleryFavorites); no shared hearts |
-| AURA-006 | 2026-07-29 | Public token gates: draft gallery/quote admin-preview only; accept only when sent |
-| AURA-007 | 2026-07-29 | GCal getBusyIntervals fail-closed on refresh/freeBusy errors (no empty=free) |
-| AURA-008 | 2026-07-29 | Sub-album public API resolves photo URLs via resolveBrowseMediaUrl |
-| AURA-358 | 2026-07-29 | R2 smoke PASS; apphosting.yaml + secrets granted to backend aura |
-| AURA-355 | 2026-07-29 | PIN download returns signed URLs (no App Hosting original buffer) |
-| AURA-356 | 2026-07-29 | Client-side zip from signed URLs; R2 CORS via dashboard (token no Admin) |
-| AURA-357 | 2026-07-29 | Public browse uses R2 signed URLs for thumb/web (resolveBrowseMediaUrl) |
-| AURA-359 | 2026-07-29 | Migrated 72 studios/** objects Firebase→R2 (verified); FB kept for dual-read |
-| AURA-360 | 2026-07-29 | Prod requires R2 for media writes; Firebase write path retired; dual-read optional |
-| AURA-362 | 2026-07-29 | DoD: signed downloads + client zip + /api/media 302→R2; W1 closed (361 optional) |
-| AURA-009 | 2026-07-29 | Webhook records amounts from session.amount_total, not metadata |
-| AURA-010 | 2026-07-29 | Payment tx idempotent on CS/PI; no double paidAmount on webhook retry |
-| AURA-011 | 2026-07-29 | Webhook no longer re-writes stage/workflow; recordPaymentLinkCharge sole writer |
-| AURA-012 | 2026-07-29 | Payments empty→project Deposit; Deposits list + cross-links both ways |
-| AURA-013 | 2026-07-29 | Quiet Enable/Manage payments strip; no Connect product narration |
-| AURA-014 | 2026-07-29 | Pay page cancel/pending; client fee preview; success amount+studio |
-| AURA-015 | 2026-07-29 | Documented fee estimate limits; USD-only currency seam in stripe-fees |
-| AURA-016 | 2026-07-29 | Webhook refund/dispute/async-fail rollback; paid-only record; dispute won restore |
-| AURA-017 | 2026-07-29 | Continuous Book→handoff→Session spine; prep gated until deposit |
-| AURA-018 | 2026-07-29 | Workflow advance/reopen; readiness-based done badges |
-| AURA-019 | 2026-07-29 | Confirm booking → project #workflow with next-step toast |
-| AURA-020 | 2026-07-29 | createSession asks before prep when book steps incomplete |
-| AURA-021 | 2026-07-29 | Bookings split into Requests / Calendar / Session types tabs |
-| AURA-022 | 2026-07-29 | Session type archive/restore; public book only active types |
-| AURA-023 | 2026-07-29 | Book form min/tz/pending + pre-submit availability check |
-| AURA-024 | 2026-07-29 | Public book API no longer returns projectHref or booking payload |
-| AURA-025 | 2026-07-29 | Confirm surfaces calendarPushFailed; decline/cancel/delete remove GCal; PATCH reschedule updates |
-| AURA-026 | 2026-07-29 | Real per-studio OAuth only (no stub); session create/edit/delete syncs GCal; redact refresh token |
-| AURA-027 | 2026-07-29 | Quote accept → contract/deposit next + links when present; admin Continue with Contract |
-| AURA-028 | 2026-07-29 | Mark accepted confirm: skips client accept; unlocks Contract then Deposit |
-| AURA-029 | 2026-07-29 | Project balance pay link (quote−paid); Workflow Delivery step Create/Copy/Email |
-| AURA-030 | 2026-07-29 | Wrap Mark delivered → session/project state; invoice + homepage reminders; archive → completed |
-| AURA-031 | 2026-07-29 | Scrim/on-media tokens; galleryThemeCssVars parity + accent-ink; lightbox/hero/tiles use scrim |
-| AURA-032 | 2026-07-29 | Gallery theme vars on peek + sub-album; fontPreset on gallery + homepage |
-| AURA-033 | 2026-07-29 | Public proposal mood-board URLs resolveBrowseMediaUrls |
-| AURA-034 | 2026-07-29 | Public quote/favorite/comments/peek/sub-album error states + toasts |
-| AURA-035 | 2026-07-29 | Gallery chrome + tile actions ≥44px; labels on small screens; hover optional |
-| AURA-036 | 2026-07-29 | Share album vs Share photo labels; dialog copy for selection share |
-| AURA-037 | 2026-07-29 | Download ext from original; skip/video honesty; single video allowed |
-| AURA-038 | 2026-07-29 | PublicShell + StudioMark on q/cancel/pay/book/homepage gate |
-| AURA-039 | 2026-07-29 | Homepage password via POST (not query); wrong-password feedback |
-| AURA-040 | 2026-07-29 | Contract acknowledge: neutral “agree to terms” (no hardcoded clauses) |
-| AURA-041 | 2026-07-29 | Escape all interpolated strings in HTML emails (wrapHtml + bodies) |
-| AURA-042 | 2026-07-29 | Single sticky chrome (AlbumView non-sticky under gallery); nav wraps 375px |
-| AURA-043 | 2026-07-29 | Gallery/studio manifest theme/background/name from brand; apple title |
-| AURA-044 | 2026-07-29 | Sticky mobile Sign CTA on contract; safe-area bottom |
-| AURA-045 | 2026-07-29 | Sub-album back-to-gallery link; errors already honest (034) |
-| AURA-046 | 2026-07-29 | Expired gallery: studio name + mailto next step |
-| AURA-047 | 2026-07-29 | Questionnaire: view answers after submit; block zero-question submit |
-| AURA-048 | 2026-07-29 | “Secures your date” only for deposit links; stable idempotency keys |
-| AURA-049 | 2026-07-29 | Expired gallery API: no photo/cover URLs (photos: []) |
-| AURA-050 | 2026-07-29 | PublicSuccess shared grammar on quote/pay/book/q/cancel |
-| AURA-364 | 2026-07-29 | Chunked signed-URL batches (30); per-chunk skipped honesty; W4 closed |
-| AURA-051 | 2026-07-29 | Dashboard/Analytics loading→error+retry on !res.ok |
-| AURA-052 | 2026-07-29 | Project sessions: parallel wizard fetches (Promise.all) not sequential |
-| AURA-053 | 2026-07-29 | Projects/Payments/Documents/Settings: loading state before empty flash |
-| AURA-365 | 2026-07-29 | Stripe Checkout Idempotency-Key on public pay |
-| AURA-054 | 2026-07-29 | Project detail: 15s timeout + error/retry (no infinite Loading) |
-| AURA-055 | 2026-07-29 | Reverted unsafe lazy-load; blocked — do not half-migrate (needs 188) |
-| AURA-056 | 2026-07-29 | Workflow loadRelated: toast on failed subfetch (not fake empty) |
-| AURA-057 | 2026-07-29 | beforeunload guard on Settings/Documents/Packages editors |
-| AURA-367 | 2026-07-29 | Projects list: null-safe email filter; W5 closed |
-| AURA-366 | 2026-07-29 | Archive: signed URLs + client-side zip (no App Hosting buffer) |
-| AURA-073 | 2026-07-29 | Delivery: expiry extend/expire + select-limit in Settings |
-| AURA-074 | 2026-07-29 | Delivery header: Copy link + Email link (gallery live email) |
-| AURA-075 | 2026-07-29 | Delivery photo select/delete ≥44px; focus-within for keyboard |
-| AURA-076 | 2026-07-29 | Create gallery: PIN shown + copied before navigate |
-| AURA-077 | 2026-07-29 | Video: no fake 1920×1080; “Download via single” hint on tile |
-| AURA-078 | 2026-07-29 | Sharp fail on watermarked gallery → 503/flag; no silent unprotected wm |
-| AURA-079 | 2026-07-29 | Prep: confirm before force-refresh wipes checked progress |
-| AURA-080 | 2026-07-29 | Dashboard: expired galleries section with admin delivery links |
-| AURA-081 | 2026-07-29 | Awaiting quotes: Continue workflow + Preview links; W6 closed |
-| AURA-153 | 2026-07-29 | Restore store helpers (delete/append/patch/updateDoc); merge rules test; doc comment |
-| AURA-154 | 2026-07-29 | Documented: dual-write only on full persist; hot paths bypass via 002/003 |
-| AURA-155 | 2026-07-29 | /api/projects + [id] CRUD with project/sessions only |
-| AURA-156 | 2026-07-29 | /api/sessions + [id] CRUD with projectId/startsAt only |
-| AURA-157 | 2026-07-29 | /api/quotes alias; POST accepts sessionId; responses quote/proposal |
-| AURA-158 | 2026-07-29 | Gallery POST accepts sessionId; “Session not found” error |
-| AURA-159 | 2026-07-29 | getProjectBundle/getSessionBundle aliases in store |
-| AURA-160 | 2026-07-29 | Wizard payload: project/session keys (client/shoot optional in hook) |
-| AURA-161 | 2026-07-29 | Project GET returns session summaries; FE uses them (no N+1 wizard) |
-| AURA-162 | 2026-07-29 | Projects list/detail → /api/projects; no project/client/shoot || soup |
-| AURA-163 | 2026-07-29 | Session create/delete → /api/sessions; projectId/startsAt |
-| AURA-164 | 2026-07-29 | Payments/Documents/Analytics pickers → projects/sessions; analytics sessionId |
-| AURA-165 | 2026-07-29 | Session wizard + hook: canonical project/session only (no || soup) |
-| AURA-166 | 2026-07-29 | Public gallery/proposal/cancel/contract JSON: projectName + clientName dual-read |
-| AURA-167 | 2026-07-29 | loadStudioDatabase: skip clients/shoots scan when canonical non-empty |
-| AURA-168 | 2026-07-29 | persistStudioDatabase: no dual-write clients/shoots; single source |
-| AURA-169 | 2026-07-29 | Gallery/quote create: sessionId only (no shootId mirror on new writes) |
-| AURA-170 | 2026-07-29 | SessionStatus/SessionPlan canonical; ShootStatus/ShootPlan deprecated aliases |
-| AURA-171 | 2026-07-29 | COL.sessions documented as auth cookies (not projectSessions) |
-| AURA-172 | 2026-07-29 | GET /api/projects/[id]/workflow: server-computed statusByStep |
-| AURA-173 | 2026-07-29 | state-rules.ts + markGalleryLive applies project side effects |
-| AURA-174 | 2026-07-29 | /api/projects + /api/clients POST: cancelToken on create |
-| AURA-175 | 2026-07-29 | intake-answers.ts: session.intakeAnswers canonical; quote accept syncs |
-| AURA-176 | 2026-07-29 | Helper: server plan only; removed localStorage cache; reload on save fail |
-| AURA-177 | 2026-07-29 | deriveWizardProgress: intake done = intakeAnswers (not session.type) |
-| AURA-178 | 2026-07-29 | SessionRow: startsAt only (no shootDate remap) |
-| AURA-179 | 2026-07-29 | archiveFlags wired (080); projectDate vs startsAt documented |
-| AURA-180 | 2026-07-29 | zod schemas for project/session/gallery/quote create-update |
-| AURA-181 | 2026-07-29 | Project create: name only; email optional (required on send) |
-| AURA-182 | 2026-07-29 | Session startsAt: normalize date-only → ISO; reject ambiguous |
-| AURA-183 | 2026-07-29 | PIN parity: 4-digit rule shared (pin.ts, schemas, UI, server) |
-| AURA-184 | 2026-07-29 | Quote POST: sessionId (or shootId); “Session not found” errors |
-| AURA-185 | 2026-07-29 | Quote POST: 409 unless replace: true when session has quote |
-| AURA-186 | 2026-07-29 | Plan route: Session not found; gallery create error uses sessionId |
-| AURA-187 | 2026-07-29 | type-systems.ts: project/session/shot-list/booking type map |
-| AURA-188 | 2026-07-29 | /api/projects/[id]/related; workflow panel uses it (one fetch) |
-| AURA-191 | 2026-07-29 | quotes GET ?projectId= filter |
-| AURA-192 | 2026-07-29 | Deleted orphan IntakeStep/QuoteStep (no imports) |
-| AURA-193 | 2026-07-29 | Dashboard helperHref → /admin/projects/.../sessions/...?step=shoot-day |
-| AURA-194 | 2026-07-29 | PUBLIC_ROUTES.md noun map |
-| AURA-195 | 2026-07-29 | recordEvent: sessionId+projectId on gallery/download/photo-view/favorites/subalbum |
-| AURA-196 | 2026-07-29 | Analytics: projectId param; money joins via projectIdFilter |
-| AURA-197 | 2026-07-29 | clients/shoots removed from TENANT_COLLECTIONS; W7 closed |
-| AURA-198 | 2026-07-29 | ADR-dual-model-retirement.md |
-| AURA-199 | 2026-07-29 | normalize tests: field preservation + alias shapes |
-| AURA-201 | 2026-07-29 | @theme: text/space/z/duration tokens mapped |
-| AURA-202 | 2026-07-29 | Theme helpers on gallery/peek/sub-album/homepage; no ad-hoc hex on gates |
-| AURA-203 | 2026-07-29 | ButtonLink primitive; ShootPublicLinks uses it |
-| AURA-204 | 2026-07-29 | ThemeSwatch primitive; Settings + GalleryDesignPanel use it |
-| AURA-205 | 2026-07-29 | SegmentedControl; cover style + photo layout use it |
-| AURA-206 | 2026-07-29 | List/ListRow primitives; dashboard uses them |
-| AURA-207 | 2026-07-29 | MetricTile; dashboard counts + analytics financials/engagement |
-| AURA-208 | 2026-07-29 | Panel static/interactive/dashed; dashboard, payments, bookings, calendar |
-| AURA-209 | 2026-07-29 | EmptyState centered/inline/loading/error; admin load/error/empty paths |
-| AURA-210 | 2026-07-29 | Button onMedia + PublicCta; GalleryHero + cover-none View gallery |
-| AURA-211 | 2026-07-29 | PublicShell on /g peek /s + homepage body; style/className; bare full-bleed |
-| AURA-212 | 2026-07-29 | ShootDay + helper shot preview → Dialog; Dialog scrim token |
-| AURA-363 | 2026-07-29 | Dialog portals to document.body; body scroll lock; Confirm/upload inherit |
-| AURA-213 | 2026-07-29 | fontPresetCssVars; studio/gallery theme helpers; homepage/book/quote/gallery |
-| AURA-214 | 2026-07-29 | radius-device + shadow-on-media tokens; retire arbitrary rounded/drop-shadow |
-| AURA-215 | 2026-07-29 | Tabs progress variant; ShootWizardShell uses it; mobile step jump |
-| AURA-067 | 2026-07-29 | Mobile wizard step jump via Tabs progress Select (with 215) |
-| AURA-216 | 2026-07-29 | StatusBadge maps; projects/sessions/bookings/payments |
-| AURA-217 | 2026-07-29 | IconButton label+active; GalleryNavItem/TileAction compose it |
-| AURA-218 | 2026-07-29 | --public-max 87.5rem; gallery/PublicShell/quote/AlbumView |
-| AURA-219 | 2026-07-29 | Chip primitive; SessionsCalendar EventChip uses status tones |
-| AURA-220 | 2026-07-29 | duration-enter/emphasis/crossfade; hero/grid/lightbox; reduced-motion |
-| AURA-221 | 2026-07-29 | aura-unified-ui.mdc enforcement + primitive inventory; W8 closed |
-| AURA-317 | 2026-07-29 | SettingsShell + routed sections; /admin/settings → last or studio; closed 070 |
-| AURA-318 | 2026-07-29 | Per-section PATCH + dirty guard (studio/homepage/notifications); watermarks own save |
-| AURA-319 | 2026-07-29 | Settings overview checklist; /admin/settings → last or overview |
-| AURA-320 | 2026-07-29 | Settings 375px: address stack, form rows, touch targets; closed 087 |
-| AURA-321 | 2026-07-29 | Account section: owner email, first/last name PATCH, logout; studio email note |
-| AURA-322 | 2026-07-29 | Account password change; list devices + sign out others via /api/auth/sessions |
-| AURA-323 | 2026-07-29 | Brand section: name/tagline/logos/theme/social; cover upload; closed 091 |
-| AURA-324 | 2026-07-29 | Brand typography: FONT_PRESETS + SegmentedControl; font override on theme save |
-| AURA-325 | 2026-07-29 | defaultCoverImageUrl upload (kind=og); OG meta on /h and /book |
-| AURA-326 | 2026-07-29 | Admin PWA from Brand kit (manifest icon/name/colors + theme-color); Brand note |
-| AURA-327 | 2026-07-29 | Business section: phone/website/address+country/print partners; addressLine2 PATCH |
-| AURA-328 | 2026-07-30 | IANA time zone Select + API validation; closed 090 |
-| AURA-329 | 2026-07-30 | Date format preview in studio TZ; curated formats + API guard |
-| AURA-330 | 2026-07-30 | Website settings shell (was Homepage); password gate copy; Switch/Checkbox |
-| AURA-331 | 2026-07-30 | `/admin/website` builder entry; Publish/Draft; live themed 375px preview; closed 098 |
-| AURA-098 | 2026-07-30 | Closed with 331 — production renderer preview, not wireframe |
-| AURA-332 | 2026-07-30 | Featured collections owned by Website settings; Design/Wrap deep-link only |
-| AURA-333 | 2026-07-30 | Website showContactForm + Notifications Contact deep-link (recipient stub) |
-| AURA-334 | 2026-07-30 | Delivery defaults section; expiryDays replaces hardcoded 60; galleries inherit |
-| AURA-335 | 2026-07-30 | Watermark CRUD under Delivery; editable scale 5–50%; /watermarks redirects |
-| AURA-336 | 2026-07-30 | Booking settings: book URL, showBooking, buffer default, session types; inbox stays |
-| AURA-337 | 2026-07-30 | Session-type buffer create/edit UI; clamped; already used in freeBusy checks |
-| AURA-338 | 2026-07-30 | Settings Payments: Connect onboard/manage/disconnect; USD-only; ledger deep-link |
-| AURA-339 | 2026-07-30 | paymentDefaults (deposit $ + link title); deposit API + form prefills; library stays on /admin/payments |
-| AURA-340 | 2026-07-30 | SettingsNotifications: Email me / Email clients Switch groups; own Save; Contact stub kept for 341 |
-| AURA-341 | 2026-07-30 | contactPrefs: recipient, website/gallery form toggles, auto-reply; Save contact; helpers for W11 |
-| AURA-342 | 2026-07-30 | SettingsIntegrations: GCal connect/refresh/disconnect; Stripe status→Payments; calendar Manage in Settings |
-| AURA-343 | 2026-07-30 | GCal/Stripe last sync+error persisted; Integrations Check status; no freeBusy RMW |
-| AURA-344 | 2026-07-30 | Settings Library index: contracts/questionnaires/packages/shot lists/watermarks + counts |
-| AURA-345 | 2026-07-30 | legalDefaults default contract template; cancel via template; quote terms clarified |
-| AURA-346 | 2026-07-30 | Settings Team: honest single-owner row; no invite/roles tease |
-| AURA-347 | 2026-07-30 | GET /api/studio/export JSON; no secrets/media bytes; Settings Data download |
-| AURA-348 | 2026-07-30 | Data danger zone: disconnect GCal/Stripe, disable site, delete studio (O(studio)) |
-| AURA-349 | 2026-07-30 | Settings PATCH requires `section`; whitelist + studio-doc RMW; clients wired |
-| AURA-350 | 2026-07-30 | Ops hubs → Settings: Booking/Library headers; Delivery studio-default link |
-| AURA-351 | 2026-07-30 | Settings copy: contacts not clients; drop fluff/limitation narration |
-| AURA-352 | 2026-07-30 | ownerEmail read-only reason; clear logo/cover/share in Brand |
-| AURA-353 | 2026-07-30 | Overview covers full company-tailor checklist; W9 Settings OS closed |
-| AURA-222 | 2026-07-30 | StudioBrandKit persist + Brand UI; presets as starting kits; legacy mirrors |
-| AURA-223 | 2026-07-30 | homepage.modules schema + migrate-from-toggles; unknown types dropped |
-| AURA-224 | 2026-07-30 | HomepageModuleList renderer; payload includes modules; shared /h + preview |
-| AURA-225 | 2026-07-30 | Site builder: module reorder/toggle, Save modules vs Publish, 375px preview |
-| AURA-226 | 2026-07-30 | Draft vs live copy; /admin/website/preview; save toasts (draft vs live) |
-| AURA-227 | 2026-07-30 | homepageSlugs index + listGalleriesForStudio; no full-DB /h load |
-| AURA-228 | 2026-07-30 | Type kits (editorial/modern/soft + legacy); TypePairingSwatch; root fonts |
-| AURA-229 | 2026-07-30 | Site layouts Editorial/Minimal/Portfolio/Bold; modules+brand apply in builder |
-| AURA-230 | 2026-07-30 | Hero variants fullBleed/split/type/lockup; coverImageUrl; PublicCta href |
-| AURA-231 | 2026-07-30 | Collections masonry/grid/list/cinematic; HomepageCollections + fade affordance |
-| AURA-232 | 2026-07-30 | Booking CTA: ready only with slug+types; admin empty states; no dead public CTA |
-| AURA-233 | 2026-07-30 | Contact: mailto/tel/maps; address lines; SocialLinks text/icons/pills |
-| AURA-234 | 2026-07-30 | Homepage unlock cookie + branded Private site gate; POST returns payload |
-| AURA-235 | 2026-07-30 | Share meta from brand kit; Website settings share-card preview |
-| AURA-236 | 2026-07-30 | Site checklist (logo/modules/reach/theme); hidden when complete |
-| AURA-237 | 2026-07-30 | Homepage cover thumb+wm srcset via derivative path rewrite; O(galleries) |
-| AURA-238 | 2026-07-30 | Documented custom domain as future (`docs/CUSTOM_DOMAIN.md`); /h/{slug} only |
-| AURA-239 | 2026-07-30 | Gallery design v2 modules + flat mirrors; normalize/patch on read & API |
-| AURA-240 | 2026-07-30 | Design preset packages fill full schema; apply on swatch + gallery create |
-| AURA-241 | 2026-07-30 | GalleryHero from cover module (layout/type/CTA/scrim); no themeId JSX |
-| AURA-242 | 2026-07-30 | Gallery designer: 375px frame, module tabs, undo, reset-to-preset |
-| AURA-243 | 2026-07-30 | Gallery design PATCH via updateStudioDoc; RMW only for live/watermark |
-| AURA-244 | 2026-07-30 | Cover treatments library + focal grid; immersive/split-title in hero |
-| AURA-245 | 2026-07-30 | GalleryChrome: sticky/floating/bottom-bar/branded + logo; safe-area pad |
-| AURA-246 | 2026-07-30 | Shared MediaGrid engine; diary mode; homepage + gallery; token enter |
-| AURA-247 | 2026-07-30 | AlbumNav + backHref; /s download inherits parent PIN via photoIds |
-| AURA-248 | 2026-07-30 | Selects X of Y + submit lock; Wrap review; 122 superseded |
-| AURA-249 | 2026-07-30 | Download copy + PIN errors; confirm when no PIN; empty/video honesty |
-| AURA-250 | 2026-07-30 | GalleryGuestState + soft draft/archived; 20s load retry; thumb-bar chrome |
-| AURA-251 | 2026-07-30 | brandSource studio|gallery; resolveGalleryBrandCssVars; designer toggle |
-| AURA-252 | 2026-07-30 | density compact/comfortable/airy; motion calm/cinematic via shell data-* |
-| AURA-253 | 2026-07-30 | PhotoLightbox portal+focus trap; filename caption; surface footer comments |
-| AURA-254 | 2026-07-30 | GalleryCoachTips first-visit card; design.coach.enabled; localStorage dismiss |
-| AURA-255 | 2026-07-30 | DeliveryPublishChecklist + delivery-publish; PIN scroll; email stamps clientEmailedAt |
-| AURA-256 | 2026-07-30 | Public gallery GET scoped (no readStudioDb); photo pages + progressive /g load |
-| AURA-257 | 2026-07-30 | Lightbox ←/→/Home/End; view aria-live; tile labels; OS reduced-motion |
-| AURA-258 | 2026-07-30 | Per-gallery manifest 192/512/maskable + theme-color; design app icon upload |
-| AURA-259 | 2026-07-30 | GalleryPrintPartners quiet CTA; publicPrintPartners filter; W10 closed |
-| AURA-304 | 2026-07-30 | ContactStudio + HomepageContactForm; honeypot; submitPublicContact stub |
-| AURA-305 | 2026-07-30 | POST /api/public/contact; contactMessages append; IP/studio rate limits; prefs gate |
-| AURA-306 | 2026-07-30 | emailContactToStudio Resend + replyTo; fail→502; emailStatus sent/failed |
-| AURA-307 | 2026-07-30 | Homepage Contact: form primary on showEmail/form; Email/Call secondary |
-| AURA-308 | 2026-07-30 | Gallery Message chrome+dialog; guest/expired form; galleryToken context |
-| AURA-309 | 2026-07-30 | Soft-failure Message on book/quote/pay; proposalToken+paymentLinkId resolve |
-| AURA-311 | 2026-07-30 | emailContactMessage pref; bell→/admin#messages; dashboard Messages list |
-| AURA-312 | 2026-07-30 | 24KiB body cap; startedAt time-trap; email RL; harden strip; no CAPTCHA |
-| AURA-313 | 2026-07-30 | contact emailOutbox+backoff; accept on Resend fail; cron/dashboard drain; 149 open |
-| AURA-314 | 2026-07-30 | emailContactAutoReply via contactPrefs.autoReply*; non-fatal on fail |
-| AURA-315 | 2026-07-30 | /api/webhooks/resend verify+sanitize; slug|s-id route; store/forward |
-| AURA-122 | 2026-07-30 | Superseded → `[!]` (keep 248) |
-| AURA-111 | 2026-07-30 | Closed with 227 — slug→studioId homepageSlugs collection |
-| AURA-121 | 2026-07-30 | Closed with 346 — single-owner, no multi-role UI |
-| AURA-265 | 2026-07-30 | Closed with 346 — permissions clarity via honest Team |
-| AURA-310 | 2026-07-30 | Closed with 341 — Settings Contact delivery prefs |
-| AURA-123 | 2026-07-30 | Closed with 338 — USD-only declared in Settings → Payments |
-| AURA-090 | 2026-07-30 | Closed with 328 timezone picker |
-| AURA-091 | 2026-07-29 | Cover logo FileUploadButton via studio/logo kind=cover |
-| AURA-087 | 2026-07-29 | City/state/ZIP stack via 320 |
-| AURA-070 | 2026-07-29 | Closed with 317 stopgap routes |
-| AURA-114/190 | 2026-07-29 | endsAt PATCH (with 152/026); marked done |
-| AURA-189 | 2026-07-29 | Superseded → `[!]` (keep 161) |
-| Audit | 2026-07-29 | App re-eval: 037/060/070/201/202 rewritten; 114/190 done, 189 `[!]`; added 364–369; waves updated |
-| AURA-361 | 2026-07-29 | Unified direct R2 upload; photos get Sharp derivatives on complete; video multipart |
+
+| ID           | Completed  | Notes                                                                                                      |
+| ------------ | ---------- | ---------------------------------------------------------------------------------------------------------- |
+| AURA-354     | 2026-07-28 | MediaStore + R2/Firebase backends; upload path wired                                                       |
+| —            | 2026-07-28 | Canonical execution waves W0–W14; Phase 0b R2 after W0; AURA-151 superseded                                |
+| AURA-001     | 2026-07-28 | coerceProject keeps workflowStep + cancelToken; projectRoundTripPreserved                                  |
+| AURA-152     | 2026-07-28 | coerceSession hardened; shoots PATCH endsAt/proposalId/galleryId/googleEventId/intakeAnswers               |
+| AURA-002     | 2026-07-28 | upsert-only collection writes; deleteStudioDocs + per-doc helpers; hot path migrations                     |
+| AURA-003     | 2026-07-28 | recordEvent → appendStudioDoc (no full-studio RMW on views)                                                |
+| AURA-004     | 2026-07-28 | Public pay fail-closed; no local fake payment when Connect/Stripe missing                                  |
+| AURA-005     | 2026-07-29 | Per-visitor gallery favorites (cookie + galleryFavorites); no shared hearts                                |
+| AURA-006     | 2026-07-29 | Public token gates: draft gallery/quote admin-preview only; accept only when sent                          |
+| AURA-007     | 2026-07-29 | GCal getBusyIntervals fail-closed on refresh/freeBusy errors (no empty=free)                               |
+| AURA-008     | 2026-07-29 | Sub-album public API resolves photo URLs via resolveBrowseMediaUrl                                         |
+| AURA-358     | 2026-07-29 | R2 smoke PASS; apphosting.yaml + secrets granted to backend aura                                           |
+| AURA-355     | 2026-07-29 | PIN download returns signed URLs (no App Hosting original buffer)                                          |
+| AURA-356     | 2026-07-29 | Client-side zip from signed URLs; R2 CORS via dashboard (token no Admin)                                   |
+| AURA-357     | 2026-07-29 | Public browse uses R2 signed URLs for thumb/web (resolveBrowseMediaUrl)                                    |
+| AURA-359     | 2026-07-29 | Migrated 72 studios/** objects Firebase→R2 (verified); FB kept for dual-read                               |
+| AURA-360     | 2026-07-29 | Prod requires R2 for media writes; Firebase write path retired; dual-read optional                         |
+| AURA-362     | 2026-07-29 | DoD: signed downloads + client zip + /api/media 302→R2; W1 closed (361 optional)                           |
+| AURA-009     | 2026-07-29 | Webhook records amounts from session.amount_total, not metadata                                            |
+| AURA-010     | 2026-07-29 | Payment tx idempotent on CS/PI; no double paidAmount on webhook retry                                      |
+| AURA-011     | 2026-07-29 | Webhook no longer re-writes stage/workflow; recordPaymentLinkCharge sole writer                            |
+| AURA-012     | 2026-07-29 | Payments empty→project Deposit; Deposits list + cross-links both ways                                      |
+| AURA-013     | 2026-07-29 | Quiet Enable/Manage payments strip; no Connect product narration                                           |
+| AURA-014     | 2026-07-29 | Pay page cancel/pending; client fee preview; success amount+studio                                         |
+| AURA-015     | 2026-07-29 | Documented fee estimate limits; USD-only currency seam in stripe-fees                                      |
+| AURA-016     | 2026-07-29 | Webhook refund/dispute/async-fail rollback; paid-only record; dispute won restore                          |
+| AURA-017     | 2026-07-29 | Continuous Book→handoff→Session spine; prep gated until deposit                                            |
+| AURA-018     | 2026-07-29 | Workflow advance/reopen; readiness-based done badges                                                       |
+| AURA-019     | 2026-07-29 | Confirm booking → project #workflow with next-step toast                                                   |
+| AURA-020     | 2026-07-29 | createSession asks before prep when book steps incomplete                                                  |
+| AURA-021     | 2026-07-29 | Bookings split into Requests / Calendar / Session types tabs                                               |
+| AURA-022     | 2026-07-29 | Session type archive/restore; public book only active types                                                |
+| AURA-023     | 2026-07-29 | Book form min/tz/pending + pre-submit availability check                                                   |
+| AURA-024     | 2026-07-29 | Public book API no longer returns projectHref or booking payload                                           |
+| AURA-025     | 2026-07-29 | Confirm surfaces calendarPushFailed; decline/cancel/delete remove GCal; PATCH reschedule updates           |
+| AURA-026     | 2026-07-29 | Real per-studio OAuth only (no stub); session create/edit/delete syncs GCal; redact refresh token          |
+| AURA-027     | 2026-07-29 | Quote accept → contract/deposit next + links when present; admin Continue with Contract                    |
+| AURA-028     | 2026-07-29 | Mark accepted confirm: skips client accept; unlocks Contract then Deposit                                  |
+| AURA-029     | 2026-07-29 | Project balance pay link (quote−paid); Workflow Delivery step Create/Copy/Email                            |
+| AURA-030     | 2026-07-29 | Wrap Mark delivered → session/project state; invoice + homepage reminders; archive → completed             |
+| AURA-031     | 2026-07-29 | Scrim/on-media tokens; galleryThemeCssVars parity + accent-ink; lightbox/hero/tiles use scrim              |
+| AURA-032     | 2026-07-29 | Gallery theme vars on peek + sub-album; fontPreset on gallery + homepage                                   |
+| AURA-033     | 2026-07-29 | Public proposal mood-board URLs resolveBrowseMediaUrls                                                     |
+| AURA-034     | 2026-07-29 | Public quote/favorite/comments/peek/sub-album error states + toasts                                        |
+| AURA-035     | 2026-07-29 | Gallery chrome + tile actions ≥44px; labels on small screens; hover optional                               |
+| AURA-036     | 2026-07-29 | Share album vs Share photo labels; dialog copy for selection share                                         |
+| AURA-037     | 2026-07-29 | Download ext from original; skip/video honesty; single video allowed                                       |
+| AURA-038     | 2026-07-29 | PublicShell + StudioMark on q/cancel/pay/book/homepage gate                                                |
+| AURA-039     | 2026-07-29 | Homepage password via POST (not query); wrong-password feedback                                            |
+| AURA-040     | 2026-07-29 | Contract acknowledge: neutral “agree to terms” (no hardcoded clauses)                                      |
+| AURA-041     | 2026-07-29 | Escape all interpolated strings in HTML emails (wrapHtml + bodies)                                         |
+| AURA-042     | 2026-07-29 | Single sticky chrome (AlbumView non-sticky under gallery); nav wraps 375px                                 |
+| AURA-043     | 2026-07-29 | Gallery/studio manifest theme/background/name from brand; apple title                                      |
+| AURA-044     | 2026-07-29 | Sticky mobile Sign CTA on contract; safe-area bottom                                                       |
+| AURA-045     | 2026-07-29 | Sub-album back-to-gallery link; errors already honest (034)                                                |
+| AURA-046     | 2026-07-29 | Expired gallery: studio name + mailto next step                                                            |
+| AURA-047     | 2026-07-29 | Questionnaire: view answers after submit; block zero-question submit                                       |
+| AURA-048     | 2026-07-29 | “Secures your date” only for deposit links; stable idempotency keys                                        |
+| AURA-049     | 2026-07-29 | Expired gallery API: no photo/cover URLs (photos: [])                                                      |
+| AURA-050     | 2026-07-29 | PublicSuccess shared grammar on quote/pay/book/q/cancel                                                    |
+| AURA-364     | 2026-07-29 | Chunked signed-URL batches (30); per-chunk skipped honesty; W4 closed                                      |
+| AURA-051     | 2026-07-29 | Dashboard/Analytics loading→error+retry on !res.ok                                                         |
+| AURA-052     | 2026-07-29 | Project sessions: parallel wizard fetches (Promise.all) not sequential                                     |
+| AURA-053     | 2026-07-29 | Projects/Payments/Documents/Settings: loading state before empty flash                                     |
+| AURA-365     | 2026-07-29 | Stripe Checkout Idempotency-Key on public pay                                                              |
+| AURA-054     | 2026-07-29 | Project detail: 15s timeout + error/retry (no infinite Loading)                                            |
+| AURA-055     | 2026-07-29 | Reverted unsafe lazy-load; blocked — do not half-migrate (needs 188)                                       |
+| AURA-056     | 2026-07-29 | Workflow loadRelated: toast on failed subfetch (not fake empty)                                            |
+| AURA-057     | 2026-07-29 | beforeunload guard on Settings/Documents/Packages editors                                                  |
+| AURA-367     | 2026-07-29 | Projects list: null-safe email filter; W5 closed                                                           |
+| AURA-366     | 2026-07-29 | Archive: signed URLs + client-side zip (no App Hosting buffer)                                             |
+| AURA-073     | 2026-07-29 | Delivery: expiry extend/expire + select-limit in Settings                                                  |
+| AURA-074     | 2026-07-29 | Delivery header: Copy link + Email link (gallery live email)                                               |
+| AURA-075     | 2026-07-29 | Delivery photo select/delete ≥44px; focus-within for keyboard                                              |
+| AURA-076     | 2026-07-29 | Create gallery: PIN shown + copied before navigate                                                         |
+| AURA-077     | 2026-07-29 | Video: no fake 1920×1080; “Download via single” hint on tile                                               |
+| AURA-078     | 2026-07-29 | Sharp fail on watermarked gallery → 503/flag; no silent unprotected wm                                     |
+| AURA-079     | 2026-07-29 | Prep: confirm before force-refresh wipes checked progress                                                  |
+| AURA-080     | 2026-07-29 | Dashboard: expired galleries section with admin delivery links                                             |
+| AURA-081     | 2026-07-29 | Awaiting quotes: Continue workflow + Preview links; W6 closed                                              |
+| AURA-153     | 2026-07-29 | Restore store helpers (delete/append/patch/updateDoc); merge rules test; doc comment                       |
+| AURA-154     | 2026-07-29 | Documented: dual-write only on full persist; hot paths bypass via 002/003                                  |
+| AURA-155     | 2026-07-29 | /api/projects + [id] CRUD with project/sessions only                                                       |
+| AURA-156     | 2026-07-29 | /api/sessions + [id] CRUD with projectId/startsAt only                                                     |
+| AURA-157     | 2026-07-29 | /api/quotes alias; POST accepts sessionId; responses quote/proposal                                        |
+| AURA-158     | 2026-07-29 | Gallery POST accepts sessionId; “Session not found” error                                                  |
+| AURA-159     | 2026-07-29 | getProjectBundle/getSessionBundle aliases in store                                                         |
+| AURA-160     | 2026-07-29 | Wizard payload: project/session keys (client/shoot optional in hook)                                       |
+| AURA-161     | 2026-07-29 | Project GET returns session summaries; FE uses them (no N+1 wizard)                                        |
+| AURA-162     | 2026-07-29 | Projects list/detail → /api/projects; no project/client/shoot                                              |
+| AURA-163     | 2026-07-29 | Session create/delete → /api/sessions; projectId/startsAt                                                  |
+| AURA-164     | 2026-07-29 | Payments/Documents/Analytics pickers → projects/sessions; analytics sessionId                              |
+| AURA-165     | 2026-07-29 | Session wizard + hook: canonical project/session only (no                                                  |
+| AURA-166     | 2026-07-29 | Public gallery/proposal/cancel/contract JSON: projectName + clientName dual-read                           |
+| AURA-167     | 2026-07-29 | loadStudioDatabase: skip clients/shoots scan when canonical non-empty                                      |
+| AURA-168     | 2026-07-29 | persistStudioDatabase: no dual-write clients/shoots; single source                                         |
+| AURA-169     | 2026-07-29 | Gallery/quote create: sessionId only (no shootId mirror on new writes)                                     |
+| AURA-170     | 2026-07-29 | SessionStatus/SessionPlan canonical; ShootStatus/ShootPlan deprecated aliases                              |
+| AURA-171     | 2026-07-29 | COL.sessions documented as auth cookies (not projectSessions)                                              |
+| AURA-172     | 2026-07-29 | GET /api/projects/[id]/workflow: server-computed statusByStep                                              |
+| AURA-173     | 2026-07-29 | state-rules.ts + markGalleryLive applies project side effects                                              |
+| AURA-174     | 2026-07-29 | /api/projects + /api/clients POST: cancelToken on create                                                   |
+| AURA-175     | 2026-07-29 | intake-answers.ts: session.intakeAnswers canonical; quote accept syncs                                     |
+| AURA-176     | 2026-07-29 | Helper: server plan only; removed localStorage cache; reload on save fail                                  |
+| AURA-177     | 2026-07-29 | deriveWizardProgress: intake done = intakeAnswers (not session.type)                                       |
+| AURA-178     | 2026-07-29 | SessionRow: startsAt only (no shootDate remap)                                                             |
+| AURA-179     | 2026-07-29 | archiveFlags wired (080); projectDate vs startsAt documented                                               |
+| AURA-180     | 2026-07-29 | zod schemas for project/session/gallery/quote create-update                                                |
+| AURA-181     | 2026-07-29 | Project create: name only; email optional (required on send)                                               |
+| AURA-182     | 2026-07-29 | Session startsAt: normalize date-only → ISO; reject ambiguous                                              |
+| AURA-183     | 2026-07-29 | PIN parity: 4-digit rule shared (pin.ts, schemas, UI, server)                                              |
+| AURA-184     | 2026-07-29 | Quote POST: sessionId (or shootId); “Session not found” errors                                             |
+| AURA-185     | 2026-07-29 | Quote POST: 409 unless replace: true when session has quote                                                |
+| AURA-186     | 2026-07-29 | Plan route: Session not found; gallery create error uses sessionId                                         |
+| AURA-187     | 2026-07-29 | type-systems.ts: project/session/shot-list/booking type map                                                |
+| AURA-188     | 2026-07-29 | /api/projects/[id]/related; workflow panel uses it (one fetch)                                             |
+| AURA-191     | 2026-07-29 | quotes GET ?projectId= filter                                                                              |
+| AURA-192     | 2026-07-29 | Deleted orphan IntakeStep/QuoteStep (no imports)                                                           |
+| AURA-193     | 2026-07-29 | Dashboard helperHref → /admin/projects/.../sessions/...?step=shoot-day                                     |
+| AURA-194     | 2026-07-29 | PUBLIC_ROUTES.md noun map                                                                                  |
+| AURA-195     | 2026-07-29 | recordEvent: sessionId+projectId on gallery/download/photo-view/favorites/subalbum                         |
+| AURA-196     | 2026-07-29 | Analytics: projectId param; money joins via projectIdFilter                                                |
+| AURA-197     | 2026-07-29 | clients/shoots removed from TENANT_COLLECTIONS; W7 closed                                                  |
+| AURA-198     | 2026-07-29 | ADR-dual-model-retirement.md                                                                               |
+| AURA-199     | 2026-07-29 | normalize tests: field preservation + alias shapes                                                         |
+| AURA-201     | 2026-07-29 | @theme: text/space/z/duration tokens mapped                                                                |
+| AURA-202     | 2026-07-29 | Theme helpers on gallery/peek/sub-album/homepage; no ad-hoc hex on gates                                   |
+| AURA-203     | 2026-07-29 | ButtonLink primitive; ShootPublicLinks uses it                                                             |
+| AURA-204     | 2026-07-29 | ThemeSwatch primitive; Settings + GalleryDesignPanel use it                                                |
+| AURA-205     | 2026-07-29 | SegmentedControl; cover style + photo layout use it                                                        |
+| AURA-206     | 2026-07-29 | List/ListRow primitives; dashboard uses them                                                               |
+| AURA-207     | 2026-07-29 | MetricTile; dashboard counts + analytics financials/engagement                                             |
+| AURA-208     | 2026-07-29 | Panel static/interactive/dashed; dashboard, payments, bookings, calendar                                   |
+| AURA-209     | 2026-07-29 | EmptyState centered/inline/loading/error; admin load/error/empty paths                                     |
+| AURA-210     | 2026-07-29 | Button onMedia + PublicCta; GalleryHero + cover-none View gallery                                          |
+| AURA-211     | 2026-07-29 | PublicShell on /g peek /s + homepage body; style/className; bare full-bleed                                |
+| AURA-212     | 2026-07-29 | ShootDay + helper shot preview → Dialog; Dialog scrim token                                                |
+| AURA-363     | 2026-07-29 | Dialog portals to document.body; body scroll lock; Confirm/upload inherit                                  |
+| AURA-213     | 2026-07-29 | fontPresetCssVars; studio/gallery theme helpers; homepage/book/quote/gallery                               |
+| AURA-214     | 2026-07-29 | radius-device + shadow-on-media tokens; retire arbitrary rounded/drop-shadow                               |
+| AURA-215     | 2026-07-29 | Tabs progress variant; ShootWizardShell uses it; mobile step jump                                          |
+| AURA-067     | 2026-07-29 | Mobile wizard step jump via Tabs progress Select (with 215)                                                |
+| AURA-216     | 2026-07-29 | StatusBadge maps; projects/sessions/bookings/payments                                                      |
+| AURA-217     | 2026-07-29 | IconButton label+active; GalleryNavItem/TileAction compose it                                              |
+| AURA-218     | 2026-07-29 | --public-max 87.5rem; gallery/PublicShell/quote/AlbumView                                                  |
+| AURA-219     | 2026-07-29 | Chip primitive; SessionsCalendar EventChip uses status tones                                               |
+| AURA-220     | 2026-07-29 | duration-enter/emphasis/crossfade; hero/grid/lightbox; reduced-motion                                      |
+| AURA-221     | 2026-07-29 | aura-unified-ui.mdc enforcement + primitive inventory; W8 closed                                           |
+| AURA-317     | 2026-07-29 | SettingsShell + routed sections; /admin/settings → last or studio; closed 070                              |
+| AURA-318     | 2026-07-29 | Per-section PATCH + dirty guard (studio/homepage/notifications); watermarks own save                       |
+| AURA-319     | 2026-07-29 | Settings overview checklist; /admin/settings → last or overview                                            |
+| AURA-320     | 2026-07-29 | Settings 375px: address stack, form rows, touch targets; closed 087                                        |
+| AURA-321     | 2026-07-29 | Account section: owner email, first/last name PATCH, logout; studio email note                             |
+| AURA-322     | 2026-07-29 | Account password change; list devices + sign out others via /api/auth/sessions                             |
+| AURA-323     | 2026-07-29 | Brand section: name/tagline/logos/theme/social; cover upload; closed 091                                   |
+| AURA-324     | 2026-07-29 | Brand typography: FONT_PRESETS + SegmentedControl; font override on theme save                             |
+| AURA-325     | 2026-07-29 | defaultCoverImageUrl upload (kind=og); OG meta on /h and /book                                             |
+| AURA-326     | 2026-07-29 | Admin PWA from Brand kit (manifest icon/name/colors + theme-color); Brand note                             |
+| AURA-327     | 2026-07-29 | Business section: phone/website/address+country/print partners; addressLine2 PATCH                         |
+| AURA-328     | 2026-07-30 | IANA time zone Select + API validation; closed 090                                                         |
+| AURA-329     | 2026-07-30 | Date format preview in studio TZ; curated formats + API guard                                              |
+| AURA-330     | 2026-07-30 | Website settings shell (was Homepage); password gate copy; Switch/Checkbox                                 |
+| AURA-331     | 2026-07-30 | `/admin/website` builder entry; Publish/Draft; live themed 375px preview; closed 098                       |
+| AURA-098     | 2026-07-30 | Closed with 331 — production renderer preview, not wireframe                                               |
+| AURA-332     | 2026-07-30 | Featured collections owned by Website settings; Design/Wrap deep-link only                                 |
+| AURA-333     | 2026-07-30 | Website showContactForm + Notifications Contact deep-link (recipient stub)                                 |
+| AURA-334     | 2026-07-30 | Delivery defaults section; expiryDays replaces hardcoded 60; galleries inherit                             |
+| AURA-335     | 2026-07-30 | Watermark CRUD under Delivery; editable scale 5–50%; /watermarks redirects                                 |
+| AURA-336     | 2026-07-30 | Booking settings: book URL, showBooking, buffer default, session types; inbox stays                        |
+| AURA-337     | 2026-07-30 | Session-type buffer create/edit UI; clamped; already used in freeBusy checks                               |
+| AURA-338     | 2026-07-30 | Settings Payments: Connect onboard/manage/disconnect; USD-only; ledger deep-link                           |
+| AURA-339     | 2026-07-30 | paymentDefaults (deposit $ + link title); deposit API + form prefills; library stays on /admin/payments    |
+| AURA-340     | 2026-07-30 | SettingsNotifications: Email me / Email clients Switch groups; own Save; Contact stub kept for 341         |
+| AURA-341     | 2026-07-30 | contactPrefs: recipient, website/gallery form toggles, auto-reply; Save contact; helpers for W11           |
+| AURA-342     | 2026-07-30 | SettingsIntegrations: GCal connect/refresh/disconnect; Stripe status→Payments; calendar Manage in Settings |
+| AURA-343     | 2026-07-30 | GCal/Stripe last sync+error persisted; Integrations Check status; no freeBusy RMW                          |
+| AURA-344     | 2026-07-30 | Settings Library index: contracts/questionnaires/packages/shot lists/watermarks + counts                   |
+| AURA-345     | 2026-07-30 | legalDefaults default contract template; cancel via template; quote terms clarified                        |
+| AURA-346     | 2026-07-30 | Settings Team: honest single-owner row; no invite/roles tease                                              |
+| AURA-347     | 2026-07-30 | GET /api/studio/export JSON; no secrets/media bytes; Settings Data download                                |
+| AURA-348     | 2026-07-30 | Data danger zone: disconnect GCal/Stripe, disable site, delete studio (O(studio))                          |
+| AURA-349     | 2026-07-30 | Settings PATCH requires `section`; whitelist + studio-doc RMW; clients wired                               |
+| AURA-350     | 2026-07-30 | Ops hubs → Settings: Booking/Library headers; Delivery studio-default link                                 |
+| AURA-351     | 2026-07-30 | Settings copy: contacts not clients; drop fluff/limitation narration                                       |
+| AURA-352     | 2026-07-30 | ownerEmail read-only reason; clear logo/cover/share in Brand                                               |
+| AURA-353     | 2026-07-30 | Overview covers full company-tailor checklist; W9 Settings OS closed                                       |
+| AURA-222     | 2026-07-30 | StudioBrandKit persist + Brand UI; presets as starting kits; legacy mirrors                                |
+| AURA-223     | 2026-07-30 | homepage.modules schema + migrate-from-toggles; unknown types dropped                                      |
+| AURA-224     | 2026-07-30 | HomepageModuleList renderer; payload includes modules; shared /h + preview                                 |
+| AURA-225     | 2026-07-30 | Site builder: module reorder/toggle, Save modules vs Publish, 375px preview                                |
+| AURA-226     | 2026-07-30 | Draft vs live copy; /admin/website/preview; save toasts (draft vs live)                                    |
+| AURA-227     | 2026-07-30 | homepageSlugs index + listGalleriesForStudio; no full-DB /h load                                           |
+| AURA-228     | 2026-07-30 | Type kits (editorial/modern/soft + legacy); TypePairingSwatch; root fonts                                  |
+| AURA-229     | 2026-07-30 | Site layouts Editorial/Minimal/Portfolio/Bold; modules+brand apply in builder                              |
+| AURA-230     | 2026-07-30 | Hero variants fullBleed/split/type/lockup; coverImageUrl; PublicCta href                                   |
+| AURA-231     | 2026-07-30 | Collections masonry/grid/list/cinematic; HomepageCollections + fade affordance                             |
+| AURA-232     | 2026-07-30 | Booking CTA: ready only with slug+types; admin empty states; no dead public CTA                            |
+| AURA-233     | 2026-07-30 | Contact: mailto/tel/maps; address lines; SocialLinks text/icons/pills                                      |
+| AURA-234     | 2026-07-30 | Homepage unlock cookie + branded Private site gate; POST returns payload                                   |
+| AURA-235     | 2026-07-30 | Share meta from brand kit; Website settings share-card preview                                             |
+| AURA-236     | 2026-07-30 | Site checklist (logo/modules/reach/theme); hidden when complete                                            |
+| AURA-237     | 2026-07-30 | Homepage cover thumb+wm srcset via derivative path rewrite; O(galleries)                                   |
+| AURA-238     | 2026-07-30 | Documented custom domain as future (`docs/CUSTOM_DOMAIN.md`); /h/{slug} only                               |
+| AURA-239     | 2026-07-30 | Gallery design v2 modules + flat mirrors; normalize/patch on read & API                                    |
+| AURA-240     | 2026-07-30 | Design preset packages fill full schema; apply on swatch + gallery create                                  |
+| AURA-241     | 2026-07-30 | GalleryHero from cover module (layout/type/CTA/scrim); no themeId JSX                                      |
+| AURA-242     | 2026-07-30 | Gallery designer: 375px frame, module tabs, undo, reset-to-preset                                          |
+| AURA-243     | 2026-07-30 | Gallery design PATCH via updateStudioDoc; RMW only for live/watermark                                      |
+| AURA-244     | 2026-07-30 | Cover treatments library + focal grid; immersive/split-title in hero                                       |
+| AURA-245     | 2026-07-30 | GalleryChrome: sticky/floating/bottom-bar/branded + logo; safe-area pad                                    |
+| AURA-246     | 2026-07-30 | Shared MediaGrid engine; diary mode; homepage + gallery; token enter                                       |
+| AURA-247     | 2026-07-30 | AlbumNav + backHref; /s download inherits parent PIN via photoIds                                          |
+| AURA-248     | 2026-07-30 | Selects X of Y + submit lock; Wrap review; 122 superseded                                                  |
+| AURA-249     | 2026-07-30 | Download copy + PIN errors; confirm when no PIN; empty/video honesty                                       |
+| AURA-250     | 2026-07-30 | GalleryGuestState + soft draft/archived; 20s load retry; thumb-bar chrome                                  |
+| AURA-251     | 2026-07-30 | brandSource studio                                                                                         |
+| AURA-252     | 2026-07-30 | density compact/comfortable/airy; motion calm/cinematic via shell data-*                                   |
+| AURA-253     | 2026-07-30 | PhotoLightbox portal+focus trap; filename caption; surface footer comments                                 |
+| AURA-254     | 2026-07-30 | GalleryCoachTips first-visit card; design.coach.enabled; localStorage dismiss                              |
+| AURA-255     | 2026-07-30 | DeliveryPublishChecklist + delivery-publish; PIN scroll; email stamps clientEmailedAt                      |
+| AURA-256     | 2026-07-30 | Public gallery GET scoped (no readStudioDb); photo pages + progressive /g load                             |
+| AURA-257     | 2026-07-30 | Lightbox ←/→/Home/End; view aria-live; tile labels; OS reduced-motion                                      |
+| AURA-258     | 2026-07-30 | Per-gallery manifest 192/512/maskable + theme-color; design app icon upload                                |
+| AURA-259     | 2026-07-30 | GalleryPrintPartners quiet CTA; publicPrintPartners filter; W10 closed                                     |
+| AURA-304     | 2026-07-30 | ContactStudio + HomepageContactForm; honeypot; submitPublicContact stub                                    |
+| AURA-305     | 2026-07-30 | POST /api/public/contact; contactMessages append; IP/studio rate limits; prefs gate                        |
+| AURA-306     | 2026-07-30 | emailContactToStudio Resend + replyTo; fail→502; emailStatus sent/failed                                   |
+| AURA-307     | 2026-07-30 | Homepage Contact: form primary on showEmail/form; Email/Call secondary                                     |
+| AURA-308     | 2026-07-30 | Gallery Message chrome+dialog; guest/expired form; galleryToken context                                    |
+| AURA-309     | 2026-07-30 | Soft-failure Message on book/quote/pay; proposalToken+paymentLinkId resolve                                |
+| AURA-311     | 2026-07-30 | emailContactMessage pref; bell→/admin#messages; dashboard Messages list                                    |
+| AURA-312     | 2026-07-30 | 24KiB body cap; startedAt time-trap; email RL; harden strip; no CAPTCHA                                    |
+| AURA-313     | 2026-07-30 | contact emailOutbox+backoff; accept on Resend fail; cron/dashboard drain; 149 open                         |
+| AURA-314     | 2026-07-30 | emailContactAutoReply via contactPrefs.autoReply*; non-fatal on fail                                       |
+| AURA-315     | 2026-07-30 | /api/webhooks/resend verify+sanitize; slug                                                                 |
+| AURA-316     | 2026-07-30 | DoD: homepage API matches showEmail/form; Message on /s + peek; W11 MVP closed                             |
+| AURA-371–374 | 2026-07-30 | Backlog: project inbound Reply-To + Messages trail (no compose)                                            |
+| AURA-371     | 2026-07-30 | p-/sess- inbound route; ContactMessage projectId/sessionId; notify→project                                 |
+| AURA-372     | 2026-07-30 | clientTransactionalReplyTo; quote/gallery/book/contract/pay Reply-To→p-                                    |
+| AURA-373     | 2026-07-30 | ProjectMessagesTrail + GET …/messages; dashboard Project link; #messages                                   |
+| AURA-374     | 2026-07-30 | POST …/messages Send reply; emailProjectClientReply; Reply-To=p-; trail note                               |
+| AURA-281     | 2026-07-30 | viewportFit=cover; Admin/PublicShell + toast/login/gallery/contract safe-area                              |
+| AURA-282     | 2026-07-30 | Button/Link sm≥44px; dashboard/bookings links; calendar chips non-link; menu scroll                        |
+| AURA-283     | 2026-07-30 | Public 375: clip H-scroll; homepage/gallery split+vertical; quote/contract; 379 closed                     |
+| AURA-379     | 2026-07-30 | Closed with 283 — bare public safe-area residuals                                                          |
+| AURA-284     | 2026-07-30 | Sticky wizard nav; workflow mobile focus; Delivery embedded designer chrome                                |
+| AURA-285     | 2026-07-30 | DeviceFramePreview 375/scale + Phone/Desktop; site builder preview-first                                   |
+| AURA-286     | 2026-07-30 | roomy/short-vh; gallery chrome+lightbox+contract+hero landscape                                            |
+| AURA-287     | 2026-07-30 | App density tokens; SegmentedControl/ShootDay/StringList/PageHeader                                        |
+| AURA-088     | 2026-07-30 | ActionStack primary+More; workflow farms + Delivery header                                                 |
+| AURA-089     | 2026-07-30 | Calendar month phone: compact grid + agenda; chips from md                                                 |
+| AURA-375     | 2026-07-30 | Switch/Checkbox ≥44px hit; visual track/box unchanged                                                      |
+| AURA-376     | 2026-07-30 | Admin touch: mailto/helper links; prep rows; Checkbox migrate                                              |
+| AURA-377     | 2026-07-30 | ScrollRail edge fades; helper / AlbumNav / cinematic                                                       |
+| AURA-378     | 2026-07-30 | Gallery phone chrome: icon thumb bar, AlbumView budget, safe chevrons                                      |
+| AURA-380     | 2026-07-30 | Dialog max-h + internal scroll; drop 85vh workarounds                                                      |
+| AURA-381     | 2026-07-30 | --admin-sticky-top under AdminShell; GalleryDesignPanel                                                    |
+| AURA-382     | 2026-07-30 | Cancel soft-fail Message via cancelToken contact resolve                                                   |
+| AURA-383     | 2026-07-30 | Gallery designer modules: Tabs progress below md                                                           |
+| AURA-288     | 2026-07-30 | Manifest matrix: admin / gallery / h / book scopes                                                         |
+| AURA-289     | 2026-07-30 | PWA icons: /api/pwa-icon PNG + maskable; static Aura marks                                                 |
+| AURA-290     | 2026-07-30 | SW v3 strategy doc; API no-cache; offline.html; controlled activate                                        |
+| AURA-291     | 2026-07-30 | OfflineStatus toasts; gallery/helper mutation honesty                                                      |
+| AURA-368     | 2026-07-30 | SW per-surface scope; v4 R2/signed media never cached                                                      |
+| AURA-292     | 2026-07-30 | Standalone detect; Account/Log out in shell; .browser-only                                                 |
+| AURA-293     | 2026-07-30 | InstallHint admin+gallery; iOS Share one-liner; dismissible                                                |
+| AURA-294     | 2026-07-30 | safeAdminNext + expiry→login?next; logout cookie path                                                      |
+| AURA-295     | 2026-07-30 | theme-color = kit background; statusBar + Brand refresh                                                    |
+| AURA-296     | 2026-07-30 | Admin last-route resume; launch_handler; hash-safe next                                                    |
+| AURA-297     | 2026-07-30 | Gallery launch_handler; standalone downloadSignedUrl                                                       |
+| AURA-298     | 2026-07-30 | Homepage/book InstallHint + preferExistingWindow                                                           |
+| AURA-299     | 2026-07-30 | Quote/contract/pay PWA chrome; no SW                                                                       |
+| AURA-300     | 2026-07-30 | SW media cache 48MiB thumbs/previews only                                                                  |
+| AURA-301     | 2026-07-30 | DoD: responsive gate — 283–287, 088/089, 375–383 closed                                                    |
+| AURA-302     | 2026-07-30 | DoD: PWA installable — 288–300 + 368 closed                                                                |
+| AURA-303     | 2026-07-30 | DoD: responsive+PWA rules peer to unified-ui; W12 closed                                                   |
+| AURA-260     | 2026-07-30 | Dashboard first-project checklist; projects ?new=1 empty CTA                                               |
+| AURA-261     | 2026-07-30 | Single spine plain labels; no Book/Session split headers                                                   |
+| AURA-262     | 2026-07-30 | Destructive confirms + shared consequence copy; go live gated                                              |
+| AURA-263     | 2026-07-30 | Deep links: notify/dashboard/analytics → workflow/delivery                                                 |
+| AURA-264     | 2026-07-30 | mutateJson; no false-success toasts; settings/upload offline honesty                                       |
+| AURA-266     | 2026-07-30 | Sparse admin help; PageHeader essays cut; Session types ButtonLinks                                        |
+| AURA-267     | 2026-07-30 | Parallel uploads (3); progress/timeouts; atomic sortOrder/cover on complete                                |
+| AURA-268     | 2026-07-30 | Admin list pagination + scoped reads; Load more; strip contract bodies                                     |
+| AURA-269     | 2026-07-30 | Idempotency-Key on quote/contract/pay email; singleflight + 15m replay                                     |
+| AURA-270     | 2026-07-30 | Public rate limits + append/patch writes; no public full-studio RMW                                        |
+| AURA-271     | 2026-07-30 | DoD data honesty verified; draft contract tokens gated like gallery/quote                                  |
+| AURA-272     | 2026-07-30 | DoD persist: public per-entity writes; upsert-only; multi-instance wipe-safe; 107 deferred                 |
+| AURA-273     | 2026-07-30 | Domain language: sessions plan/wizard/wrap; FE cutover; legacy flag; Deprecation headers                   |
+| AURA-274     | 2026-07-30 | DoD unified UI; PublicShell/primitives verified; helper+ShootDay off ad-hoc; closed 082/083                |
+| AURA-275     | 2026-07-30 | DoD website builder MVP verified; Settings defers layout to Site builder                                   |
+| AURA-276     | 2026-07-30 | DoD gallery designer MVP verified (schema/presets/hero/chrome/grid/checklist)                              |
+| AURA-277     | 2026-07-30 | Happy-path DoD; deposit/contract workflow advance rules (119/120); closed 118                               |
+| AURA-094     | 2026-07-30 | Bookings/Library/Projects PageHeaders label-first (no header essays)                                       |
+| AURA-093     | 2026-07-30 | Analytics human labels + project·session filter (no id slices)                                             |
+| AURA-092     | 2026-07-30 | Dialog/lightbox a11y: autofocus priority, labelledby, Escape ownership                                     |
+| AURA-084     | 2026-07-30 | Analytics/payments List+ListRow; workflow section + divide-y (no Card chrome)                              |
+| AURA-072     | 2026-07-30 | Type labels: Project type / Session label / Applies to / Session type (booking)                            |
+| AURA-071     | 2026-07-30 | Hub send forms removed; workflow canonical for contract/Q/pay                                              |
+| AURA-069     | 2026-07-30 | Documents tabs; decoupled contract/questionnaire project pickers                                           |
+| AURA-068     | 2026-07-30 | Shared SessionShootDay for wizard + helper; wake lock + prefs parity                                       |
+| AURA-066     | 2026-07-30 | Mobile More ops-first; Bookings pending badge (`view=badges`)                                              |
+| AURA-065     | 2026-07-30 | Nav Prep hub → Library; session wizard Prep unchanged                                                      |
+| AURA-064     | 2026-07-30 | Galleries admin index + paginated API; More nav                                                            |
+| AURA-063     | 2026-07-30 | Server legacy admin redirects; ADMIN_ROUTES.md; Projects nav narrowed                                      |
+| AURA-062     | 2026-07-30 | Prep hub only; packages/shot-lists redirect + ?tab=                                                        |
+| AURA-061     | 2026-07-30 | Deleted IdeasPanel + /api/ideas; /admin/ideas → Prep                                                       |
+| AURA-060     | 2026-07-30 | Verified dead IntakeStep/QuoteStep already deleted (192); closed                                           |
+| AURA-280     | 2026-07-30 | ADR + agent rules aligned; persist ADR; AGENTS.md; closed 126/058/059                                      |
+| AURA-126     | 2026-07-30 | Closed with 280 — per-entity persist in ADR                                                                |
+| AURA-058     | 2026-07-30 | Closed with 273/280 — projects/sessions API cutover                                                        |
+| AURA-059     | 2026-07-30 | Closed with 168/197/280 — no dual-write                                                                    |
+| AURA-279     | 2026-07-30 | Delivery observability: notify + dashboard for email/calendar/payments failures                            |
+| AURA-278     | 2026-07-30 | Copy/a11y DoD; Dialog focus trap; infra + Client/Shoot labels; closed 085/086                              |
+| AURA-085     | 2026-07-30 | Closed with 278 — Firebase/Stripe out of user-facing errors                                                |
+| AURA-086     | 2026-07-30 | Closed with 278 — Project/Session admin copy                                                               |
+| AURA-119     | 2026-07-30 | Closed with 277 — payment → prep only from deposit                                                         |
+| AURA-120     | 2026-07-30 | Closed with 277 — contract sign does not regress past deposit                                              |
+| AURA-118     | 2026-07-30 | Closed with 173/277 — triple-state rules + readiness badges                                                |
+| AURA-082     | 2026-07-30 | Closed with 274 — Checkbox/Switch/Select on listed admin surfaces                                          |
+| AURA-083     | 2026-07-30 | Closed with 274 — ButtonLink/PublicCta/Button on listed ad-hoc sites                                       |
+| Audit        | 2026-07-30 | Deep responsive multi-agent pass; enriched 088/089/283–287; added 375–383; W12 order updated               |
+| AURA-122     | 2026-07-30 | Superseded → `[!]` (keep 248)                                                                              |
+| AURA-111     | 2026-07-30 | Closed with 227 — slug→studioId homepageSlugs collection                                                   |
+| AURA-121     | 2026-07-30 | Closed with 346 — single-owner, no multi-role UI                                                           |
+| AURA-265     | 2026-07-30 | Closed with 346 — permissions clarity via honest Team                                                      |
+| AURA-310     | 2026-07-30 | Closed with 341 — Settings Contact delivery prefs                                                          |
+| AURA-123     | 2026-07-30 | Closed with 338 — USD-only declared in Settings → Payments                                                 |
+| AURA-090     | 2026-07-30 | Closed with 328 timezone picker                                                                            |
+| AURA-091     | 2026-07-29 | Cover logo FileUploadButton via studio/logo kind=cover                                                     |
+| AURA-087     | 2026-07-29 | City/state/ZIP stack via 320                                                                               |
+| AURA-070     | 2026-07-29 | Closed with 317 stopgap routes                                                                             |
+| AURA-114/190 | 2026-07-29 | endsAt PATCH (with 152/026); marked done                                                                   |
+| AURA-189     | 2026-07-29 | Superseded → `[!]` (keep 161)                                                                              |
+| Audit        | 2026-07-29 | App re-eval: 037/060/070/201/202 rewritten; 114/190 done, 189 `[!]`; added 364–369; waves updated          |
+| AURA-361     | 2026-07-29 | Unified direct R2 upload; photos get Sharp derivatives on complete; video multipart                        |
+
 
 ---
 

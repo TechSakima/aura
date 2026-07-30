@@ -17,6 +17,7 @@ import {
   DEFAULT_BOOKING_DEFAULTS,
   normalizeBookingDefaults,
 } from "@/lib/booking-defaults";
+import { mutateJson } from "@/lib/client/mutation";
 import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 
 export function SettingsBooking() {
@@ -69,26 +70,33 @@ export function SettingsBooking() {
   async function save(e?: FormEvent) {
     e?.preventDefault();
     setSaving(true);
-    const bookingDefaults = normalizeBookingDefaults({
-      defaultBufferMinutes: Number(defaultBufferMinutes),
-    });
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "booking",
-        homepage: { showBooking },
-        bookingDefaults,
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+    try {
+      const bookingDefaults = normalizeBookingDefaults({
+        defaultBufferMinutes: Number(defaultBufferMinutes),
+      });
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "booking",
+            homepage: { showBooking },
+            bookingDefaults,
+          }),
+        },
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setDefaultBufferMinutes(String(bookingDefaults.defaultBufferMinutes));
+      setDirty(false);
+      push("Booking settings saved", "success");
+    } finally {
+      setSaving(false);
     }
-    setDefaultBufferMinutes(String(bookingDefaults.defaultBufferMinutes));
-    setDirty(false);
-    push("Booking settings saved", "success");
   }
 
   if (loading) {

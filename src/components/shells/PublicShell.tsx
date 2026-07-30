@@ -27,7 +27,10 @@ export function PublicShell({
 }) {
   return (
     <div
-      className={cn("min-h-full bg-canvas text-ink", className)}
+      className={cn(
+        "min-h-full min-w-0 overflow-x-clip bg-canvas text-ink",
+        className,
+      )}
       style={style}
       data-gallery-motion={galleryMotion || undefined}
       data-gallery-density={galleryDensity || undefined}
@@ -35,7 +38,7 @@ export function PublicShell({
       {bare ? (
         children
       ) : (
-        <main className="shell-pad mx-auto w-full max-w-[var(--public-max)] py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] animate-enter sm:py-14">
+        <main className="shell-pad mx-auto w-full max-w-[var(--public-max)] animate-enter pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:pt-[max(3.5rem,env(safe-area-inset-top))] sm:pb-[max(3.5rem,env(safe-area-inset-bottom))]">
           {children}
         </main>
       )}

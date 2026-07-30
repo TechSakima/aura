@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/auth";
-import type { Gallery, Proposal } from "@/lib/types";
+import type { Contract, Gallery, Proposal } from "@/lib/types";
 
 export type PublicAccessResult =
   | { ok: true; preview: boolean }
@@ -70,6 +70,46 @@ export async function assertPublicProposalAccess(
   if (status === "draft") {
     const admin = await requireAdmin();
     if (admin && admin.studioId === proposal.studioId) {
+      return { ok: true, preview: true };
+    }
+    return { ok: false, status: 404, error: "Not found" };
+  }
+
+  return { ok: false, status: 404, error: "Not found" };
+}
+
+/**
+ * Public contract token access (AURA-271 / pairs AURA-006).
+ * - View: `awaiting_signature` | `completed`, or `draft` with admin preview
+ * - Sign (mutate): only `awaiting_signature`
+ * - `canceled` / unknown: 404
+ */
+export async function assertPublicContractAccess(
+  contract: Pick<Contract, "status" | "studioId">,
+  opts?: { sign?: boolean },
+): Promise<PublicAccessResult> {
+  const status = contract.status;
+
+  if (opts?.sign) {
+    if (status === "awaiting_signature") {
+      return { ok: true, preview: false };
+    }
+    if (status === "completed") {
+      return { ok: false, status: 403, error: "Already signed" };
+    }
+    if (status === "draft") {
+      return { ok: false, status: 403, error: "Contract is not available yet." };
+    }
+    return { ok: false, status: 404, error: "Not found" };
+  }
+
+  if (status === "awaiting_signature" || status === "completed") {
+    return { ok: true, preview: false };
+  }
+
+  if (status === "draft") {
+    const admin = await requireAdmin();
+    if (admin && admin.studioId === contract.studioId) {
       return { ok: true, preview: true };
     }
     return { ok: false, status: 404, error: "Not found" };

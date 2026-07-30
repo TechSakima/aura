@@ -5,7 +5,7 @@ import { firebaseReady } from "@/lib/db/require-firebase";
 export async function POST(req: Request) {
   if (!firebaseReady()) {
     return NextResponse.json(
-      { error: "Firebase is not configured" },
+      { error: "Sign-up is unavailable. Try again later." },
       { status: 503 },
     );
   }
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const body = (await req.json()) as { idToken?: string; studioName?: string };
   if (!body.idToken) {
     return NextResponse.json(
-      { error: "Firebase sign-in required" },
+      { error: "Sign-in required" },
       { status: 401 },
     );
   }

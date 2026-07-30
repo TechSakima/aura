@@ -47,6 +47,13 @@ function sessionsOnDay(sessions: CalendarSession[], day: Date) {
   );
 }
 
+function monthGridDays(month: Date) {
+  const start = startOfWeek(startOfMonth(month));
+  const end = endOfWeek(endOfMonth(month));
+  return eachDayOfInterval({ start, end });
+}
+
+/** Desktop month grid with event chips (AURA-089 — phone uses compact + agenda). */
 function MonthGrid({
   month,
   sessions,
@@ -56,22 +63,17 @@ function MonthGrid({
   sessions: CalendarSession[];
   onSelectDay: (day: Date) => void;
 }) {
-  const days = useMemo(() => {
-    const start = startOfWeek(startOfMonth(month));
-    const end = endOfWeek(endOfMonth(month));
-    return eachDayOfInterval({ start, end });
-  }, [month]);
+  const days = useMemo(() => monthGridDays(month), [month]);
 
   return (
     <div className="overflow-hidden rounded-md border border-line">
       <div className="border-b border-line bg-surface px-3 py-2 text-center text-sm font-medium">
         {format(month, "MMMM yyyy")}
       </div>
-      <div className="grid grid-cols-7 border-b border-line bg-surface text-center text-[10px] uppercase tracking-[0.14em] text-muted sm:text-xs">
+      <div className="grid grid-cols-7 border-b border-line bg-surface text-center text-xs uppercase tracking-[0.14em] text-muted">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <div key={d} className="px-1 py-2">
-            <span className="sm:hidden">{d.slice(0, 1)}</span>
-            <span className="hidden sm:inline">{d}</span>
+            {d}
           </div>
         ))}
       </div>
@@ -85,7 +87,7 @@ function MonthGrid({
               type="button"
               onClick={() => onSelectDay(day)}
               className={cn(
-                "min-h-[4.5rem] border-b border-r border-line p-1 text-left align-top sm:min-h-[6.5rem] sm:p-2",
+                "min-h-[6.5rem] border-b border-r border-line p-2 text-left align-top",
                 !inMonth && "bg-canvas/60 text-muted",
                 isToday(day) && "bg-accent/5",
               )}
@@ -114,19 +116,165 @@ function MonthGrid({
   );
 }
 
+/** Phone: number grid + dots only — tap opens day (AURA-089). */
+function MonthCompactGrid({
+  month,
+  sessions,
+  onSelectDay,
+}: {
+  month: Date;
+  sessions: CalendarSession[];
+  onSelectDay: (day: Date) => void;
+}) {
+  const days = useMemo(() => monthGridDays(month), [month]);
+
+  return (
+    <div className="overflow-hidden rounded-md border border-line">
+      <div className="border-b border-line bg-surface px-3 py-2 text-center text-sm font-medium">
+        {format(month, "MMMM yyyy")}
+      </div>
+      <div className="grid grid-cols-7 border-b border-line bg-surface text-center text-[10px] uppercase tracking-[0.14em] text-muted">
+        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+          <div key={`${d}-${i}`} className="px-0.5 py-2">
+            {d}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {days.map((day) => {
+          const count = sessionsOnDay(sessions, day).length;
+          const inMonth = isSameMonth(day, month);
+          return (
+            <button
+              key={day.toISOString()}
+              type="button"
+              onClick={() => onSelectDay(day)}
+              aria-label={`${format(day, "EEEE MMM d")}${count ? `, ${count} sessions` : ""}`}
+              className={cn(
+                "flex min-h-11 flex-col items-center justify-center gap-0.5 border-b border-r border-line py-1.5",
+                !inMonth && "bg-canvas/60 text-muted",
+                isToday(day) && "bg-accent/5",
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-flex size-7 items-center justify-center rounded-full text-xs",
+                  isToday(day) && "bg-accent text-accent-ink",
+                )}
+              >
+                {format(day, "d")}
+              </span>
+              <span
+                className={cn(
+                  "size-1 rounded-full",
+                  count > 0 ? "bg-accent" : "bg-transparent",
+                )}
+                aria-hidden
+              />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Phone: sessions grouped by day for the month (AURA-089). */
+function MonthAgenda({
+  month,
+  sessions,
+  onSelectDay,
+}: {
+  month: Date;
+  sessions: CalendarSession[];
+  onSelectDay: (day: Date) => void;
+}) {
+  const daysWithSessions = useMemo(() => {
+    const start = startOfMonth(month);
+    const end = endOfMonth(month);
+    return eachDayOfInterval({ start, end }).filter(
+      (day) => sessionsOnDay(sessions, day).length > 0,
+    );
+  }, [month, sessions]);
+
+  if (daysWithSessions.length === 0) {
+    return (
+      <Panel className="p-4">
+        <p className="text-sm text-muted">No sessions this month.</p>
+      </Panel>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs uppercase tracking-[0.14em] text-muted">
+        Sessions · {format(month, "MMM yyyy")}
+      </p>
+      {daysWithSessions.map((day) => {
+        const items = sessionsOnDay(sessions, day);
+        return (
+          <Panel key={day.toISOString()} className="p-3">
+            <button
+              type="button"
+              onClick={() => onSelectDay(day)}
+              className="flex min-h-11 w-full items-center justify-between gap-2 text-left"
+            >
+              <p className="text-xs uppercase tracking-[0.14em] text-muted">
+                {format(day, "EEE MMM d")}
+                {isToday(day) ? " · Today" : ""}
+              </p>
+              <span className="text-xs text-muted">{items.length}</span>
+            </button>
+            <ul className="mt-2 space-y-2">
+              {items.map((s) => (
+                <li key={s.id}>
+                  <EventChip s={s} />
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        );
+      })}
+    </div>
+  );
+}
+
+function MonthPhoneView({
+  month,
+  sessions,
+  onSelectDay,
+}: {
+  month: Date;
+  sessions: CalendarSession[];
+  onSelectDay: (day: Date) => void;
+}) {
+  return (
+    <div className="space-y-4 md:hidden">
+      <MonthCompactGrid
+        month={month}
+        sessions={sessions}
+        onSelectDay={onSelectDay}
+      />
+      <MonthAgenda
+        month={month}
+        sessions={sessions}
+        onSelectDay={onSelectDay}
+      />
+    </div>
+  );
+}
+
 function sessionChipTone(status?: SessionStatus | string): ChipTone {
   if (status === "delivered") return "success";
   if (status === "archived") return "neutral";
   return "accent";
 }
 
+/** Decorative only — day cell is the hit target (AURA-282). */
 function EventChip({ s }: { s: CalendarSession }) {
-  const href =
-    s.projectHref ||
-    (s.projectId ? `/admin/projects/${s.projectId}` : undefined);
   const label = `${s.projectName || s.type} · ${sessionTimeLabel(s.startsAt)}`;
   return (
-    <Chip href={href} tone={sessionChipTone(s.status)} className="w-full">
+    <Chip tone={sessionChipTone(s.status)} className="w-full pointer-events-none">
       {label}
     </Chip>
   );
@@ -275,24 +423,45 @@ export function SessionsCalendar({
       </div>
 
       {view === "month" ? (
-        <MonthGrid
-          month={startOfMonth(cursor)}
-          sessions={dated}
-          onSelectDay={selectDay}
-        />
-      ) : null}
-
-      {view === "months" ? (
-        <div className="grid gap-4 lg:grid-cols-3">
-          {multiMonths.map((month) => (
+        <>
+          <MonthPhoneView
+            month={startOfMonth(cursor)}
+            sessions={dated}
+            onSelectDay={selectDay}
+          />
+          <div className="hidden md:block">
             <MonthGrid
-              key={month.toISOString()}
-              month={month}
+              month={startOfMonth(cursor)}
               sessions={dated}
               onSelectDay={selectDay}
             />
-          ))}
-        </div>
+          </div>
+        </>
+      ) : null}
+
+      {view === "months" ? (
+        <>
+          <div className="space-y-6 md:hidden">
+            {multiMonths.map((month) => (
+              <MonthPhoneView
+                key={month.toISOString()}
+                month={month}
+                sessions={dated}
+                onSelectDay={selectDay}
+              />
+            ))}
+          </div>
+          <div className="hidden gap-4 md:grid lg:grid-cols-3">
+            {multiMonths.map((month) => (
+              <MonthGrid
+                key={month.toISOString()}
+                month={month}
+                sessions={dated}
+                onSelectDay={selectDay}
+              />
+            ))}
+          </div>
+        </>
       ) : null}
 
       {view === "week" ? (

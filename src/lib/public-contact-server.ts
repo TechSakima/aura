@@ -4,6 +4,7 @@ import { listStudiosWithPaymentLink } from "@/lib/db/payments";
 import {
   findGalleryByPublicToken,
   findProposalByToken,
+  findStudioIdByProjectCancelToken,
   getStudioDoc,
 } from "@/lib/db/store";
 import {
@@ -86,6 +87,7 @@ export function isContactTimeTrap(startedAt: number | undefined): boolean {
   return false;
 }
 
+/** Matches ContactModule UI: form is primary when form or email is on (AURA-307 / AURA-316). */
 export function studioHomepageContactFormEnabled(studio: Studio): boolean {
   const hp = studio.homepage;
   if (!hp) return false;
@@ -94,9 +96,9 @@ export function studioHomepageContactFormEnabled(studio: Studio): boolean {
     (m) => m.type === "contact",
   );
   if (mod?.type === "contact") {
-    return Boolean(mod.props.showContactForm);
+    return Boolean(mod.props.showContactForm || mod.props.showEmail);
   }
-  return Boolean(hp.showContactForm);
+  return Boolean(hp.showContactForm || hp.showEmail);
 }
 
 /** Soft-failure Message path — recipient required, form toggles not required (AURA-309). */
@@ -117,6 +119,7 @@ export type ParsedPublicContact = {
   galleryToken?: string;
   proposalToken?: string;
   paymentLinkId?: string;
+  cancelToken?: string;
 };
 
 export function parsePublicContactBody(
@@ -156,6 +159,9 @@ export function parsePublicContactBody(
   const paymentLinkId = String(b.paymentLinkId || "")
     .trim()
     .slice(0, 80);
+  const cancelToken = String(b.cancelToken || "")
+    .trim()
+    .slice(0, 80);
   const startedRaw = b.startedAt;
   const startedAt =
     typeof startedRaw === "number"
@@ -184,6 +190,7 @@ export function parsePublicContactBody(
       galleryToken: galleryToken || undefined,
       proposalToken: proposalToken || undefined,
       paymentLinkId: paymentLinkId || undefined,
+      cancelToken: cancelToken || undefined,
     },
   };
 }
@@ -239,6 +246,18 @@ export async function resolveContactStudio(
     return { ok: true, resolved: { studio } };
   }
 
+  if (data.cancelToken) {
+    const studioId = await findStudioIdByProjectCancelToken(data.cancelToken);
+    if (!studioId) {
+      return { ok: false, status: 404, error: "Not found" };
+    }
+    const studio = await getStudioDoc(studioId);
+    if (!studio || !studioCanReceiveContact(studio)) {
+      return { ok: false, status: 403, error: "Contact is unavailable" };
+    }
+    return { ok: true, resolved: { studio } };
+  }
+
   if (data.slug) {
     const studio = await findStudioByHomepageSlug(data.slug);
     if (!studio) {
@@ -279,6 +298,7 @@ export function buildContactMessage(
     galleryToken: data.galleryToken,
     proposalToken: data.proposalToken,
     paymentLinkId: data.paymentLinkId,
+    cancelToken: data.cancelToken,
     emailStatus: "pending",
     createdAt: now,
   };

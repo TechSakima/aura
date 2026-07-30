@@ -46,17 +46,30 @@ export function IconButton({
         <span className="inline-flex shrink-0" aria-hidden>
           {children}
         </span>
-        <span>{label}</span>
+        <span className="max-w-[4.5rem] truncate sm:max-w-[7rem] md:max-w-none">
+          {label}
+        </span>
       </button>
     );
   }
+
+  const iconOnlyTone =
+    tone === "onAccent"
+      ? active
+        ? "bg-accent-ink/15 text-accent-ink"
+        : "text-accent-ink/80 hover:bg-accent-ink/10 hover:text-accent-ink"
+      : active
+        ? "bg-line/40 text-ink"
+        : "text-ink hover:bg-line/40";
 
   return (
     <button
       type={type}
       disabled={disabled}
+      aria-pressed={active || undefined}
       className={cn(
-        "inline-flex size-11 touch-target items-center justify-center rounded-md text-ink transition-colors hover:bg-line/40 disabled:opacity-50",
+        "inline-flex size-11 touch-target items-center justify-center rounded-md transition-colors disabled:opacity-50",
+        iconOnlyTone,
         className,
       )}
       {...props}

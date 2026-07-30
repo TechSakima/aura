@@ -13,6 +13,7 @@ import {
   useConfirm,
   useToast,
 } from "@/components/ui";
+import { mutateJson } from "@/lib/client/mutation";
 import {
   DEFAULT_LINK_TITLE,
   normalizePaymentDefaults,
@@ -140,40 +141,47 @@ export function SettingsPayments() {
   async function saveDefaults(e?: FormEvent) {
     e?.preventDefault();
     setSaving(true);
-    const paymentDefaults = normalizePaymentDefaults({
-      defaultDepositAmount:
-        defaultDepositAmount.trim() === ""
-          ? undefined
-          : Number(defaultDepositAmount),
-      defaultLinkTitle,
-    });
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "payments",
-        paymentDefaults: {
-          ...paymentDefaults,
-          defaultDepositAmount:
-            defaultDepositAmount.trim() === ""
-              ? null
-              : paymentDefaults.defaultDepositAmount,
+    try {
+      const paymentDefaults = normalizePaymentDefaults({
+        defaultDepositAmount:
+          defaultDepositAmount.trim() === ""
+            ? undefined
+            : Number(defaultDepositAmount),
+        defaultLinkTitle,
+      });
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "payments",
+            paymentDefaults: {
+              ...paymentDefaults,
+              defaultDepositAmount:
+                defaultDepositAmount.trim() === ""
+                  ? null
+                  : paymentDefaults.defaultDepositAmount,
+            },
+          }),
         },
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setDefaultDepositAmount(
+        paymentDefaults.defaultDepositAmount != null
+          ? String(paymentDefaults.defaultDepositAmount)
+          : "",
+      );
+      setDefaultLinkTitle(paymentDefaults.defaultLinkTitle);
+      setDirty(false);
+      push("Payment defaults saved", "success");
+    } finally {
+      setSaving(false);
     }
-    setDefaultDepositAmount(
-      paymentDefaults.defaultDepositAmount != null
-        ? String(paymentDefaults.defaultDepositAmount)
-        : "",
-    );
-    setDefaultLinkTitle(paymentDefaults.defaultLinkTitle);
-    setDirty(false);
-    push("Payment defaults saved", "success");
   }
 
   if (loading) {

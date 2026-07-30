@@ -55,7 +55,7 @@ function HeroMark({
   return (
     <div
       className={cn(
-        "flex flex-col gap-5",
+        "flex w-full min-w-0 max-w-full flex-col gap-5",
         align === "center" ? "items-center text-center" : "items-start text-left",
       )}
     >
@@ -65,7 +65,7 @@ function HeroMark({
           src={studio.logoUrl}
           alt=""
           className={cn(
-            "h-14 w-auto object-contain",
+            "h-14 w-auto max-w-full object-contain",
             onMedia && "shadow-on-media",
           )}
         />
@@ -73,7 +73,7 @@ function HeroMark({
       {showName ? (
         <h1
           className={cn(
-            "font-display text-4xl font-semibold uppercase tracking-[0.14em] sm:text-5xl",
+            "max-w-full break-words font-display text-4xl font-semibold uppercase tracking-[0.14em] sm:text-5xl",
             onMedia ? "text-on-media" : "text-ink",
           )}
         >
@@ -101,7 +101,7 @@ function HeroModule({
   if (variant === "fullBleed") {
     if (!cover) {
       return (
-        <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-14 text-center sm:pt-20">
+        <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-[max(3.5rem,env(safe-area-inset-top))] text-center sm:pt-[max(5rem,env(safe-area-inset-top))]">
           <HeroMark
             studio={studio}
             showLogo={showLogo}
@@ -140,8 +140,8 @@ function HeroModule({
 
   if (variant === "split") {
     return (
-      <section className="grid min-h-0 grid-cols-1 lg:min-h-[70vh] lg:grid-cols-2">
-        <div className="relative min-h-[42vh] overflow-hidden bg-scrim lg:min-h-0">
+      <section className="grid min-h-0 min-w-0 grid-cols-1 overflow-x-clip lg:min-h-[70vh] lg:grid-cols-2">
+        <div className="relative min-h-[42vh] min-w-0 overflow-hidden bg-scrim lg:min-h-0">
           {cover ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -159,7 +159,7 @@ function HeroModule({
             />
           ) : null}
         </div>
-        <div className="flex flex-col justify-center gap-2 px-5 py-12 sm:px-10 sm:py-16 lg:px-14">
+        <div className="flex min-w-0 flex-col justify-center gap-2 px-5 py-12 sm:px-10 sm:py-16 lg:px-14">
           <HeroMark
             studio={studio}
             showLogo={showLogo}
@@ -175,9 +175,9 @@ function HeroModule({
   if (variant === "type") {
     if (!showName && !showCta) return null;
     return (
-      <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-16 pb-4 text-center sm:pt-24">
+      <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-[max(4rem,env(safe-area-inset-top))] pb-4 text-center sm:pt-[max(6rem,env(safe-area-inset-top))]">
         {showName ? (
-          <h1 className="font-display text-5xl font-medium tracking-tight text-ink sm:text-6xl md:text-7xl">
+          <h1 className="max-w-full break-words font-display text-5xl font-medium tracking-tight text-ink sm:text-6xl md:text-7xl">
             {studio.name}
           </h1>
         ) : null}
@@ -190,7 +190,7 @@ function HeroModule({
   const logo = showLogo && studio.logoUrl;
   if (!logo && !showName && !showCta) return null;
   return (
-    <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-14 text-center sm:pt-20">
+    <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-[max(3.5rem,env(safe-area-inset-top))] text-center sm:pt-[max(5rem,env(safe-area-inset-top))]">
       <HeroMark
         studio={studio}
         showLogo={showLogo}
@@ -447,7 +447,7 @@ function FeaturedGalleryModule({
             <div className="aspect-[16/10] bg-line" />
           )}
         </div>
-        <p className="mt-4 text-center font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
+        <p className="mt-4 max-w-full break-words text-center font-sans text-sm font-medium uppercase tracking-[0.12em] text-ink">
           {gallery.title}
         </p>
       </Link>
@@ -497,7 +497,7 @@ function FooterModule({
       : [];
   if (!showName && !social.length) return null;
   return (
-    <footer className="shell-pad mx-auto max-w-[var(--public-max)] border-t border-line py-10 text-center">
+    <footer className="shell-pad mx-auto max-w-[var(--public-max)] border-t border-line py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] text-center">
       {showName ? (
         <p className="font-sans text-xs uppercase tracking-[0.14em] text-muted">
           {studio.name}

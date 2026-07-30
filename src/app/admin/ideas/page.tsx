@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Ideas merged into shot lists under Prep. */
+/** Legacy URL — shot lists live under Library (AURA-061 / AURA-065). */
 export default function IdeasPage() {
   redirect("/admin/prep");
 }

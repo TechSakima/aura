@@ -1,28 +1,35 @@
 "use client";
 
-import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Button,
   Card,
+  Checkbox,
   EmptyState,
   Field,
   Input,
   Label,
+  List,
+  ListRow,
   PageHeader,
   StatusBadge,
   Textarea,
   useToast,
 } from "@/components/ui";
+import { ADMIN_LIST_PAGE } from "@/lib/admin-list-page";
 
 import type { Project } from "@/lib/types";
 
-export default function ProjectsPage() {
+function ProjectsPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { push } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,23 +37,51 @@ export default function ProjectsPage() {
   const [notes, setNotes] = useState("");
   const [projectType, setProjectType] = useState("Wedding");
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [showArchived, setShowArchived] = useState(false);
 
-  async function load() {
-    const res = await fetch("/api/projects");
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(q.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [q]);
+
+  async function loadPage(offset: number, append: boolean) {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
+    const params = new URLSearchParams({
+      offset: String(offset),
+      limit: String(ADMIN_LIST_PAGE),
+    });
+    if (debouncedQ) params.set("q", debouncedQ);
+    if (showArchived) params.set("includeArchived", "1");
+    const res = await fetch(`/api/projects?${params}`);
     if (!res.ok) {
       setLoading(false);
+      setLoadingMore(false);
       push("Could not load projects", "danger");
       return;
     }
     const data = await res.json();
-    setProjects(data.projects || []);
+    const next = (data.projects || []) as Project[];
+    setProjects((prev) => (append ? [...prev, ...next] : next));
+    setHasMore(Boolean(data.hasMore));
+    setTotal(Number(data.total) || next.length);
     setLoading(false);
+    setLoadingMore(false);
   }
 
   useEffect(() => {
-    void load();
-  }, []);
+    void loadPage(0, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQ, showArchived]);
+
+  // Dashboard first-project CTA → open create form (AURA-260).
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    setAdding(true);
+    setQ("");
+    router.replace("/admin/projects", { scroll: false });
+  }, [searchParams, router]);
 
   function resetForm() {
     setName("");
@@ -69,29 +104,18 @@ export default function ProjectsPage() {
     const data = await res.json();
     const project = data.project as Project;
     setProjects((prev) => [project, ...prev]);
+    setTotal((n) => n + 1);
     resetForm();
     setAdding(false);
     push("Project saved", "success");
     router.push(`/admin/projects/${project.id}`);
   }
 
-  const filtered = projects.filter((c) => {
-    if (!showArchived && c.stage === "archived") return false;
-    const s = q.toLowerCase();
-    return (
-      !s ||
-      c.name.toLowerCase().includes(s) ||
-      (c.email || "").toLowerCase().includes(s) ||
-      (c.phone || "").includes(s)
-    );
-  });
-
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Studio"
         title="Projects"
-        description="Jobs and engagements — each project can have multiple sessions."
         actions={
           adding ? (
             <Button
@@ -141,7 +165,7 @@ export default function ProjectsPage() {
               />
             </Field>
             <Field>
-              <Label htmlFor="type">Type</Label>
+              <Label htmlFor="type">Project type</Label>
               <Input
                 id="type"
                 value={projectType}
@@ -192,8 +216,7 @@ export default function ProjectsPage() {
             />
           </Field>
           <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={showArchived}
               onChange={(e) => setShowArchived(e.target.checked)}
             />
@@ -201,51 +224,73 @@ export default function ProjectsPage() {
           </label>
           {loading ? (
             <EmptyState variant="loading" title="Loading projects…" />
-          ) : filtered.length === 0 ? (
+          ) : projects.length === 0 ? (
             <EmptyState
-              title={projects.length === 0 ? "No projects yet" : "No matches"}
+              title={total === 0 && !debouncedQ ? "No projects yet" : "No matches"}
               description={
-                projects.length === 0
-                  ? "Create a project, then add sessions."
-                  : "Try a different search."
+                total === 0 && !debouncedQ ? undefined : "Try a different search."
+              }
+              action={
+                total === 0 && !debouncedQ && !adding ? (
+                  <Button
+                    onClick={() => {
+                      setAdding(true);
+                      setQ("");
+                    }}
+                  >
+                    New project
+                  </Button>
+                ) : undefined
               }
             />
           ) : (
-            <ul className="divide-y divide-line border-y border-line">
-              {filtered.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
+            <div className="space-y-4">
+              <List>
+                {projects.map((c) => (
+                  <ListRow key={c.id} href={`/admin/projects/${c.id}`}>
+                    <div className="min-w-0">
+                      <p className="font-display text-xl text-ink">{c.name}</p>
+                      <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
+                        <span className="truncate">{c.type || "Project"}</span>
+                        <StatusBadge
+                          domain="projectStage"
+                          value={c.stage || "inquiry"}
+                        />
+                        {c.email ? (
+                          <span className="truncate">· {c.email}</span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm text-accent">Open</span>
+                  </ListRow>
+                ))}
+              </List>
+              {hasMore ? (
+                <Button
+                  type="button"
+                  tone="neutral"
+                  className="min-h-11 w-full sm:w-auto"
+                  pending={loadingMore}
+                  pendingLabel="Loading…"
+                  onClick={() => void loadPage(projects.length, true)}
                 >
-                  <div className="min-w-0">
-                    <Link
-                      href={`/admin/projects/${c.id}`}
-                      className="font-display text-xl text-ink no-underline hover:opacity-80"
-                    >
-                      {c.name}
-                    </Link>
-                    <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
-                      <span className="truncate">{c.type || "Project"}</span>
-                      <StatusBadge
-                        domain="projectStage"
-                        value={c.stage || "inquiry"}
-                      />
-                      {c.email ? (
-                        <span className="truncate">· {c.email}</span>
-                      ) : null}
-                    </p>
-                  </div>
-                  <Link href={`/admin/projects/${c.id}`}>
-                    <Button size="sm" tone="neutral">
-                      Open
-                    </Button>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+                  Load more
+                </Button>
+              ) : null}
+            </div>
           )}
         </>
       )}
     </div>
+  );
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense
+      fallback={<EmptyState variant="loading" title="Loading projects…" />}
+    >
+      <ProjectsPageInner />
+    </Suspense>
   );
 }

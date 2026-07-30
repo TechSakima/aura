@@ -1,22 +1,23 @@
 import type { ProjectWorkflowStep } from "@/lib/types";
 
 /**
- * Continuous studio path (AURA-017).
+ * Continuous studio path (AURA-017 / AURA-261).
  *
- * One spine: book the job → deposit clears → session tools (prep → wrap).
+ * One spine: book the job → get paid → plan & deliver.
+ * Labels are plain studio language (“Get paid”, “Deliver photos”).
  * Prep is not a separate product; it starts after deposit.
  */
 export const BOOK_STEPS: { id: ProjectWorkflowStep; label: string }[] = [
-  { id: "inquiry", label: "Inquiry" },
-  { id: "questionnaire", label: "Questionnaire" },
-  { id: "pricing", label: "Pricing" },
-  { id: "contract", label: "Contract" },
-  { id: "deposit", label: "Deposit" },
+  { id: "inquiry", label: "Get details" },
+  { id: "questionnaire", label: "Ask questions" },
+  { id: "pricing", label: "Send quote" },
+  { id: "contract", label: "Sign contract" },
+  { id: "deposit", label: "Get paid" },
 ];
 
 export const SESSION_STEPS: { id: ProjectWorkflowStep; label: string }[] = [
-  { id: "prep", label: "Prep" },
-  { id: "delivery", label: "Delivery" },
+  { id: "prep", label: "Plan the shoot" },
+  { id: "delivery", label: "Deliver photos" },
 ];
 
 /** Full project workflow order (book + session handoff). */
@@ -28,7 +29,7 @@ export const HANDOFF_AFTER_STEP: ProjectWorkflowStep = "deposit";
 /** First session step on the project spine (session wizard continues shoot-day → wrap). */
 export const SESSION_START_STEP: ProjectWorkflowStep = "prep";
 
-export const HANDOFF_COPY = "Prep starts after deposit";
+export const HANDOFF_COPY = "Plan the shoot after you get paid";
 
 const PATH_IDS = new Set(PROJECT_PATH_STEPS.map((s) => s.id));
 
@@ -36,6 +37,13 @@ export function isProjectWorkflowStep(
   value: unknown,
 ): value is ProjectWorkflowStep {
   return typeof value === "string" && PATH_IDS.has(value as ProjectWorkflowStep);
+}
+
+export function workflowStepLabel(step?: ProjectWorkflowStep): string {
+  return (
+    PROJECT_PATH_STEPS.find((s) => s.id === step)?.label ||
+    BOOK_STEPS[0]!.label
+  );
 }
 
 export function projectPathIndex(step?: ProjectWorkflowStep) {

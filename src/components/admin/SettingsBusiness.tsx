@@ -11,6 +11,7 @@ import {
   Label,
   useToast,
 } from "@/components/ui";
+import { mutateJson } from "@/lib/client/mutation";
 import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 import type { PrintPartner } from "@/lib/types";
 
@@ -65,29 +66,36 @@ export function SettingsBusiness() {
   async function saveBusiness(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "business",
-        website,
-        phone,
-        addressLine1,
-        addressLine2,
-        city,
-        region,
-        postalCode,
-        country,
-        printPartners,
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+    try {
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "business",
+            website,
+            phone,
+            addressLine1,
+            addressLine2,
+            city,
+            region,
+            postalCode,
+            country,
+            printPartners,
+          }),
+        },
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setDirty(false);
+      push("Business saved", "success");
+    } finally {
+      setSaving(false);
     }
-    setDirty(false);
-    push("Business saved", "success");
   }
 
   if (loading) {

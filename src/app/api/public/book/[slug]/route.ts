@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { findStudioByHomepageSlug } from "@/lib/db/homepage-slug";
-import { updateStudioDb } from "@/lib/db/store";
-import { notifyStudio, emailClient, wrapHtml } from "@/lib/notify/send";
 import { nextStepHtml, offeringLabel } from "@/lib/copy/offering";
+import { COL } from "@/lib/db/collections";
+import { findStudioByHomepageSlug } from "@/lib/db/homepage-slug";
+import {
+  appendStudioDoc,
+  listSessionTypesForStudio,
+} from "@/lib/db/store";
+import { notifyStudio, emailClient, wrapHtml } from "@/lib/notify/send";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import type { BookingRequest, Project, ProjectSession } from "@/lib/types";
 
 export async function GET(
@@ -95,6 +100,18 @@ export async function POST(
   ctx: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await ctx.params;
+  const ip = clientIp(req);
+  const ipLimit = rateLimit(`book:${slug}:${ip}`, 5, 10 * 60_000);
+  if (!ipLimit.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(ipLimit.retryAfterSec) },
+      },
+    );
+  }
+
   const studio = await findStudioByHomepageSlug(slug);
   if (!studio) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await req.json();
@@ -106,12 +123,20 @@ export async function POST(
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
+  const emailLimit = rateLimit(`book-email:${email}`, 2, 60 * 60_000);
+  if (!emailLimit.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(emailLimit.retryAfterSec) },
+      },
+    );
+  }
+
   const now = new Date().toISOString();
-  let booking: BookingRequest | null = null;
-  let createdProjectId = "";
-  const { readStudioDb } = await import("@/lib/db/store");
-  const studioDb = await readStudioDb(studio.id);
-  const stPreview = studioDb.sessionTypes.find((t) => t.id === sessionTypeId);
+  const sessionTypes = await listSessionTypesForStudio(studio.id);
+  const stPreview = sessionTypes.find((t) => t.id === sessionTypeId);
   if (!stPreview || !stPreview.active) {
     return NextResponse.json(
       { error: "Session type not available" },
@@ -149,60 +174,56 @@ export async function POST(
     );
   }
 
-  try {
-    await updateStudioDb(studio.id, (db) => {
-      const st = db.sessionTypes.find((t) => t.id === sessionTypeId);
-      if (!st || !st.active) throw new Error("Session type not available");
+  const project: Project = {
+    id: nanoid(),
+    studioId: studio.id,
+    name,
+    email,
+    phone: body.phone ? String(body.phone) : undefined,
+    notes: body.notes ? String(body.notes) : undefined,
+    type: stPreview.name,
+    stage: "inquiry",
+    workflowStep: "inquiry",
+    projectDate: startsAt.slice(0, 10),
+    paidAmount: 0,
+    cancelToken: nanoid(24),
+    createdAt: now,
+    updatedAt: now,
+  };
+  const createdProjectId = project.id;
+  const end = new Date(startsAt);
+  end.setMinutes(end.getMinutes() + stPreview.durationMinutes);
+  const session: ProjectSession = {
+    id: nanoid(),
+    studioId: studio.id,
+    projectId: project.id,
+    type: stPreview.name,
+    startsAt,
+    endsAt: end.toISOString(),
+    status: "inquiry",
+    createdAt: now,
+    updatedAt: now,
+  };
+  const booking: BookingRequest = {
+    id: nanoid(),
+    studioId: studio.id,
+    sessionTypeId,
+    name,
+    email,
+    phone: body.phone ? String(body.phone) : undefined,
+    startsAt,
+    notes: body.notes ? String(body.notes) : undefined,
+    status: "pending",
+    projectId: project.id,
+    sessionId: session.id,
+    createdAt: now,
+    updatedAt: now,
+  };
 
-      const project: Project = {
-        id: nanoid(),
-        studioId: studio.id,
-        name,
-        email,
-        phone: body.phone ? String(body.phone) : undefined,
-        notes: body.notes ? String(body.notes) : undefined,
-        type: st.name,
-        stage: "inquiry",
-        workflowStep: "inquiry",
-        projectDate: startsAt.slice(0, 10),
-        paidAmount: 0,
-        cancelToken: nanoid(24),
-        createdAt: now,
-        updatedAt: now,
-      };
-      createdProjectId = project.id;
-      const end = new Date(startsAt);
-      end.setMinutes(end.getMinutes() + st.durationMinutes);
-      const session: ProjectSession = {
-        id: nanoid(),
-        studioId: studio.id,
-        projectId: project.id,
-        type: st.name,
-        startsAt,
-        endsAt: end.toISOString(),
-        status: "inquiry",
-        createdAt: now,
-        updatedAt: now,
-      };
-      booking = {
-        id: nanoid(),
-        studioId: studio.id,
-        sessionTypeId,
-        name,
-        email,
-        phone: body.phone ? String(body.phone) : undefined,
-        startsAt,
-        notes: body.notes ? String(body.notes) : undefined,
-        status: "pending",
-        projectId: project.id,
-        sessionId: session.id,
-        createdAt: now,
-        updatedAt: now,
-      };
-      db.projects.unshift(project);
-      db.sessions.unshift(session);
-      db.bookingRequests.unshift(booking);
-    });
+  try {
+    await appendStudioDoc(COL.projects, project);
+    await appendStudioDoc(COL.projectSessions, session);
+    await appendStudioDoc(COL.bookingRequests, booking);
   } catch {
     return NextResponse.json({ error: "Could not create booking" }, { status: 500 });
   }

@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActionStack,
   Badge,
   Button,
-  Card,
   Field,
   Input,
   Label,
@@ -32,6 +32,11 @@ import {
   projectRemainingBalance,
 } from "@/lib/payments/project-balance";
 import {
+  newIdempotencyKey,
+  withIdempotencyHeaders,
+} from "@/lib/client/idempotency-key";
+import { confirmReplaceQuote } from "@/lib/destructive-confirm";
+import {
   BOOK_STEPS,
   HANDOFF_COPY,
   PROJECT_PATH_STEPS,
@@ -39,6 +44,7 @@ import {
   nextProjectPathStep,
   previousProjectPathStep,
   projectPathIndex,
+  workflowStepLabel,
 } from "@/lib/workflow/path";
 
 function absoluteUrl(path: string) {
@@ -98,9 +104,33 @@ export function ProjectWorkflowPanel({
   const [toolSessionId, setToolSessionId] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [balanceAmount, setBalanceAmount] = useState("");
+  /** Mobile: which step card is expanded (follows current when it advances). */
+  const [viewStep, setViewStep] = useState<ProjectWorkflowStep>(
+    () => project.workflowStep || "inquiry",
+  );
 
   const primarySession = sessions[0];
   const current = project.workflowStep || "inquiry";
+  const viewIdx = projectPathIndex(viewStep);
+  const progressIdx = projectPathIndex(current);
+  const showHandoffCard =
+    viewStep === "deposit" || viewStep === "prep" || viewIdx >= BOOK_STEPS.length;
+
+  useEffect(() => {
+    setViewStep(current);
+  }, [current]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== "#workflow") return;
+    requestAnimationFrame(() => {
+      document.getElementById("workflow")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, []);
+
   const latestSubmitted = useMemo(
     () => questionnaires.find((r) => Boolean(r.submittedAt)),
     [questionnaires],
@@ -308,7 +338,7 @@ export function ProjectWorkflowPanel({
 
   async function setWorkflowStep(step: ProjectWorkflowStep) {
     setBusy("workflow");
-    const res = await fetch(`/api/clients/${project.id}`, {
+    const res = await fetch(`/api/projects/${project.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workflowStep: step }),
@@ -374,16 +404,11 @@ export function ProjectWorkflowPanel({
       return;
     }
     if (!packageId) {
-      push("Create a package in Prep first", "danger");
+      push("Create a package in Library first", "danger");
       return;
     }
     if (proposal) {
-      const ok = await confirm({
-        title: "Replace quote?",
-        message: "The current public link will be replaced.",
-        confirmLabel: "Replace",
-        tone: "danger",
-      });
+      const ok = await confirm(confirmReplaceQuote());
       if (!ok) return;
     }
     setBusy("pricing");
@@ -424,10 +449,11 @@ export function ProjectWorkflowPanel({
   }
 
   async function emailQuote() {
-    if (!proposal) return;
+    if (!proposal || busy) return;
     setBusy("pricing");
     const res = await fetch(`/api/proposals/${proposal.id}/email`, {
       method: "POST",
+      headers: withIdempotencyHeaders(newIdempotencyKey()),
     });
     setBusy(null);
     const data = await res.json().catch(() => ({}));
@@ -447,7 +473,7 @@ export function ProjectWorkflowPanel({
     const ok = await confirm({
       title: "Mark quote accepted?",
       message:
-        "Skips the client accepting the quote link. Moves the project to Contract, then Deposit.",
+        `Skips the client accepting the quote link. Moves to ${workflowStepLabel("contract")}, then ${workflowStepLabel("deposit")}.`,
       confirmLabel: "Mark accepted",
       tone: "neutral",
     });
@@ -463,7 +489,10 @@ export function ProjectWorkflowPanel({
       push("Could not mark accepted", "danger");
       return;
     }
-    push("Quote accepted · continue with Contract", "success");
+    push(
+      `Quote accepted · continue with ${workflowStepLabel("contract")}`,
+      "success",
+    );
     await refresh();
     if (typeof document !== "undefined") {
       document.getElementById("workflow")?.scrollIntoView({
@@ -474,11 +503,14 @@ export function ProjectWorkflowPanel({
   }
 
   async function sendContract() {
+    if (busy) return;
     const tmpl = contractTemplates.find((t) => t.id === contractTemplateId);
     setBusy("contract");
     const res = await fetch("/api/documents/contracts", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withIdempotencyHeaders(newIdempotencyKey(), {
+        "Content-Type": "application/json",
+      }),
       body: JSON.stringify({
         projectId: project.id,
         title: tmpl?.name || "Photography agreement",
@@ -575,6 +607,7 @@ export function ProjectWorkflowPanel({
   }
 
   async function emailDepositLink() {
+    if (busy) return;
     if (!projectDepositLink) {
       push("Create a deposit first", "danger");
       return;
@@ -587,7 +620,9 @@ export function ProjectWorkflowPanel({
     setBusy("deposit");
     const res = await fetch("/api/payments/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withIdempotencyHeaders(newIdempotencyKey(), {
+        "Content-Type": "application/json",
+      }),
       body: JSON.stringify({
         action: "email",
         id: projectDepositLink.id,
@@ -654,6 +689,7 @@ export function ProjectWorkflowPanel({
   }
 
   async function emailBalanceLink() {
+    if (busy) return;
     if (!projectBalanceLink) {
       push("Create a balance link first", "danger");
       return;
@@ -666,7 +702,9 @@ export function ProjectWorkflowPanel({
     setBusy("balance");
     const res = await fetch("/api/payments/links", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withIdempotencyHeaders(newIdempotencyKey(), {
+        "Content-Type": "application/json",
+      }),
       body: JSON.stringify({
         action: "email",
         id: projectBalanceLink.id,
@@ -737,7 +775,7 @@ export function ProjectWorkflowPanel({
       !sessionUnlocked &&
       (stepId === "prep" || stepId === "delivery")
     ) {
-      return "After deposit";
+      return "After payment";
     }
     if (state === "done") return "Done";
     if (isCurrent) return "Current";
@@ -751,14 +789,12 @@ export function ProjectWorkflowPanel({
   }
 
   return (
-    <Card id="workflow" className="space-y-5 p-5 scroll-mt-24">
+    <section id="workflow" className="space-y-5 scroll-mt-24">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 className="font-display text-2xl">Workflow</h2>
           <p className="mt-1 text-sm text-muted">
-            Book the job, then run the session ·{" "}
-            {PROJECT_PATH_STEPS.find((s) => s.id === current)?.label ||
-              "Inquiry"}
+            Quote to delivery · {workflowStepLabel(current)}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {nextStep ? (
@@ -806,17 +842,56 @@ export function ProjectWorkflowPanel({
         ) : null}
       </div>
 
-      <ol className="space-y-3">
-        <li className="pt-1">
-          <p className="text-xs uppercase tracking-[0.14em] text-muted">Book</p>
-        </li>
+      <div className="space-y-3 md:hidden">
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-muted">
+            Step {viewIdx + 1} of {PROJECT_PATH_STEPS.length}
+          </p>
+          <p className="mt-1 font-medium text-ink">
+            {PROJECT_PATH_STEPS[viewIdx]?.label || "Workflow"}
+          </p>
+          <div className="mt-3 h-1 overflow-hidden rounded-full bg-line">
+            <div
+              className="h-full bg-ink transition-all"
+              style={{
+                width: `${((progressIdx + 1) / PROJECT_PATH_STEPS.length) * 100}%`,
+              }}
+            />
+          </div>
+        </div>
+        <Field>
+          <Label htmlFor="workflow-step-jump" className="sr-only">
+            Jump to step
+          </Label>
+          <Select
+            id="workflow-step-jump"
+            value={viewStep}
+            onChange={(e) =>
+              setViewStep(e.target.value as ProjectWorkflowStep)
+            }
+            aria-label="Jump to workflow step"
+          >
+            {PROJECT_PATH_STEPS.map((s, i) => (
+              <option key={s.id} value={s.id}>
+                {i + 1}. {s.label}
+                {s.id === current ? " · Current" : ""}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+
+      <ol className="divide-y divide-line border-y border-line">
         {BOOK_STEPS.map((step, idx) => {
           const state = statusByStep[step.id];
           const isCurrent = step.id === current;
+          const mobileShow = viewStep === step.id;
           return (
             <li
               key={step.id}
-              className="border border-line bg-canvas p-4 sm:flex sm:items-start sm:justify-between sm:gap-4"
+              className={`py-4 sm:flex sm:items-start sm:justify-between sm:gap-4${
+                mobileShow ? "" : " max-md:hidden"
+              }`}
             >
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -898,34 +973,42 @@ export function ProjectWorkflowPanel({
                         </Select>
                       </Field>
                     ) : null}
-                    <Button
-                      className="min-h-11"
-                      pending={busy === "questionnaire"}
-                      pendingLabel="Sending…"
-                      onClick={() => void sendQuestionnaire()}
-                    >
-                      {qSent ? "Send again" : "Send questionnaire"}
-                    </Button>
-                    {qDone && latestSubmitted ? (
-                      <Button
-                        type="button"
-                        tone="neutral"
-                        className="min-h-11"
-                        onClick={() => setShowAnswers((v) => !v)}
-                      >
-                        {showAnswers ? "Hide answers" : "View answers"}
-                      </Button>
-                    ) : null}
-                    {questionnaires[0] ? (
-                      <a
-                        className="text-sm text-accent"
-                        href={`/q/${questionnaires[0].token}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Client link
-                      </a>
-                    ) : null}
+                    <ActionStack
+                      primaryId="send"
+                      actions={[
+                        {
+                          id: "send",
+                          label: qSent ? "Send again" : "Send questionnaire",
+                          tone: "accent",
+                          pending: busy === "questionnaire",
+                          pendingLabel: "Sending…",
+                          onClick: () => void sendQuestionnaire(),
+                        },
+                        ...(qDone && latestSubmitted
+                          ? [
+                              {
+                                id: "answers",
+                                label: showAnswers
+                                  ? "Hide answers"
+                                  : "View answers",
+                                tone: "neutral" as const,
+                                onClick: () => setShowAnswers((v) => !v),
+                              },
+                            ]
+                          : []),
+                        ...(questionnaires[0]
+                          ? [
+                              {
+                                id: "questionnaire-link",
+                                label: "Questionnaire link",
+                                href: `/q/${questionnaires[0].token}`,
+                                external: true,
+                                tone: "ghost" as const,
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
                   </>
                 ) : null}
 
@@ -963,71 +1046,76 @@ export function ProjectWorkflowPanel({
                         )}
                       </Select>
                     </Field>
-                    <Button
-                      className="min-h-11"
-                      pending={busy === "pricing"}
-                      pendingLabel="Working…"
-                      disabled={!packageId || !activeSessionId}
-                      onClick={() => void createQuote()}
-                    >
-                      {proposal ? "Replace quote" : "Create quote"}
-                    </Button>
-                    {proposal ? (
-                      <>
-                        <Button
-                          tone="neutral"
-                          className="min-h-11"
-                          onClick={() => void copyQuoteLink()}
-                        >
-                          Copy link
-                        </Button>
-                        <Button
-                          tone="neutral"
-                          className="min-h-11"
-                          pending={busy === "pricing"}
-                          onClick={() => void emailQuote()}
-                        >
-                          Email quote
-                        </Button>
-                        {proposal.status !== "accepted" ? (
-                          <Button
-                            tone="ghost"
-                            className="min-h-11"
-                            pending={busy === "pricing"}
-                            onClick={() => void markQuoteAccepted()}
-                          >
-                            Mark accepted
-                          </Button>
-                        ) : (
-                          <Button
-                            tone="neutral"
-                            className="min-h-11"
-                            onClick={() => {
-                              document
-                                .getElementById("workflow")
-                                ?.scrollIntoView({
-                                  behavior: "smooth",
-                                  block: "start",
-                                });
-                            }}
-                          >
-                            Continue with Contract
-                          </Button>
-                        )}
-                        <a
-                          className="text-sm text-accent"
-                          href={`/p/${proposal.token}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Preview
-                        </a>
-                      </>
-                    ) : (
-                      <Link href="/admin/prep" className="text-sm text-accent">
-                        Manage packages
-                      </Link>
-                    )}
+                    <ActionStack
+                      primaryId="quote"
+                      actions={[
+                        {
+                          id: "quote",
+                          label: proposal ? "Replace quote" : "Create quote",
+                          tone: "accent",
+                          pending: busy === "pricing",
+                          pendingLabel: "Working…",
+                          disabled: !packageId || !activeSessionId,
+                          onClick: () => void createQuote(),
+                        },
+                        ...(proposal
+                          ? [
+                              {
+                                id: "copy",
+                                label: "Copy link",
+                                tone: "neutral" as const,
+                                onClick: () => void copyQuoteLink(),
+                              },
+                              {
+                                id: "email",
+                                label: "Email quote",
+                                tone: "neutral" as const,
+                                pending: busy === "pricing",
+                                onClick: () => void emailQuote(),
+                              },
+                              ...(proposal.status !== "accepted"
+                                ? [
+                                    {
+                                      id: "accept",
+                                      label: "Mark accepted",
+                                      tone: "ghost" as const,
+                                      pending: busy === "pricing",
+                                      onClick: () => void markQuoteAccepted(),
+                                    },
+                                  ]
+                                : [
+                                    {
+                                      id: "continue-contract",
+                                      label: `Continue — ${workflowStepLabel("contract")}`,
+                                      tone: "neutral" as const,
+                                      onClick: () => {
+                                        document
+                                          .getElementById("workflow")
+                                          ?.scrollIntoView({
+                                            behavior: "smooth",
+                                            block: "start",
+                                          });
+                                      },
+                                    },
+                                  ]),
+                              {
+                                id: "preview",
+                                label: "Preview",
+                                href: `/p/${proposal.token}`,
+                                external: true,
+                                tone: "ghost" as const,
+                              },
+                            ]
+                          : [
+                              {
+                                id: "packages",
+                                label: "Manage packages",
+                                href: "/admin/prep",
+                                tone: "ghost" as const,
+                              },
+                            ]),
+                      ]}
+                    />
                   </>
                 ) : null}
 
@@ -1050,23 +1138,31 @@ export function ProjectWorkflowPanel({
                         </Select>
                       </Field>
                     ) : null}
-                    <Button
-                      className="min-h-11"
-                      pending={busy === "contract"}
-                      pendingLabel="Sending…"
-                      onClick={() => void sendContract()}
-                    >
-                      {contractSent ? "Send again" : "Send agreement"}
-                    </Button>
-                    {contracts[0] ? (
-                      <Button
-                        tone="neutral"
-                        className="min-h-11"
-                        onClick={() => void copyContractLink()}
-                      >
-                        Copy sign link
-                      </Button>
-                    ) : null}
+                    <ActionStack
+                      primaryId="send"
+                      actions={[
+                        {
+                          id: "send",
+                          label: contractSent
+                            ? "Send again"
+                            : "Send agreement",
+                          tone: "accent",
+                          pending: busy === "contract",
+                          pendingLabel: "Sending…",
+                          onClick: () => void sendContract(),
+                        },
+                        ...(contracts[0]
+                          ? [
+                              {
+                                id: "copy",
+                                label: "Copy sign link",
+                                tone: "neutral" as const,
+                                onClick: () => void copyContractLink(),
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
                   </>
                 ) : null}
 
@@ -1088,49 +1184,61 @@ export function ProjectWorkflowPanel({
                         />
                       </Field>
                     ) : null}
-                    <Button
-                      className="min-h-11"
-                      pending={busy === "deposit"}
-                      pendingLabel="Creating…"
-                      disabled={depositPaid}
-                      onClick={() => void createDeposit()}
-                    >
-                      {depositPaid ? "Paid" : "Create deposit"}
-                    </Button>
-                    {projectDepositLink || invoices.length > 0 ? (
-                      <>
-                        <Button
-                          tone="neutral"
-                          className="min-h-11"
-                          onClick={() => void copyDepositLink()}
-                        >
-                          Copy pay link
-                        </Button>
-                        {!depositPaid && projectDepositLink ? (
-                          <Button
-                            tone="neutral"
-                            className="min-h-11"
-                            pending={busy === "deposit"}
-                            pendingLabel="Sending…"
-                            onClick={() => void emailDepositLink()}
-                          >
-                            Email pay link
-                          </Button>
-                        ) : null}
-                        <Link href="/admin/payments">
-                          <Button tone="ghost" className="min-h-11">
-                            View in Payments
-                          </Button>
-                        </Link>
-                      </>
-                    ) : null}
-                    {depositPaid && prepHref ? (
-                      <Link href={prepHref}>
-                        <Button className="min-h-11 w-full">
-                          Continue to prep
-                        </Button>
-                      </Link>
-                    ) : null}
+                    <ActionStack
+                      primaryId={
+                        depositPaid && prepHref ? "continue-prep" : "deposit"
+                      }
+                      actions={[
+                        ...(depositPaid && prepHref
+                          ? [
+                              {
+                                id: "continue-prep",
+                                label: "Continue to prep",
+                                href: prepHref,
+                                tone: "accent" as const,
+                              },
+                            ]
+                          : [
+                              {
+                                id: "deposit",
+                                label: depositPaid ? "Paid" : "Create deposit",
+                                tone: "accent" as const,
+                                pending: busy === "deposit",
+                                pendingLabel: "Creating…",
+                                disabled: depositPaid,
+                                onClick: () => void createDeposit(),
+                              },
+                            ]),
+                        ...(projectDepositLink || invoices.length > 0
+                          ? [
+                              {
+                                id: "copy",
+                                label: "Copy pay link",
+                                tone: "neutral" as const,
+                                onClick: () => void copyDepositLink(),
+                              },
+                              ...(!depositPaid && projectDepositLink
+                                ? [
+                                    {
+                                      id: "email",
+                                      label: "Email pay link",
+                                      tone: "neutral" as const,
+                                      pending: busy === "deposit",
+                                      pendingLabel: "Sending…",
+                                      onClick: () => void emailDepositLink(),
+                                    },
+                                  ]
+                                : []),
+                              {
+                                id: "payments",
+                                label: "View in Payments",
+                                href: "/admin/payments",
+                                tone: "ghost" as const,
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
                   </>
                 ) : null}
                 {!isCurrent &&
@@ -1162,26 +1270,26 @@ export function ProjectWorkflowPanel({
           );
         })}
 
-        <li className="border border-dashed border-line bg-surface px-4 py-3">
+        <li
+          className={`py-4${showHandoffCard ? "" : " max-md:hidden"}`}
+        >
           <p className="text-sm text-ink">{HANDOFF_COPY}</p>
           <p className="mt-1 text-sm text-muted">
-            Session tools unlock when the deposit is paid.
+            Plan and deliver unlock when payment clears.
           </p>
         </li>
 
-        <li className="pt-1">
-          <p className="text-xs uppercase tracking-[0.14em] text-muted">
-            Session
-          </p>
-        </li>
         {SESSION_STEPS.map((step, idx) => {
           const state = statusByStep[step.id];
           const isCurrent = step.id === current;
           const pathIdx = BOOK_STEPS.length + idx;
+          const mobileShow = viewStep === step.id;
           return (
             <li
               key={step.id}
-              className="border border-line bg-canvas p-4 sm:flex sm:items-start sm:justify-between sm:gap-4"
+              className={`py-4 sm:flex sm:items-start sm:justify-between sm:gap-4${
+                mobileShow ? "" : " max-md:hidden"
+              }`}
             >
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1197,7 +1305,7 @@ export function ProjectWorkflowPanel({
                   <p className="text-sm text-muted">{HANDOFF_COPY}.</p>
                 ) : step.id === "prep" ? (
                   <p className="text-sm text-muted">
-                    Continues as prep → shoot day → delivery → wrap
+                    Continues: plan → shoot day → deliver → wrap
                   </p>
                 ) : null}
               </div>
@@ -1222,7 +1330,9 @@ export function ProjectWorkflowPanel({
                     ) : null}
                     {prepHref ? (
                       <Link href={prepHref}>
-                        <Button className="min-h-11 w-full">Open prep</Button>
+                        <Button className="min-h-11 w-full">
+                          Open plan
+                        </Button>
                       </Link>
                     ) : (
                       <p className="text-sm text-muted">Add a session first</p>
@@ -1247,33 +1357,41 @@ export function ProjectWorkflowPanel({
                         </Select>
                       </Field>
                     ) : null}
-                    {deliveryHref ? (
-                      <Link href={deliveryHref}>
-                        <Button className="min-h-11 w-full">
-                          Open delivery
-                        </Button>
-                      </Link>
-                    ) : null}
-                    {!toolSession?.galleryToken ? (
-                      <Button
-                        className="min-h-11"
-                        tone="neutral"
-                        pending={busy === "delivery"}
-                        disabled={!toolSession && !primarySession}
-                        onClick={() => void createGallery()}
-                      >
-                        Create gallery
-                      </Button>
-                    ) : (
-                      <a
-                        className="text-sm text-accent"
-                        href={`/g/${toolSession.galleryToken}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open gallery
-                      </a>
-                    )}
+                    <ActionStack
+                      primaryId={deliveryHref ? "open" : "create-gallery"}
+                      actions={[
+                        ...(deliveryHref
+                          ? [
+                              {
+                                id: "open",
+                                label: "Open delivery",
+                                href: deliveryHref,
+                                tone: "accent" as const,
+                              },
+                            ]
+                          : []),
+                        ...(!toolSession?.galleryToken
+                          ? [
+                              {
+                                id: "create-gallery",
+                                label: "Create gallery",
+                                tone: "neutral" as const,
+                                pending: busy === "delivery",
+                                disabled: !toolSession && !primarySession,
+                                onClick: () => void createGallery(),
+                              },
+                            ]
+                          : [
+                              {
+                                id: "gallery",
+                                label: "Open gallery",
+                                href: `/g/${toolSession.galleryToken}`,
+                                external: true,
+                                tone: "ghost" as const,
+                              },
+                            ]),
+                      ]}
+                    />
                     <div className="border-t border-line pt-3">
                       <p className="mb-2 text-sm text-muted">
                         {balancePaid
@@ -1305,41 +1423,46 @@ export function ProjectWorkflowPanel({
                           />
                         </Field>
                       ) : null}
-                      <Button
-                        className="min-h-11 w-full"
-                        pending={busy === "balance"}
-                        pendingLabel="Creating…"
-                        disabled={balancePaid}
-                        onClick={() => void createBalance()}
-                      >
-                        {balancePaid
-                          ? "Paid"
-                          : projectBalanceLink
-                            ? "Create again"
-                            : "Create balance link"}
-                      </Button>
-                      {projectBalanceLink ? (
-                        <>
-                          <Button
-                            tone="neutral"
-                            className="mt-2 min-h-11 w-full"
-                            onClick={() => void copyBalanceLink()}
-                          >
-                            Copy balance link
-                          </Button>
-                          {!balancePaid ? (
-                            <Button
-                              tone="neutral"
-                              className="mt-2 min-h-11 w-full"
-                              pending={busy === "balance"}
-                              pendingLabel="Sending…"
-                              onClick={() => void emailBalanceLink()}
-                            >
-                              Email balance link
-                            </Button>
-                          ) : null}
-                        </>
-                      ) : null}
+                      <ActionStack
+                        primaryId="balance"
+                        actions={[
+                          {
+                            id: "balance",
+                            label: balancePaid
+                              ? "Paid"
+                              : projectBalanceLink
+                                ? "Create again"
+                                : "Create balance link",
+                            tone: "accent",
+                            pending: busy === "balance",
+                            pendingLabel: "Creating…",
+                            disabled: balancePaid,
+                            onClick: () => void createBalance(),
+                          },
+                          ...(projectBalanceLink
+                            ? [
+                                {
+                                  id: "copy-balance",
+                                  label: "Copy balance link",
+                                  tone: "neutral" as const,
+                                  onClick: () => void copyBalanceLink(),
+                                },
+                                ...(!balancePaid
+                                  ? [
+                                      {
+                                        id: "email-balance",
+                                        label: "Email balance link",
+                                        tone: "neutral" as const,
+                                        pending: busy === "balance",
+                                        pendingLabel: "Sending…",
+                                        onClick: () => void emailBalanceLink(),
+                                      },
+                                    ]
+                                  : []),
+                              ]
+                            : []),
+                        ]}
+                      />
                     </div>
                   </>
                 ) : null}
@@ -1372,6 +1495,6 @@ export function ProjectWorkflowPanel({
           );
         })}
       </ol>
-    </Card>
+    </section>
   );
 }

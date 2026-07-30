@@ -1,5 +1,10 @@
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
+/** Client IP from proxy headers (AURA-270). */
+export function clientIp(req: Request): string {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+}
+
 /** Simple in-memory rate limiter (per-process). */
 export function rateLimit(
   key: string,

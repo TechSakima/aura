@@ -1,70 +1,172 @@
 import { requireAdmin } from "@/lib/auth";
 import {
+  parseAdminListPage,
+  slicePage,
+} from "@/lib/admin-list-page";
+import {
   clampBufferMinutes,
   studioBookingDefaults,
 } from "@/lib/booking-defaults";
-import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  getStudioDoc,
+  listBookingRequestsForStudio,
+  listProjectsForStudio,
+  listQuestionnaireTemplatesForStudio,
+  listSessionsForStudio,
+  listSessionTypesForStudio,
+  updateStudioDb,
+} from "@/lib/db/store";
 import { studioGoogleCalendarReady } from "@/lib/google-calendar";
 import { toDurationMinutes } from "@/lib/session-duration";
 import type { SessionDurationUnit, SessionType } from "@/lib/types";
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 
-export async function GET() {
+/**
+ * Bookings list + session-type CRUD.
+ * AURA-268: scoped collection reads; paginated request history; calendar view skips requests.
+ */
+export async function GET(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = await readStudioDb(admin.studioId);
-  const sessionTypeById = new Map(db.sessionTypes.map((t) => [t.id, t]));
-  const projectById = new Map(db.projects.map((p) => [p.id, p]));
 
-  const bookingRequests = db.bookingRequests.map((r) => {
-    const project = r.projectId ? projectById.get(r.projectId) : undefined;
-    const sessionType = sessionTypeById.get(r.sessionTypeId);
-    return {
-      ...r,
-      sessionTypeName: sessionType?.name || "Session",
-      projectName: project?.name || r.name,
-      projectStage: project?.stage || "inquiry",
-      projectHref: r.projectId ? `/admin/projects/${r.projectId}` : undefined,
-      sessionHref: r.sessionId
-        ? `/admin/shoots/${r.sessionId}/helper`
-        : undefined,
-    };
-  });
+  const url = new URL(req.url);
+  const view = url.searchParams.get("view") || "all";
 
-  const hiddenSessionIds = new Set(
-    db.bookingRequests
-      .filter((r) => r.status === "declined" || r.status === "canceled")
-      .map((r) => r.sessionId)
-      .filter((id): id is string => Boolean(id)),
-  );
-  const canceledProjectIds = new Set(
-    db.projects.filter((p) => p.stage === "canceled").map((p) => p.id),
-  );
+  // Cheap shell badge poll (AURA-066) — no studio graph.
+  if (view === "badges") {
+    const bookingRequests = await listBookingRequestsForStudio(admin.studioId);
+    const pendingCount = bookingRequests.filter(
+      (r) => r.status === "pending",
+    ).length;
+    return NextResponse.json({ pendingCount });
+  }
 
-  const sessions = db.sessions
-    .filter((s) => {
-      if (s.status === "archived") return false;
-      if (canceledProjectIds.has(s.projectId)) return false;
-      if (hiddenSessionIds.has(s.id)) return false;
-      return true;
-    })
-    .map((s) => {
-      const project = projectById.get(s.projectId);
-      return {
-        ...s,
-        projectName: project?.name,
-        projectHref: `/admin/projects/${s.projectId}`,
-      };
+  const studio = await getStudioDoc(admin.studioId);
+  if (!studio) {
+    return NextResponse.json({ error: "Studio not found" }, { status: 404 });
+  }
+
+  const gcalConnected = studioGoogleCalendarReady(studio);
+  const homepageSlug = studio.homepage?.slug;
+
+  if (view === "calendar") {
+    const [projects, sessions, bookingRequests] = await Promise.all([
+      listProjectsForStudio(admin.studioId),
+      listSessionsForStudio(admin.studioId),
+      listBookingRequestsForStudio(admin.studioId),
+    ]);
+    const projectById = new Map(projects.map((p) => [p.id, p]));
+    const hiddenSessionIds = new Set(
+      bookingRequests
+        .filter((r) => r.status === "declined" || r.status === "canceled")
+        .map((r) => r.sessionId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const canceledProjectIds = new Set(
+      projects.filter((p) => p.stage === "canceled").map((p) => p.id),
+    );
+    const calendarSessions = sessions
+      .filter((s) => {
+        if (s.status === "archived") return false;
+        if (canceledProjectIds.has(s.projectId)) return false;
+        if (hiddenSessionIds.has(s.id)) return false;
+        return true;
+      })
+      .map((s) => {
+        const project = projectById.get(s.projectId);
+        return {
+          ...s,
+          projectName: project?.name,
+          projectHref: `/admin/projects/${s.projectId}#workflow`,
+        };
+      });
+
+    return NextResponse.json({
+      sessions: calendarSessions,
+      bookingRequests: [],
+      sessionTypes: [],
+      homepageSlug,
+      gcalConnected,
+      questionnaireTemplates: [],
     });
+  }
+
+  const [projects, sessionTypes, bookingRequests, qTemplates] =
+    await Promise.all([
+      listProjectsForStudio(admin.studioId),
+      listSessionTypesForStudio(admin.studioId),
+      listBookingRequestsForStudio(admin.studioId),
+      listQuestionnaireTemplatesForStudio(admin.studioId),
+    ]);
+  const projectById = new Map(projects.map((p) => [p.id, p]));
+  const sessionTypeById = new Map(sessionTypes.map((t) => [t.id, t]));
+
+  const enriched = bookingRequests
+    .map((r) => {
+      const project = r.projectId ? projectById.get(r.projectId) : undefined;
+      const sessionType = sessionTypeById.get(r.sessionTypeId);
+      return {
+        ...r,
+        sessionTypeName: sessionType?.name || "Session",
+        projectName: project?.name || r.name,
+        projectStage: project?.stage || "inquiry",
+        projectHref: r.projectId
+          ? `/admin/projects/${r.projectId}#workflow`
+          : undefined,
+        sessionHref: r.sessionId
+          ? `/admin/shoots/${r.sessionId}/helper`
+          : undefined,
+      };
+    })
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+
+  const pending = enriched.filter((r) => r.status === "pending");
+  const history = enriched.filter((r) => r.status !== "pending");
+  const { offset, limit } = parseAdminListPage(url);
+  const historyPage = slicePage(history, offset, limit);
+
+  let sessions: unknown[] = [];
+  if (view === "all") {
+    const allSessions = await listSessionsForStudio(admin.studioId);
+    const hiddenSessionIds = new Set(
+      bookingRequests
+        .filter((r) => r.status === "declined" || r.status === "canceled")
+        .map((r) => r.sessionId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const canceledProjectIds = new Set(
+      projects.filter((p) => p.stage === "canceled").map((p) => p.id),
+    );
+    sessions = allSessions
+      .filter((s) => {
+        if (s.status === "archived") return false;
+        if (canceledProjectIds.has(s.projectId)) return false;
+        if (hiddenSessionIds.has(s.id)) return false;
+        return true;
+      })
+      .map((s) => {
+        const project = projectById.get(s.projectId);
+        return {
+          ...s,
+          projectName: project?.name,
+          projectHref: `/admin/projects/${s.projectId}#workflow`,
+        };
+      });
+  }
 
   return NextResponse.json({
-    sessionTypes: db.sessionTypes,
+    sessionTypes,
     sessions,
-    bookingRequests,
-    homepageSlug: db.studio.homepage?.slug,
-    gcalConnected: studioGoogleCalendarReady(db.studio),
-    questionnaireTemplates: db.questionnaireTemplates.map((t) => ({
+    bookingRequests: [...pending, ...historyPage.items],
+    pendingCount: pending.length,
+    historyTotal: historyPage.total,
+    hasMore: historyPage.hasMore,
+    offset,
+    limit,
+    homepageSlug,
+    gcalConnected,
+    questionnaireTemplates: qTemplates.map((t) => ({
       id: t.id,
       name: t.name,
     })),
@@ -79,13 +181,18 @@ export async function POST(req: Request) {
   if (!name) {
     return NextResponse.json({ error: "Name required" }, { status: 400 });
   }
-  const db = await readStudioDb(admin.studioId);
-  const defaults = studioBookingDefaults(db.studio);
+  const studio = await getStudioDoc(admin.studioId);
+  if (!studio) {
+    return NextResponse.json({ error: "Studio not found" }, { status: 404 });
+  }
+  const defaults = studioBookingDefaults(studio);
   const now = new Date().toISOString();
   const pricingMode =
     body.pricingMode === "upfront" ? "upfront" : "after_intake";
   const depositRaw =
-    body.depositAmount !== undefined && body.depositAmount !== null && body.depositAmount !== ""
+    body.depositAmount !== undefined &&
+    body.depositAmount !== null &&
+    body.depositAmount !== ""
       ? Number(body.depositAmount)
       : undefined;
   const durationUnit: SessionDurationUnit =

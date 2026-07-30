@@ -7,13 +7,14 @@ import {
   type PublicContactSource,
 } from "@/lib/public-contact";
 
-/** Message studio from booking / quote / pay soft failures (AURA-309). */
+/** Message studio from booking / quote / pay / cancel soft failures (AURA-309 / 382). */
 export function PublicSoftFailureContact({
   studioName,
   source,
   slug,
   proposalToken,
   paymentLinkId,
+  cancelToken,
   context,
   className,
 }: {
@@ -22,6 +23,7 @@ export function PublicSoftFailureContact({
   slug?: string;
   proposalToken?: string;
   paymentLinkId?: string;
+  cancelToken?: string;
   context?: string;
   className?: string;
 }) {
@@ -39,6 +41,7 @@ export function PublicSoftFailureContact({
             slug,
             proposalToken,
             paymentLinkId,
+            cancelToken,
             context: values.context || context,
           });
         }}

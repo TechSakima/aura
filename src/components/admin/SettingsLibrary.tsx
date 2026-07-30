@@ -15,6 +15,7 @@ import {
   Select,
   useToast,
 } from "@/components/ui";
+import { mutateJson } from "@/lib/client/mutation";
 import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 import type { ContractTemplate } from "@/lib/types";
 
@@ -31,28 +32,28 @@ const LIBRARY_ITEMS: LibraryItem[] = [
     id: "contracts",
     label: "Contracts",
     detail: "Templates and cancel policy",
-    href: "/admin/documents#contract-templates",
+    href: "/admin/documents?tab=templates",
     count: null,
   },
   {
     id: "questionnaires",
     label: "Questionnaires",
     detail: "Intake templates",
-    href: "/admin/documents#questionnaires",
+    href: "/admin/documents?tab=templates",
     count: null,
   },
   {
     id: "packages",
     label: "Quote packages",
     detail: "Pricing packages for quotes",
-    href: "/admin/packages",
+    href: "/admin/prep?tab=packages",
     count: null,
   },
   {
     id: "shot-lists",
     label: "Shot lists",
     detail: "Session shot list templates",
-    href: "/admin/shot-lists",
+    href: "/admin/prep?tab=shots",
     count: null,
   },
   {
@@ -160,23 +161,30 @@ export function SettingsLibrary() {
   async function saveLegal(e?: FormEvent) {
     e?.preventDefault();
     setSaving(true);
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "library",
-        legalDefaults: {
-          defaultContractTemplateId: defaultContractTemplateId || null,
+    try {
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "library",
+            legalDefaults: {
+              defaultContractTemplateId: defaultContractTemplateId || null,
+            },
+          }),
         },
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setDirty(false);
+      push("Legal defaults saved", "success");
+    } finally {
+      setSaving(false);
     }
-    setDirty(false);
-    push("Legal defaults saved", "success");
   }
 
   if (loading) {
@@ -190,7 +198,7 @@ export function SettingsLibrary() {
       <Panel variant="static" className="min-w-0 p-5">
         <h2 className="font-display text-2xl">Library</h2>
         <p className="mt-1 text-sm text-muted">
-          Templates and presets. Send from Documents or a project.
+          Templates and presets. Send from a project.
         </p>
         <List className="mt-4 border-x-0">
           {items.map((item) => (
@@ -224,7 +232,7 @@ export function SettingsLibrary() {
           <div className="mt-6 space-y-3">
             <p className="text-sm text-muted">No contract templates yet.</p>
             <ButtonLink
-              href="/admin/documents#contract-templates"
+              href="/admin/documents?tab=templates"
               tone="accent"
               className="w-full sm:w-auto"
             >
@@ -278,14 +286,14 @@ export function SettingsLibrary() {
                 Save legal
               </Button>
               <ButtonLink
-                href="/admin/documents#contract-templates"
+                href="/admin/documents?tab=templates"
                 tone="ghost"
                 className="w-full sm:w-auto"
               >
                 Edit templates
               </ButtonLink>
               <ButtonLink
-                href="/admin/packages"
+                href="/admin/prep?tab=packages"
                 tone="ghost"
                 className="w-full sm:w-auto"
               >

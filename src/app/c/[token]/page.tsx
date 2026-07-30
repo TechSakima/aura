@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
+import { InstallHint } from "@/components/pwa/InstallHint";
 import { PublicShell } from "@/components/shells/PublicShell";
 import { Button, Checkbox, Field, Input, Label } from "@/components/ui";
 
@@ -81,6 +82,13 @@ export default function SignContractPage() {
 
   return (
     <PublicShell>
+      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(4.75rem+env(safe-area-inset-bottom))] roomy:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-md">
+          <InstallHint
+            storageKey={`aura-install-dismiss-c-${params.token}`}
+          />
+        </div>
+      </div>
       <div className="mx-auto max-w-2xl">
         {studioName ? (
           <p className="text-sm tracking-wide text-muted uppercase">
@@ -107,14 +115,15 @@ export default function SignContractPage() {
         ) : (
           <>
             {/* Sticky bottom sign CTA on small screens (AURA-044) */}
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden">
-              <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
-                <p className="truncate text-sm text-muted">
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/95 py-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur roomy:hidden">
+              <div className="mx-auto flex max-w-2xl min-w-0 items-center justify-between gap-3">
+                <p className="min-w-0 truncate text-sm text-muted">
                   {acknowledged ? "Ready to sign" : "Read & agree below"}
                 </p>
                 <Button
                   type="button"
                   size="sm"
+                  className="shrink-0"
                   disabled={busy || !acknowledged}
                   onClick={() =>
                     document
@@ -129,7 +138,7 @@ export default function SignContractPage() {
           <form
             id="sign-contract-form"
             onSubmit={onSubmit}
-            className="mt-10 space-y-5 border-t border-line pt-8 pb-24 sm:pb-0"
+            className="mt-10 space-y-5 border-t border-line pt-8 pb-24 roomy:pb-0"
           >
             <Field>
               <Label htmlFor="signed-date">Date</Label>

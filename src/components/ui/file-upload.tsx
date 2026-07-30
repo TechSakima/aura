@@ -4,6 +4,10 @@ import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
+import { uploadErrorMessage } from "@/lib/client/mutation";
+
+/** Parallel file uploads within browser connection budget (AURA-267). */
+export const FILE_UPLOAD_CONCURRENCY = 3;
 
 export type UploadItemStatus = "queued" | "uploading" | "done" | "error";
 
@@ -12,6 +16,12 @@ export type UploadItem = {
   name: string;
   status: UploadItemStatus;
   error?: string;
+  /** 0–100 while uploading (bytes transferred). */
+  progress?: number;
+};
+
+export type UploadFileContext = {
+  onProgress: (percent: number) => void;
 };
 
 export function FileUploadButton({
@@ -68,6 +78,12 @@ export function FileUploadButton({
   );
 }
 
+function uploadingLabel(item: UploadItem): string {
+  if (item.progress != null && item.progress >= 100) return "Finishing…";
+  if (item.progress != null && item.progress > 0) return `${item.progress}%`;
+  return "Uploading…";
+}
+
 export function UploadStatusDialog({
   open,
   onClose,
@@ -83,6 +99,7 @@ export function UploadStatusDialog({
 }) {
   const done = items.filter((i) => i.status === "done").length;
   const failed = items.filter((i) => i.status === "error").length;
+  const uploading = items.filter((i) => i.status === "uploading").length;
   const total = items.length;
   const pct = total ? Math.round(((done + failed) / total) * 100) : 0;
 
@@ -99,7 +116,9 @@ export function UploadStatusDialog({
           <div className="mb-1 flex justify-between text-sm text-muted">
             <span>
               {busy
-                ? `Uploading ${done + failed + (items.some((i) => i.status === "uploading") ? 1 : 0)} of ${total}`
+                ? `${done + failed} of ${total}${
+                    uploading ? ` · ${uploading} active` : ""
+                  }`
                 : failed
                   ? `${done} uploaded · ${failed} failed`
                   : `${done} of ${total} uploaded`}
@@ -135,7 +154,7 @@ export function UploadStatusDialog({
                 )}
               >
                 {item.status === "queued" && "Waiting"}
-                {item.status === "uploading" && "Uploading…"}
+                {item.status === "uploading" && uploadingLabel(item)}
                 {item.status === "done" && "Done"}
                 {item.status === "error" && (item.error || "Failed")}
               </span>
@@ -153,6 +172,22 @@ export function UploadStatusDialog({
   );
 }
 
+async function runPool<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  async function run() {
+    while (next < items.length) {
+      const index = next++;
+      await worker(items[index]!, index);
+    }
+  }
+  const n = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(Array.from({ length: n }, () => run()));
+}
+
 export function useUploadSession() {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("Uploading");
@@ -168,7 +203,8 @@ export function useUploadSession() {
     async (opts: {
       title?: string;
       files: File[];
-      uploadFile: (file: File) => Promise<void>;
+      concurrency?: number;
+      uploadFile: (file: File, ctx: UploadFileContext) => Promise<void>;
     }) => {
       if (!opts.files.length) return;
       const queued: UploadItem[] = opts.files.map((file, i) => ({
@@ -181,33 +217,48 @@ export function useUploadSession() {
       setOpen(true);
       setBusy(true);
 
-      for (let i = 0; i < opts.files.length; i++) {
-        const file = opts.files[i];
-        const id = queued[i].id;
+      const concurrency = opts.concurrency ?? FILE_UPLOAD_CONCURRENCY;
+
+      await runPool(opts.files, concurrency, async (file, i) => {
+        const id = queued[i]!.id;
         setItems((prev) =>
           prev.map((item) =>
-            item.id === id ? { ...item, status: "uploading" } : item,
+            item.id === id
+              ? { ...item, status: "uploading", progress: 0 }
+              : item,
           ),
         );
         try {
-          await opts.uploadFile(file);
-          setItems((prev) =>
-            prev.map((item) =>
-              item.id === id ? { ...item, status: "done" } : item,
-            ),
-          );
-        } catch (err) {
-          const message =
-            err instanceof Error ? err.message : "Upload failed";
+          await opts.uploadFile(file, {
+            onProgress: (percent) => {
+              const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+              setItems((prev) =>
+                prev.map((item) =>
+                  item.id === id && item.status === "uploading"
+                    ? { ...item, progress: clamped }
+                    : item,
+                ),
+              );
+            },
+          });
           setItems((prev) =>
             prev.map((item) =>
               item.id === id
-                ? { ...item, status: "error", error: message }
+                ? { ...item, status: "done", progress: 100 }
+                : item,
+            ),
+          );
+        } catch (err) {
+          const message = uploadErrorMessage(err);
+          setItems((prev) =>
+            prev.map((item) =>
+              item.id === id
+                ? { ...item, status: "error", error: message, progress: undefined }
                 : item,
             ),
           );
         }
-      }
+      });
 
       setBusy(false);
     },

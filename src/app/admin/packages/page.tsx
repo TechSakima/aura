@@ -1,5 +1,6 @@
-import { PackagesPanel } from "@/components/admin/PackagesPanel";
+import { redirect } from "next/navigation";
 
+/** Legacy URL — quote packages live under Library (AURA-062 / AURA-065). */
 export default function PackagesPage() {
-  return <PackagesPanel />;
+  redirect("/admin/prep?tab=packages");
 }

@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { DeviceFramePreview } from "@/components/admin/DeviceFramePreview";
 import {
   Button,
   ButtonLink,
@@ -223,13 +224,12 @@ function DevicePreview({
   const layout = effectiveCoverLayout(cover);
 
   return (
-    <div className="mx-auto w-full max-w-[375px]">
-      <p className="mb-2 text-center text-xs uppercase tracking-wider text-muted">
-        Preview
-      </p>
+    <DeviceFramePreview
+      label="Gallery"
+      frameStyle={themeStyle}
+      frameClassName="bg-canvas"
+    >
       <div
-        className="overflow-hidden rounded-device border-[6px] border-ink shadow-lg"
-        style={themeStyle}
         data-gallery-motion={design.motion}
         data-gallery-density={design.density}
       >
@@ -411,7 +411,7 @@ function DevicePreview({
           </div>
         ) : null}
       </div>
-    </div>
+    </DeviceFramePreview>
   );
 }
 
@@ -420,12 +420,15 @@ export function GalleryDesignPanel({
   coverPhotoUrl,
   studioTheme,
   onSave,
+  /** Inside Delivery Layout — drop duplicate title. */
+  embedded = false,
 }: {
   design?: GalleryDesign | null;
   coverPhotoUrl?: string;
   /** Studio brand kit theme slice for inherit preview (AURA-251). */
   studioTheme?: StudioTheme | null;
   onSave: (body: { design: GalleryDesign }) => Promise<void>;
+  embedded?: boolean;
 }) {
   const [hist, dispatch] = useReducer(histReducer, undefined, () => ({
     past: [] as GalleryDesign[],
@@ -519,13 +522,22 @@ export function GalleryDesignPanel({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-        <div>
-          <h3 className="font-display text-xl">Design</h3>
-          <p className="mt-1 text-sm text-muted">
-            Preset, then modules. Preview updates live.
-          </p>
-        </div>
+      <div
+        className={cn(
+          "flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between",
+          embedded && "sm:items-center",
+        )}
+      >
+        {embedded ? (
+          <p className="text-sm text-muted">Preview updates live.</p>
+        ) : (
+          <div>
+            <h3 className="font-display text-xl">Design</h3>
+            <p className="mt-1 text-sm text-muted">
+              Preset, then modules. Preview updates live.
+            </p>
+          </div>
+        )}
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button
             type="button"
@@ -556,10 +568,11 @@ export function GalleryDesignPanel({
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(240px,375px)] lg:items-start">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,min(100%,26rem))] lg:items-start">
         <div className="order-2 space-y-6 lg:order-1">
           <Tabs
             aria-label="Design modules"
+            variant="progress"
             tabs={[...MODULE_TABS]}
             value={moduleTab}
             onChange={(id) => setModuleTab(id as ModuleTab)}
@@ -968,7 +981,7 @@ export function GalleryDesignPanel({
           ) : null}
         </div>
 
-        <div className="order-1 lg:sticky lg:top-4 lg:order-2 lg:self-start">
+        <div className="order-1 lg:sticky lg:top-[var(--admin-sticky-top)] lg:order-2 lg:self-start">
           <DevicePreview
             design={design}
             coverPhotoUrl={coverPhotoUrl}

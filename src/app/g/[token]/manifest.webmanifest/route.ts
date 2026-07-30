@@ -5,11 +5,12 @@ import {
   resolveGalleryBrandColors,
 } from "@/lib/gallery-brand";
 import { normalizeGalleryDesign } from "@/lib/gallery-design";
+import { galleryPwaShortName } from "@/lib/gallery-pwa-manifest";
 import {
-  galleryPwaIcons,
-  galleryPwaShortName,
-} from "@/lib/gallery-pwa-manifest";
-import { resolveBrowseMediaUrl } from "@/lib/media-url-server";
+  buildWebManifest,
+  studioPwaIconMediaUrl,
+  webManifestResponse,
+} from "@/lib/studio-pwa-manifest";
 
 export async function GET(
   _req: Request,
@@ -19,9 +20,9 @@ export async function GET(
   const gallery = await findGalleryByPublicToken(token);
 
   let title = "Aura Gallery";
-  let backgroundColor = "#f7f5f2";
-  let themeColor = "#1a1a1a";
-  let iconSrc: string | undefined;
+  let backgroundColor = "#f3efe6";
+  let themeColor = "#f3efe6";
+  let hasIconSource = false;
 
   if (gallery?.studioId) {
     title = gallery.title?.trim() || title;
@@ -31,32 +32,31 @@ export async function GET(
     const colors = resolveGalleryBrandColors(design, studioTheme);
     backgroundColor = colors.backgroundColor;
     themeColor = colors.themeColor;
-
-    const rawIcon =
-      design.appIconUrl || studio?.logoUrl || gallery.coverPhotoUrl;
-    if (rawIcon) {
-      iconSrc = (await resolveBrowseMediaUrl(rawIcon)) || undefined;
-    }
+    hasIconSource = Boolean(
+      design.appIconUrl ||
+        (studio ? studioPwaIconMediaUrl(studio) : undefined) ||
+        gallery.coverPhotoUrl,
+    );
   }
 
   const shortName = galleryPwaShortName(title);
-  const manifest = {
-    id: `/g/${token}`,
-    name: title,
-    short_name: shortName,
-    description: `Photo gallery — ${title}`,
-    start_url: `/g/${token}`,
-    scope: `/g/${token}`,
-    display: "standalone",
-    background_color: backgroundColor,
-    theme_color: themeColor,
-    icons: galleryPwaIcons(iconSrc),
-  };
+  const path = `/g/${token}`;
+  const { body, headers } = webManifestResponse(
+    buildWebManifest({
+      id: path,
+      name: title,
+      shortName,
+      description: `Photo gallery — ${title}`,
+      startUrl: path,
+      scope: path,
+      backgroundColor,
+      themeColor,
+      iconQuery: hasIconSource
+        ? `token=${encodeURIComponent(token)}`
+        : null,
+      preferExistingWindow: true,
+    }),
+  );
 
-  return NextResponse.json(manifest, {
-    headers: {
-      "Content-Type": "application/manifest+json",
-      "Cache-Control": "private, max-age=0, must-revalidate",
-    },
-  });
+  return NextResponse.json(body, { headers });
 }

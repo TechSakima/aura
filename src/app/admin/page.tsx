@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { FirstProjectChecklist } from "@/components/admin/FirstProjectChecklist";
 import {
   Badge,
   Button,
@@ -13,10 +15,17 @@ import {
   Panel,
   SectionIntro,
 } from "@/components/ui";
+import {
+  ADMIN_RESUME_ONCE_KEY,
+  readAdminLastRoute,
+} from "@/lib/admin-last-route";
+import type { FirstProjectGuide } from "@/lib/first-project-guide";
+import { useDisplayModeStandalone } from "@/lib/use-display-mode-standalone";
 
 type Dash = {
   studio: { name: string; brandTagline?: string; timeZone?: string };
   counts: Record<string, number>;
+  firstProjectGuide?: FirstProjectGuide | null;
   upcomingSession: {
     id: string;
     projectId: string;
@@ -32,6 +41,7 @@ type Dash = {
     title: string;
     expiresAt: string;
     publicToken: string;
+    adminHref: string;
   }[];
   archiveFlags: { id: string; title: string; expiresAt: string; adminHref: string }[];
   recentContacts: {
@@ -42,6 +52,14 @@ type Dash = {
     context?: string;
     preview: string;
     createdAt: string;
+    projectId?: string;
+    projectHref?: string;
+  }[];
+  deliveryIssues?: {
+    kind: "email" | "calendar" | "payments";
+    title: string;
+    body: string;
+    href: string;
   }[];
 };
 
@@ -53,6 +71,8 @@ const COUNT_LABELS: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
+  const router = useRouter();
+  const standalone = useDisplayModeStandalone();
   const [data, setData] = useState<Dash | null>(null);
   const [error, setError] = useState("");
 
@@ -76,6 +96,20 @@ export default function AdminDashboard() {
   useEffect(() => {
     void load();
   }, []);
+
+  // Installed app: cold start_url is Dashboard — resume last useful route once (AURA-296).
+  useEffect(() => {
+    if (!standalone) return;
+    try {
+      if (sessionStorage.getItem(ADMIN_RESUME_ONCE_KEY)) return;
+      sessionStorage.setItem(ADMIN_RESUME_ONCE_KEY, "1");
+    } catch {
+      return;
+    }
+    const last = readAdminLastRoute();
+    if (!last || last === "/admin" || last.startsWith("/admin?")) return;
+    router.replace(last);
+  }, [standalone, router]);
 
   useEffect(() => {
     if (!data) return;
@@ -113,12 +147,37 @@ export default function AdminDashboard() {
       })
     : null;
 
+  const guide = data.firstProjectGuide;
+
   return (
     <div className="space-y-12">
-      <PageHeader
-        title="Dashboard"
-        description="Next session, quotes waiting, and galleries closing."
-      />
+      <PageHeader title="Dashboard" />
+
+      {guide ? <FirstProjectChecklist guide={guide} /> : null}
+
+      {(data.deliveryIssues || []).length > 0 ? (
+        <section className="space-y-5">
+          <SectionIntro eyebrow="Attention" title="Delivery issues" />
+          <List>
+            {(data.deliveryIssues || []).map((issue) => (
+              <ListRow key={issue.kind}>
+                <div className="min-w-0">
+                  <p className="font-medium">{issue.title}</p>
+                  <p className="mt-0.5 truncate text-sm text-muted">
+                    {issue.body}
+                  </p>
+                </div>
+                <Link
+                  href={issue.href}
+                  className="inline-flex min-h-11 shrink-0 items-center text-sm text-accent no-underline"
+                >
+                  Open
+                </Link>
+              </ListRow>
+            ))}
+          </List>
+        </section>
+      ) : null}
 
       {data.upcomingSession ? (
         <Panel as="section" className="px-6 py-8">
@@ -143,7 +202,7 @@ export default function AdminDashboard() {
             </Link>
           </div>
         </Panel>
-      ) : (
+      ) : guide ? null : (
         <Panel variant="dashed" as="section" className="px-6 py-8">
           <p className="text-sm text-muted">
             No upcoming sessions. Add a session date on a project to see it here.
@@ -177,12 +236,22 @@ export default function AdminDashboard() {
                     {m.preview ? ` — ${m.preview}` : ""}
                   </p>
                 </div>
-                <a
-                  className="shrink-0 text-sm text-accent no-underline"
-                  href={`mailto:${m.email}`}
-                >
-                  Reply
-                </a>
+                <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
+                  {m.projectHref ? (
+                    <a
+                      className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
+                      href={m.projectHref}
+                    >
+                      Project
+                    </a>
+                  ) : null}
+                  <a
+                    className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
+                    href={`mailto:${m.email}`}
+                  >
+                    Reply
+                  </a>
+                </div>
               </ListRow>
             ))}
           </List>
@@ -194,7 +263,7 @@ export default function AdminDashboard() {
           <SectionIntro
             eyebrow="Attention"
             title="Awaiting quote"
-            description="Clients who haven’t accepted yet."
+            description="Quotes waiting on acceptance."
           />
           {data.awaitingProposals.length === 0 ? (
             <EmptyState variant="inline" title="None right now." />
@@ -203,15 +272,15 @@ export default function AdminDashboard() {
               {data.awaitingProposals.map((p) => (
                 <ListRow key={p.id}>
                   <span className="font-medium">{p.title}</span>
-                  <div className="flex shrink-0 gap-3">
+                  <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
                     <a
-                      className="text-sm text-accent no-underline"
+                      className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
                       href={p.projectHref}
                     >
                       Continue workflow
                     </a>
                     <a
-                      className="text-sm text-muted no-underline hover:text-ink"
+                      className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
                       href={`/p/${p.token}`}
                       target="_blank"
                       rel="noreferrer"
@@ -243,14 +312,22 @@ export default function AdminDashboard() {
                       {new Date(g.expiresAt).toLocaleDateString()}
                     </Badge>
                   </div>
-                  <a
-                    className="text-sm text-accent"
-                    href={`/g/${g.publicToken}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open
-                  </a>
+                  <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+                    <a
+                      className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
+                      href={g.adminHref}
+                    >
+                      Open delivery
+                    </a>
+                    <a
+                      className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
+                      href={`/g/${g.publicToken}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Preview
+                    </a>
+                  </div>
                 </ListRow>
               ))}
             </List>
@@ -276,7 +353,7 @@ export default function AdminDashboard() {
                     </Badge>
                   </div>
                   <a
-                    className="text-sm text-accent no-underline"
+                    className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
                     href={g.adminHref}
                   >
                     Open delivery

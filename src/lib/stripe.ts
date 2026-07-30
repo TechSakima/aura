@@ -79,7 +79,7 @@ export function stripeErrorMessage(e: unknown): string {
     const msg = err.raw?.message || err.message;
     if (msg) return msg;
   }
-  return "Stripe request failed";
+  return "Payment request failed";
 }
 
 /**

@@ -9,7 +9,9 @@ export function Checkbox({
     <input
       type="checkbox"
       className={cn(
-        "size-5 rounded border-line accent-accent",
+        "size-5 shrink-0 rounded border-line accent-accent",
+        /* Invisible padding grows hit to ≥44px without shifting layout (AURA-375) */
+        "box-content p-3 -m-3",
         className,
       )}
       {...props}

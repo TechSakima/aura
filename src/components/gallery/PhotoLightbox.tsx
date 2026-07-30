@@ -83,8 +83,16 @@ export function PhotoLightbox({
     if (!photo) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [photo]);
+
+  useEffect(() => {
+    if (!photo) return;
 
     function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") return; // useFocusTrap owns Escape
       if (isEditableTarget(e.target)) return;
       if (e.key === "ArrowLeft" && hasPrev) {
         e.preventDefault();
@@ -108,7 +116,6 @@ export function PhotoLightbox({
     }
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", onKey);
     };
   }, [photo, hasPrev, hasNext, index, onIndexChange, photos.length]);
@@ -120,7 +127,9 @@ export function PhotoLightbox({
       ref={rootRef}
       tabIndex={-1}
       className={cn(
-        "fixed inset-0 z-50 flex flex-col bg-scrim-strong text-on-media outline-none",
+        "fixed inset-0 z-50 flex bg-scrim-strong text-on-media outline-none",
+        /* Portrait stack; short landscape → media + actions side-by-side (AURA-286) */
+        "flex-col short-vh:flex-row",
         !prefersReducedMotion && "animate-fade",
       )}
       role="dialog"
@@ -132,86 +141,98 @@ export function PhotoLightbox({
         {liveLabel}
       </p>
 
-      <header className="flex shrink-0 items-center justify-between gap-3 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 sm:px-6">
-        <p className="min-w-0 truncate text-sm text-on-media-muted" aria-hidden>
-          {counter}
-        </p>
-        <Button
-          ref={closeRef}
-          tone="onMedia"
-          size="sm"
-          className="min-h-11 min-w-11"
-          onClick={onClose}
-        >
-          Close
-        </Button>
-      </header>
-
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 sm:px-16">
-        {hasPrev ? (
-          <IconButton
-            aria-label="Previous photo"
-            className="absolute left-1 top-1/2 z-10 size-11 min-h-11 min-w-11 -translate-y-1/2 bg-on-media/10 text-on-media hover:bg-on-media/20 sm:left-4"
-            onClick={() => onIndexChange(index - 1)}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 items-center justify-between gap-3 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 sm:px-6">
+          <p className="min-w-0 truncate text-sm text-on-media-muted" aria-hidden>
+            {counter}
+          </p>
+          <Button
+            ref={closeRef}
+            tone="onMedia"
+            size="sm"
+            className="min-h-11 min-w-11"
+            onClick={onClose}
           >
-            ‹
-          </IconButton>
-        ) : null}
-        {hasNext ? (
-          <IconButton
-            aria-label="Next photo"
-            className="absolute right-1 top-1/2 z-10 size-11 min-h-11 min-w-11 -translate-y-1/2 bg-on-media/10 text-on-media hover:bg-on-media/20 sm:right-4"
-            onClick={() => onIndexChange(index + 1)}
-          >
-            ›
-          </IconButton>
+            Close
+          </Button>
+        </header>
+
+        <div className="relative flex min-h-0 flex-1 items-center justify-center px-3 short-vh:px-12 sm:px-16">
+          {hasPrev ? (
+            <IconButton
+              aria-label="Previous photo"
+              className="absolute left-[max(0.25rem,env(safe-area-inset-left))] top-1/2 z-10 size-11 min-h-11 min-w-11 -translate-y-1/2 bg-on-media/10 text-on-media hover:bg-on-media/20 sm:left-[max(1rem,env(safe-area-inset-left))]"
+              onClick={() => onIndexChange(index - 1)}
+            >
+              ‹
+            </IconButton>
+          ) : null}
+          {hasNext ? (
+            <IconButton
+              aria-label="Next photo"
+              className="absolute right-[max(0.25rem,env(safe-area-inset-right))] top-1/2 z-10 size-11 min-h-11 min-w-11 -translate-y-1/2 bg-on-media/10 text-on-media hover:bg-on-media/20 sm:right-[max(1rem,env(safe-area-inset-right))]"
+              onClick={() => onIndexChange(index + 1)}
+            >
+              ›
+            </IconButton>
+          ) : null}
+
+          {isVideo ? (
+            <video
+              key={photo.id}
+              src={photo.videoUrl || photo.url}
+              controls
+              playsInline
+              className={cn(
+                "max-h-full max-w-full",
+                !prefersReducedMotion && "animate-enter",
+              )}
+              poster={photo.thumbUrl || undefined}
+            />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              key={photo.id}
+              src={photo.url}
+              alt={fileCaption || `Photo ${index + 1} of ${photos.length}`}
+              className={cn(
+                "max-h-full max-w-full object-contain",
+                !prefersReducedMotion && "animate-enter",
+              )}
+            />
+          )}
+        </div>
+
+        {fileCaption ? (
+          <p className="shrink-0 truncate px-4 py-2 text-center text-xs text-on-media-muted short-vh:hidden sm:px-6">
+            {fileCaption}
+          </p>
         ) : null}
 
-        {isVideo ? (
-          <video
-            key={photo.id}
-            src={photo.videoUrl || photo.url}
-            controls
-            playsInline
-            className={cn(
-              "max-h-full max-w-full",
-              !prefersReducedMotion && "animate-enter",
-            )}
-            poster={photo.thumbUrl || undefined}
-          />
-        ) : (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            key={photo.id}
-            src={photo.url}
-            alt={fileCaption || `Photo ${index + 1} of ${photos.length}`}
-            className={cn(
-              "max-h-full max-w-full object-contain",
-              !prefersReducedMotion && "animate-enter",
-            )}
-          />
-        )}
+        {!footer ? (
+          <div className="pb-[env(safe-area-inset-bottom)] short-vh:hidden" />
+        ) : null}
       </div>
-
-      {fileCaption ? (
-        <p className="shrink-0 truncate px-4 py-2 text-center text-xs text-on-media-muted sm:px-6">
-          {fileCaption}
-        </p>
-      ) : null}
 
       {footer ? (
         <div
           className={cn(
-            "shrink-0 border-t border-line bg-surface text-ink",
-            "px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6",
-            "max-h-[40vh] overflow-y-auto",
+            "shrink-0 border-line bg-surface text-ink",
+            "border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6",
+            "max-h-[min(40vh,16rem)] overflow-y-auto",
+            /* Landscape: side rail instead of a crushed bottom strip */
+            "short-vh:max-h-none short-vh:h-full short-vh:w-[min(18rem,42vw)] short-vh:shrink-0 short-vh:overflow-y-auto",
+            "short-vh:border-t-0 short-vh:border-l short-vh:pt-[max(0.75rem,env(safe-area-inset-top))] short-vh:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
           )}
         >
+          {fileCaption ? (
+            <p className="mb-2 hidden truncate text-xs text-muted short-vh:block">
+              {fileCaption}
+            </p>
+          ) : null}
           {footer}
         </div>
-      ) : (
-        <div className="pb-[env(safe-area-inset-bottom)]" />
-      )}
+      ) : null}
     </div>,
     document.body,
   );

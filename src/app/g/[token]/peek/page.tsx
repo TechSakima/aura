@@ -8,9 +8,10 @@ import {
   AlbumView,
 } from "@/components/gallery/AlbumView";
 import type { MasonryPhoto } from "@/components/gallery/MasonryGrid";
+import { GalleryContactDialog } from "@/components/gallery/GalleryContactDialog";
 import { PhotoLightbox } from "@/components/gallery/PhotoLightbox";
 import { PublicShell } from "@/components/shells/PublicShell";
-import { EmptyState, useToast } from "@/components/ui";
+import { Button, EmptyState, useToast } from "@/components/ui";
 import { resolveGalleryBrandCssVars } from "@/lib/gallery-brand";
 import { normalizeGalleryDesign } from "@/lib/gallery-design";
 import type { GalleryDesign, StudioTheme } from "@/lib/types";
@@ -23,7 +24,12 @@ type GalleryPayload = {
   clientName?: string | null;
   projectName?: string | null;
   subAlbums?: { id: string; token: string; label: string; count: number }[];
-  studio: { name: string; logoUrl?: string; theme?: StudioTheme };
+  studio: {
+    name: string;
+    logoUrl?: string;
+    theme?: StudioTheme;
+    showGalleryContactForm?: boolean;
+  };
 };
 
 export default function PeekGalleryPage() {
@@ -32,6 +38,7 @@ export default function PeekGalleryPage() {
   const { push } = useToast();
   const [data, setData] = useState<GalleryPayload | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -137,6 +144,8 @@ export default function PeekGalleryPage() {
     );
   }
 
+  const showGalleryContact = Boolean(data.studio.showGalleryContactForm);
+
   return (
     <PublicShell
       bare
@@ -161,7 +170,19 @@ export default function PeekGalleryPage() {
         emptyMessage="No sneak peek photos yet."
         headerExtra={<AlbumNav items={navItems} />}
         actions={
-          <AlbumShareButton onShare={() => void shareNative()} />
+          <>
+            <AlbumShareButton onShare={() => void shareNative()} />
+            {showGalleryContact ? (
+              <Button
+                size="sm"
+                tone="ghost"
+                className="min-h-11"
+                onClick={() => setContactOpen(true)}
+              >
+                Message
+              </Button>
+            ) : null}
+          </>
         }
       />
 
@@ -171,6 +192,16 @@ export default function PeekGalleryPage() {
           index={lightboxIndex}
           onIndexChange={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
+        />
+      ) : null}
+
+      {showGalleryContact ? (
+        <GalleryContactDialog
+          open={contactOpen}
+          onClose={() => setContactOpen(false)}
+          token={token}
+          studioName={data.studio.name}
+          galleryTitle={data.gallery.title}
         />
       ) : null}
     </PublicShell>

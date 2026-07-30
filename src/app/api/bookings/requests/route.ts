@@ -173,13 +173,17 @@ export async function PATCH(req: Request) {
       startsAt,
       cancelHref,
       nextWorkflowStep: nextStep,
+      projectId,
+      sessionId: req0.sessionId,
     });
     await notifyStudio({
       studioId: admin.studioId,
       type: "booking_confirmed",
       title: "Booking accepted",
       body: `${clientName || "Guest"} · ${sessionTypeName}`,
-      href: projectId ? `/admin/projects/${projectId}` : "/admin/bookings",
+      href: projectId
+        ? `/admin/projects/${projectId}#workflow`
+        : "/admin/bookings",
       emailStudio: false,
     });
 
@@ -213,6 +217,8 @@ export async function PATCH(req: Request) {
           clientName: project.name,
           title: template.name,
           token: response.token,
+          projectId,
+          sessionId: req0.sessionId,
         });
       }
     }
@@ -251,6 +257,8 @@ export async function PATCH(req: Request) {
         sessionTypeName,
         reason: declineReason,
         requestId: id,
+        projectId,
+        sessionId: req0.sessionId,
       });
       await notifyStudio({
         studioId: admin.studioId,
@@ -266,7 +274,9 @@ export async function PATCH(req: Request) {
   return NextResponse.json({
     ok: true,
     projectId,
-    projectHref: projectId ? `/admin/projects/${projectId}` : undefined,
+    projectHref: projectId
+      ? `/admin/projects/${projectId}#workflow`
+      : undefined,
     workflowStep: status === "confirmed" ? nextStep : undefined,
     conflicts: conflicts.length ? conflicts : undefined,
     calendarPushFailed: calendarPushFailed || undefined,

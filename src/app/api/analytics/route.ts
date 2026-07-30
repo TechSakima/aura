@@ -1,9 +1,75 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import {
+  bookingsHref,
+  paymentsHref,
+  projectWorkflowHref,
+  sessionDeliveryHref,
+} from "@/lib/admin-deep-links";
 import { readStudioDb } from "@/lib/db/store";
+import type { AnalyticsEvent, AuraDatabase } from "@/lib/types";
 
 function sum(nums: number[]) {
   return nums.reduce((a, b) => a + b, 0);
+}
+
+function deliveryHref(
+  projectId?: string | null,
+  sessionId?: string | null,
+): string | undefined {
+  const p = projectId?.trim();
+  const s = sessionId?.trim();
+  if (p && s) return sessionDeliveryHref(p, s);
+  if (p) return projectWorkflowHref(p);
+  return undefined;
+}
+
+function eventHref(e: AnalyticsEvent, db: AuraDatabase): string | undefined {
+  let projectId = e.projectId;
+  let sessionId = e.sessionId || e.shootId;
+
+  if (e.galleryId) {
+    const g = db.galleries.find((x) => x.id === e.galleryId);
+    if (g) {
+      projectId = projectId || g.projectId;
+      sessionId = sessionId || g.sessionId || g.shootId;
+    }
+  }
+
+  switch (e.type) {
+    case "booking_submitted":
+      return bookingsHref();
+    case "proposal_view":
+    case "proposal_accept":
+    case "contract_signed":
+      return projectId ? projectWorkflowHref(projectId) : undefined;
+    case "payment_received":
+    case "payment_reversed":
+      return projectId ? projectWorkflowHref(projectId) : paymentsHref();
+    case "gallery_view":
+    case "photo_view":
+    case "download_single":
+    case "download_bulk":
+    case "favorite_toggle":
+    case "subalbum_view":
+      return deliveryHref(projectId, sessionId);
+    default:
+      return projectId ? projectWorkflowHref(projectId) : undefined;
+  }
+}
+
+function photoDeliveryHref(
+  db: AuraDatabase,
+  photoId: string,
+): string | undefined {
+  const photo = db.photos.find((p) => p.id === photoId);
+  if (!photo) return undefined;
+  const gallery = db.galleries.find((g) => g.id === photo.galleryId);
+  if (!gallery) return undefined;
+  return deliveryHref(
+    gallery.projectId,
+    gallery.sessionId || gallery.shootId,
+  );
 }
 
 export async function GET(req: Request) {
@@ -54,6 +120,7 @@ export async function GET(req: Request) {
         photoId,
         count,
         thumbUrl: photo?.thumbUrl,
+        href: photoDeliveryHref(db, photoId),
       };
     });
 
@@ -69,7 +136,6 @@ export async function GET(req: Request) {
     txs = txs.filter((t) => t.projectId === projectIdFilter);
     invoices = invoices.filter((i) => i.projectId === projectIdFilter);
   } else if (sessionId) {
-    // Session filter with no project — empty money slice
     txs = [];
     invoices = [];
   }
@@ -104,8 +170,12 @@ export async function GET(req: Request) {
       netAmount: t.netAmount,
       grossAmount: t.grossAmount,
       processingFee: t.processingFee,
+      projectId: t.projectId,
       projectName: projectName(t.projectId),
       createdAt: t.createdAt,
+      href: t.projectId
+        ? projectWorkflowHref(t.projectId)
+        : paymentsHref(),
     })),
   };
 
@@ -113,7 +183,20 @@ export async function GET(req: Request) {
     totals: counts,
     topPhotos,
     byDay,
-    recent: events.slice(-50).reverse(),
+    recent: events.slice(-50).reverse().map((e) => {
+      let projectId = e.projectId;
+      if (!projectId && e.galleryId) {
+        projectId = db.galleries.find((g) => g.id === e.galleryId)?.projectId;
+      }
+      return {
+        id: e.id,
+        type: e.type,
+        at: e.at,
+        photoId: e.photoId,
+        projectName: projectName(projectId),
+        href: eventHref(e, db),
+      };
+    }),
     financials,
   });
 }

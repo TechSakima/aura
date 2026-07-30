@@ -8,7 +8,7 @@ import {
   stripeConfigured,
   stripeErrorMessage,
 } from "@/lib/stripe";
-import { appOrigin } from "@/lib/notify/send";
+import { appOrigin, notifyDeliveryIssue } from "@/lib/notify/send";
 
 export const runtime = "nodejs";
 
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Stripe is not configured. Set STRIPE_SECRET_KEY in App Hosting env.",
+            "Payments are unavailable. Try again later.",
         },
         { status: 503 },
       );
@@ -133,6 +133,8 @@ export async function PUT() {
         : !account.details_submitted
           ? "Account details incomplete"
           : undefined;
+    const prevError = db.studio.stripeConnectLastError || "";
+    let alertError: string | null = null;
     await updateStudioDb(admin.studioId, (d) => {
       d.studio.stripeOnboardingComplete = complete;
       d.studio.stripeConnectLastCheckedAt = now;
@@ -140,8 +142,20 @@ export async function PUT() {
         delete d.studio.stripeConnectLastError;
       } else if (due) {
         d.studio.stripeConnectLastError = due;
+        if (due !== prevError) alertError = due;
       }
     });
+    if (alertError) {
+      void notifyDeliveryIssue({
+        studioId: admin.studioId,
+        kind: "payments",
+        title: "Payments need attention",
+        body: alertError,
+        href: "/admin/settings/payments",
+      }).catch((err) => {
+        console.error("[payments/connect] notify delivery", err);
+      });
+    }
     return NextResponse.json({
       onboardingComplete: complete,
       chargesEnabled: account.charges_enabled,
@@ -153,10 +167,24 @@ export async function PUT() {
     const message = stripeErrorMessage(e);
     console.error("[payments/connect PUT]", message, e);
     const now = new Date().toISOString();
+    const prev = await readStudioDb(admin.studioId).catch(() => null);
+    const prevError = prev?.studio.stripeConnectLastError || "";
+    const sliced = message.slice(0, 200);
     await updateStudioDb(admin.studioId, (d) => {
       d.studio.stripeConnectLastCheckedAt = now;
-      d.studio.stripeConnectLastError = message.slice(0, 200);
+      d.studio.stripeConnectLastError = sliced;
     }).catch(() => undefined);
+    if (sliced !== prevError) {
+      void notifyDeliveryIssue({
+        studioId: admin.studioId,
+        kind: "payments",
+        title: "Payments need attention",
+        body: sliced,
+        href: "/admin/settings/payments",
+      }).catch((err) => {
+        console.error("[payments/connect] notify delivery", err);
+      });
+    }
     return NextResponse.json(
       { error: message, lastCheckedAt: now, lastError: message },
       { status: 500 },

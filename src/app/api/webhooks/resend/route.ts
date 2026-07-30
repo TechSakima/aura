@@ -10,9 +10,10 @@ import { rateLimit } from "@/lib/rate-limit";
 import {
   extractFromAddress,
   inboundContactMessageId,
-  parseEmailAddresses,
+  inboundNotifyHref,
+  parseInboundAddressParts,
   resendInboundClient,
-  resolveStudioFromInboundRecipients,
+  resolveInboundRoute,
   sanitizeInboundBody,
 } from "@/lib/resend-inbound";
 import type { ContactMessage } from "@/lib/types";
@@ -20,9 +21,10 @@ import type { ContactMessage } from "@/lib/types";
 export const runtime = "nodejs";
 
 /**
- * Resend inbound webhook (AURA-315).
+ * Resend inbound webhook (AURA-315 / AURA-371).
  * Requires RESEND_WEBHOOK_SECRET + RESEND_INBOUND_DOMAIN for email.received routing.
- * Addresses: `{homepageSlug}@domain` or `s-{studioId}@domain`.
+ * Addresses: `{homepageSlug}@domain`, `s-{studioId}@domain`,
+ * `p-{projectId}@domain`, `sess-{sessionId}@domain`.
  */
 export async function POST(req: Request) {
   const secret = process.env.RESEND_WEBHOOK_SECRET?.trim();
@@ -100,7 +102,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not load email" }, { status: 502 });
   }
 
-  const toList = parseEmailAddresses([
+  const toParts = parseInboundAddressParts([
     ...(Array.isArray(received.to) ? received.to : [received.to]),
     ...(Array.isArray(received.cc)
       ? received.cc
@@ -109,11 +111,15 @@ export async function POST(req: Request) {
         : []),
     ...(Array.isArray(event.data.received_for) ? event.data.received_for : []),
   ]);
-  const studio = await resolveStudioFromInboundRecipients(toList);
-  if (!studio) {
-    console.warn("[resend-webhook] no studio for recipients", toList);
+  const route = await resolveInboundRoute(toParts);
+  if (!route) {
+    console.warn(
+      "[resend-webhook] no studio for recipients",
+      toParts.map((p) => p.addr),
+    );
     return NextResponse.json({ ok: true, unmatched: true });
   }
+  const { studio, projectId, sessionId } = route;
 
   const from = extractFromAddress(received.from ?? event.data.from);
   if (!from.email.includes("@")) {
@@ -146,6 +152,8 @@ export async function POST(req: Request) {
     email: from.email.slice(0, 254),
     message: body,
     context,
+    ...(projectId ? { projectId } : {}),
+    ...(sessionId ? { sessionId } : {}),
     emailStatus: "pending",
     createdAt: now,
   };
@@ -172,15 +180,22 @@ export async function POST(req: Request) {
 
   if (studio.notificationPrefs?.emailContactMessage !== false) {
     const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;
+    const scope = projectId ? "Project" : "Inbound";
     await notifyStudio({
       studioId: studio.id,
       type: "contact_message",
       title: `Email from ${from.name}`,
-      body: `Inbound · ${from.email}${preview ? ` — ${preview}` : ""}`,
-      href: "/admin#messages",
+      body: `${scope} · ${from.email}${preview ? ` — ${preview}` : ""}`,
+      href: inboundNotifyHref({ projectId, sessionId }),
       emailStudio: false,
     });
   }
 
-  return NextResponse.json({ ok: true, id: messageId, studioId: studio.id });
+  return NextResponse.json({
+    ok: true,
+    id: messageId,
+    studioId: studio.id,
+    ...(projectId ? { projectId } : {}),
+    ...(sessionId ? { sessionId } : {}),
+  });
 }

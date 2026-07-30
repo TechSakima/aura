@@ -31,6 +31,7 @@ import {
 } from "@/components/gallery/GalleryGuestState";
 import { GalleryPrintPartners } from "@/components/gallery/GalleryPrintPartners";
 import { PinModal } from "@/components/gallery/PinModal";
+import { InstallHint } from "@/components/pwa/InstallHint";
 import { PublicShell } from "@/components/shells/PublicShell";
 import {
   Button,
@@ -56,6 +57,7 @@ import {
   galleryShouldEnterMotion,
   galleryViewAnnouncement,
 } from "@/lib/gallery-experience";
+import { isNetworkError, mutationOfflineMessage } from "@/lib/offline";
 import { usePrefersReducedMotion } from "@/lib/use-prefers-reduced-motion";
 import type { Comment, Gallery, PrintPartner, StudioTheme } from "@/lib/types";
 
@@ -256,8 +258,11 @@ export default function PublicGalleryPage() {
         return;
       }
     } catch (e) {
-      if (ctrl.signal.aborted || (e instanceof DOMException && e.name === "AbortError")) {
-        setGuestReason("timeout");
+      if (
+        ctrl.signal.aborted ||
+        (e instanceof DOMException && e.name === "AbortError")
+      ) {
+        setGuestReason(navigator.onLine === false ? "load_failed" : "timeout");
         return;
       }
       setGuestReason("load_failed");
@@ -334,18 +339,22 @@ export default function PublicGalleryPage() {
       push(`${favorites.length} of ${selectLimit} selected`, "neutral");
       return;
     }
-    const res = await fetch(`/api/public/galleries/${token}/favorites`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ photoId }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      push(String(json.error || "Could not update favorites"), "danger");
-      return;
+    try {
+      const res = await fetch(`/api/public/galleries/${token}/favorites`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        push(String(json.error || "Could not update favorites"), "danger");
+        return;
+      }
+      applyFavoritesPayload(json);
+    } catch {
+      push(mutationOfflineMessage("update favorites"), "danger");
     }
-    applyFavoritesPayload(json);
   }
 
   async function submitSelects() {
@@ -365,6 +374,8 @@ export default function PublicGalleryPage() {
       }
       applyFavoritesPayload(json);
       push("Selects submitted", "success");
+    } catch {
+      push(mutationOfflineMessage("submit selects"), "danger");
     } finally {
       setSubmittingSelects(false);
     }
@@ -441,7 +452,11 @@ export default function PublicGalleryPage() {
         payload = await fetchDownloadPayload({ ...body, maxUrls: CHUNK });
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Download failed";
+      const msg = isNetworkError(e)
+        ? mutationOfflineMessage("download")
+        : e instanceof Error
+          ? e.message
+          : "Download failed";
       if (pinOpen && /invalid pin/i.test(msg)) {
         setPinError(msg);
         throw e instanceof Error ? e : new Error(msg);
@@ -453,19 +468,13 @@ export default function PublicGalleryPage() {
       return;
     }
 
-    function triggerDownload(href: string, filename?: string) {
-      const a = document.createElement("a");
-      a.href = href;
-      if (filename) a.download = filename;
-      a.rel = "noopener";
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+    async function triggerDownload(href: string, filename?: string) {
+      const { downloadSignedUrl } = await import("@/lib/client/zip-downloads");
+      await downloadSignedUrl(href, filename);
     }
 
     if (payload.url) {
-      triggerDownload(payload.url, payload.filename);
+      await triggerDownload(payload.url, payload.filename);
       setPinOpen(false);
       return;
     }
@@ -523,7 +532,7 @@ export default function PublicGalleryPage() {
         // CORS not set on R2 yet — fall back to individual signed downloads.
         push("Zip unavailable — downloading files individually", "neutral");
         for (const item of allUrls) {
-          triggerDownload(item.url, item.filename);
+          await triggerDownload(item.url, item.filename);
           await new Promise((r) => setTimeout(r, 150));
         }
         setPinOpen(false);
@@ -545,51 +554,59 @@ export default function PublicGalleryPage() {
 
   async function submitComment() {
     if (!selected || !commentBody.trim()) return;
-    const res = await fetch(`/api/public/galleries/${token}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        photoId: selected.id,
-        authorName: commentName || "Guest",
-        body: commentBody,
-      }),
-    });
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      push(String(json.error || "Could not post comment"), "danger");
-      return;
+    try {
+      const res = await fetch(`/api/public/galleries/${token}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          photoId: selected.id,
+          authorName: commentName || "Guest",
+          body: commentBody,
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        push(String(json.error || "Could not post comment"), "danger");
+        return;
+      }
+      setCommentBody("");
+      await load();
+    } catch {
+      push(mutationOfflineMessage("post comment"), "danger");
     }
-    setCommentBody("");
-    await load();
   }
 
   async function createSubAlbum() {
     if (!subSelected.length) return;
-    const res = await fetch(`/api/public/galleries/${token}/subalbums`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        label: subLabel || "Shared album",
-        photoIds: subSelected,
-      }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      push(String(json.error || "Could not create share link"), "danger");
-      return;
-    }
-    const href = `/s/${json.subAlbum.token}`;
-    setSubUrl(href);
-    setSubOpen(false);
-    setSubSelected([]);
-    const absolute = `${window.location.origin}${href}`;
     try {
-      await navigator.clipboard.writeText(absolute);
-      push("Share link copied", "success");
+      const res = await fetch(`/api/public/galleries/${token}/subalbums`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: subLabel || "Shared album",
+          photoIds: subSelected,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        push(String(json.error || "Could not create share link"), "danger");
+        return;
+      }
+      const href = `/s/${json.subAlbum.token}`;
+      setSubUrl(href);
+      setSubOpen(false);
+      setSubSelected([]);
+      const absolute = `${window.location.origin}${href}`;
+      try {
+        await navigator.clipboard.writeText(absolute);
+        push("Share link copied", "success");
+      } catch {
+        push("Share link ready", "success");
+      }
+      await load();
     } catch {
-      push("Share link ready", "success");
+      push(mutationOfflineMessage("create share link"), "danger");
     }
-    await load();
   }
 
   async function shareAlbum() {
@@ -883,6 +900,12 @@ export default function PublicGalleryPage() {
     >
       {viewAnnouncer}
       {chrome}
+
+      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(4.75rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-md">
+          <InstallHint storageKey="aura-install-dismiss-gallery" />
+        </div>
+      </div>
 
       {coverStyle !== "none" ? (
         <GalleryHero

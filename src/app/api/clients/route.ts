@@ -1,20 +1,26 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
+import { withApiDeprecation } from "@/lib/api-deprecation";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { publicToken } from "@/lib/tokens";
 import type { Project } from "@/lib/types";
 
+/** @deprecated Use `/api/projects` (AURA-273). */
 export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = await readStudioDb(admin.studioId);
-  return NextResponse.json({
-    clients: db.projects,
-    projects: db.projects,
-  });
+  return withApiDeprecation(
+    NextResponse.json({
+      clients: db.projects,
+      projects: db.projects,
+    }),
+    "/api/projects",
+  );
 }
 
+/** @deprecated Use `/api/projects` (AURA-273). */
 export async function POST(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -44,5 +50,8 @@ export async function POST(req: Request) {
   await updateStudioDb(admin.studioId, (db) => {
     db.projects.unshift(project);
   });
-  return NextResponse.json({ client: project, project });
+  return withApiDeprecation(
+    NextResponse.json({ client: project, project }),
+    "/api/projects",
+  );
 }

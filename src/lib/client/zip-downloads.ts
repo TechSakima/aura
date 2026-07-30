@@ -60,3 +60,33 @@ export function saveBlobDownload(blob: Blob, filename: string) {
   a.remove();
   URL.revokeObjectURL(href);
 }
+
+/**
+ * Download a signed / cross-origin file without `target="_blank"` (AURA-297).
+ * Prefer fetch→blob (stays in standalone); fall back to a hidden iframe.
+ */
+export async function downloadSignedUrl(
+  url: string,
+  filename?: string,
+): Promise<void> {
+  try {
+    const res = await fetch(url, { mode: "cors" });
+    if (!res.ok) throw new Error(`download ${res.status}`);
+    const blob = await res.blob();
+    const name =
+      filename?.trim() ||
+      url.split("/").pop()?.split("?")[0] ||
+      "download";
+    saveBlobDownload(blob, name);
+    return;
+  } catch {
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("hidden", "");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.src = url;
+    document.body.appendChild(iframe);
+    window.setTimeout(() => {
+      iframe.remove();
+    }, 120_000);
+  }
+}

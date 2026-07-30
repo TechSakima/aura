@@ -51,15 +51,16 @@ export function GalleryChrome({
     favoritesLabel ||
     (favoritesCount > 0 ? `Favorites (${favoritesCount})` : "Favorites");
 
-  const navClass = cn(
-    "flex shrink-0 items-center gap-0.5 sm:gap-1",
-    "max-md:w-full max-md:justify-around max-md:gap-0",
-    variant === "bottom-bar" && "w-full justify-around gap-0",
-  );
-
-  const renderNav = () =>
+  const renderNav = (iconOnly: boolean) =>
     showNav ? (
-      <nav aria-label="Gallery" className={navClass}>
+      <nav
+        aria-label="Gallery"
+        className={cn(
+          "flex w-full shrink-0 items-center justify-around gap-0",
+          !iconOnly && "roomy:w-auto roomy:justify-start roomy:gap-1",
+          variant === "bottom-bar" && "w-full justify-around gap-0",
+        )}
+      >
         {showGalleryActions ? (
           <>
             <GalleryNavItem
@@ -67,13 +68,24 @@ export function GalleryChrome({
               onClick={onFavorites}
               active={favoritesActive}
               tone={navTone}
+              iconOnly={iconOnly}
             >
               <IconHeart filled={favoritesCount > 0} />
             </GalleryNavItem>
-            <GalleryNavItem label="Download" onClick={onDownload} tone={navTone}>
+            <GalleryNavItem
+              label="Download"
+              onClick={onDownload}
+              tone={navTone}
+              iconOnly={iconOnly}
+            >
               <IconDownload />
             </GalleryNavItem>
-            <GalleryNavItem label="Share" onClick={onShare} tone={navTone}>
+            <GalleryNavItem
+              label="Share"
+              onClick={onShare}
+              tone={navTone}
+              iconOnly={iconOnly}
+            >
               <IconShare />
             </GalleryNavItem>
           </>
@@ -83,6 +95,7 @@ export function GalleryChrome({
             label="Message"
             onClick={onContact!}
             tone={navTone}
+            iconOnly={iconOnly}
           >
             <IconMessage />
           </GalleryNavItem>
@@ -124,24 +137,31 @@ export function GalleryChrome({
     </div>
   );
 
-  /** Thumb-zone actions on small screens (AURA-250). */
+  /** Thumb-zone: icon-primary until roomy (AURA-250/286/378). */
   const mobileBottomNav = showNav ? (
     <div
       className={cn(
-        "fixed inset-x-0 bottom-0 z-30 md:hidden",
+        "fixed inset-x-0 bottom-0 z-30 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] roomy:hidden",
         branded
           ? "bg-accent pb-[env(safe-area-inset-bottom)] text-accent-ink"
           : "border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md",
       )}
     >
-      <div className="px-1 py-1">{renderNav()}</div>
+      <div className="px-1 py-1">{renderNav(true)}</div>
     </div>
   ) : null;
+
+  const headerNav = showNav ? (
+    <div className="hidden roomy:block">{renderNav(false)}</div>
+  ) : null;
+
+  const headerInner =
+    "shell-pad mx-auto flex max-w-[var(--public-max)] items-center justify-between gap-3 py-2.5";
 
   if (variant === "floating") {
     return (
       <>
-        <header className="pointer-events-none sticky top-0 z-30 px-4 pt-[env(safe-area-inset-top)] sm:px-8">
+        <header className="pointer-events-none sticky top-0 z-30 shell-pad pt-[env(safe-area-inset-top)]">
           <div className="pointer-events-auto mx-auto flex max-w-[var(--public-max)] py-2.5">
             <div className="rounded-md border border-line bg-surface/90 px-3 py-2 backdrop-blur-md">
               {titleBlock}
@@ -152,16 +172,16 @@ export function GalleryChrome({
           <>
             <div
               className={cn(
-                "fixed z-40 hidden sm:block",
-                "sm:top-[max(0.75rem,env(safe-area-inset-top))] sm:right-[max(0.75rem,env(safe-area-inset-right))]",
+                "fixed z-40 hidden roomy:block",
+                "top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))]",
               )}
             >
               <div className="rounded-lg border border-line bg-surface/95 p-1 shadow-lg backdrop-blur-md">
-                {renderNav()}
+                {renderNav(false)}
               </div>
             </div>
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
-              <div className="px-1 py-1">{renderNav()}</div>
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-md roomy:hidden">
+              <div className="px-1 py-1">{renderNav(true)}</div>
             </div>
           </>
         ) : null}
@@ -173,11 +193,9 @@ export function GalleryChrome({
     return (
       <>
         <header className="sticky top-0 z-30 border-b border-line bg-surface/95 pt-[env(safe-area-inset-top)] backdrop-blur-md">
-          <div className="mx-auto flex max-w-[var(--public-max)] items-center justify-between gap-3 px-4 py-2.5 sm:px-8">
+          <div className={headerInner}>
             {titleBlock}
-            {showNav ? (
-              <div className="hidden md:block">{renderNav()}</div>
-            ) : null}
+            {headerNav}
           </div>
         </header>
         {mobileBottomNav}
@@ -189,11 +207,9 @@ export function GalleryChrome({
     return (
       <>
         <header className="sticky top-0 z-30 bg-accent pt-[env(safe-area-inset-top)] text-accent-ink">
-          <div className="mx-auto flex max-w-[var(--public-max)] items-center justify-between gap-3 px-4 py-2.5 sm:px-8">
+          <div className={headerInner}>
             {titleBlock}
-            {showNav ? (
-              <div className="hidden md:block">{renderNav()}</div>
-            ) : null}
+            {headerNav}
           </div>
         </header>
         {mobileBottomNav}
@@ -201,15 +217,13 @@ export function GalleryChrome({
     );
   }
 
-  /* sticky-minimal — bottom actions below md for one-handed use */
+  /* sticky-minimal — thumb bar until roomy (AURA-286) */
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-line bg-surface/95 pt-[env(safe-area-inset-top)] backdrop-blur-md">
-        <div className="mx-auto flex max-w-[var(--public-max)] items-center justify-between gap-3 px-4 py-2.5 sm:px-8">
+        <div className={headerInner}>
           {titleBlock}
-          {showNav ? (
-            <div className="hidden md:block">{renderNav()}</div>
-          ) : null}
+          {headerNav}
         </div>
       </header>
       {mobileBottomNav}
@@ -224,9 +238,6 @@ export function galleryChromePadClass(
   showContact?: boolean,
 ): string {
   if (expired && !showContact) return "";
-  if (chrome.variant === "floating") {
-    return "pb-[calc(4.75rem+env(safe-area-inset-bottom))] sm:pb-0";
-  }
-  /* sticky-minimal, branded, bottom-bar: thumb bar below md */
-  return "pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-0";
+  /* Thumb bar until roomy — unified floating + sticky variants (AURA-286/378) */
+  return "pb-[calc(4.75rem+env(safe-area-inset-bottom))] roomy:pb-0";
 }

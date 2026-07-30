@@ -484,6 +484,11 @@ export type ContactMessage = {
   galleryToken?: string;
   proposalToken?: string;
   paymentLinkId?: string;
+  /** Cancel soft-failure resolve (AURA-382) */
+  cancelToken?: string;
+  /** Project-scoped inbound / assign (AURA-371+) */
+  projectId?: string;
+  sessionId?: string;
   /** Resend delivery — filled by AURA-306 / outbox (AURA-313) */
   emailStatus?: "pending" | "sent" | "skipped" | "failed" | "queued";
   emailLastError?: string;
@@ -903,7 +908,7 @@ export type PaymentLinkTemplate = {
   archived?: boolean;
   stripePaymentLinkId?: string;
   publicUrl?: string;
-  /** Optional default project when sending from Payments hub */
+  /** Linked project when created from workflow deposit/balance */
   projectId?: string;
   createdAt: string;
   updatedAt: string;

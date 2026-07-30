@@ -2,6 +2,7 @@
 
 /**
  * Direct-to-R2 uploads (AURA-361): presigned PUT for small files, S3 multipart for large.
+ * Timeouts + progress for AURA-267.
  */
 
 export type DirectUploadInit =
@@ -28,15 +29,61 @@ export type DirectUploadInit =
     };
 
 const PART_SIGN_BATCH = 50;
-const PART_UPLOAD_CONCURRENCY = 4;
+/** Keep part workers modest when several files upload in parallel (AURA-267). */
+const PART_UPLOAD_CONCURRENCY = 2;
 
-async function postJson(url: string, body: unknown): Promise<Response> {
-  return fetch(url, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+const INIT_TIMEOUT_MS = 30_000;
+const PUT_TIMEOUT_MS = 180_000;
+const PART_PUT_TIMEOUT_MS = 120_000;
+const COMPLETE_TIMEOUT_MS = 90_000;
+
+export class UploadTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UploadTimeoutError";
+  }
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit | undefined,
+  ms: number,
+  timeoutMessage: string,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (
+      (err instanceof DOMException && err.name === "AbortError") ||
+      (err instanceof Error && err.name === "AbortError")
+    ) {
+      throw new UploadTimeoutError(timeoutMessage);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function postJson(
+  url: string,
+  body: unknown,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<Response> {
+  return fetchWithTimeout(
+    url,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    timeoutMs,
+    timeoutMessage,
+  );
 }
 
 export async function initiateGalleryDirectUpload(
@@ -48,12 +95,17 @@ export async function initiateGalleryDirectUpload(
     kind: "main" | "peek" | "video";
   },
 ): Promise<DirectUploadInit> {
-  const res = await postJson(`/api/galleries/${galleryId}/upload/initiate`, {
-    filename: opts.filename,
-    size: opts.size,
-    contentType: opts.contentType,
-    kind: opts.kind,
-  });
+  const res = await postJson(
+    `/api/galleries/${galleryId}/upload/initiate`,
+    {
+      filename: opts.filename,
+      size: opts.size,
+      contentType: opts.contentType,
+      kind: opts.kind,
+    },
+    INIT_TIMEOUT_MS,
+    "Upload timed out — try again",
+  );
   const data = (await res.json()) as DirectUploadInit & { error?: string };
   if (!res.ok) {
     throw new Error(data.error || "Could not start upload");
@@ -67,11 +119,16 @@ async function signPartUrls(
   uploadId: string,
   partNumbers: number[],
 ): Promise<{ partNumber: number; url: string }[]> {
-  const res = await postJson(`/api/galleries/${galleryId}/upload/parts`, {
-    objectPath,
-    uploadId,
-    partNumbers,
-  });
+  const res = await postJson(
+    `/api/galleries/${galleryId}/upload/parts`,
+    {
+      objectPath,
+      uploadId,
+      partNumbers,
+    },
+    INIT_TIMEOUT_MS,
+    "Upload timed out — try again",
+  );
   const data = (await res.json()) as {
     parts?: { partNumber: number; url: string }[];
     error?: string;
@@ -88,7 +145,7 @@ async function uploadParts(
   file: File,
   onProgress?: (uploadedBytes: number, totalBytes: number) => void,
 ): Promise<{ partNumber: number; eTag: string }[]> {
-    const results: { partNumber: number; eTag: string }[] = [];
+  const results: { partNumber: number; eTag: string }[] = [];
   let uploaded = 0;
 
   for (let start = 1; start <= init.partCount; start += PART_SIGN_BATCH) {
@@ -113,13 +170,18 @@ async function uploadParts(
         const endByte = Math.min(startByte + init.partSizeBytes, file.size);
         const blob = file.slice(startByte, endByte);
 
-        const res = await fetch(url, {
-          method: "PUT",
-          body: blob,
-          headers: {
-            "Content-Type": "application/octet-stream",
+        const res = await fetchWithTimeout(
+          url,
+          {
+            method: "PUT",
+            body: blob,
+            headers: {
+              "Content-Type": "application/octet-stream",
+            },
           },
-        });
+          PART_PUT_TIMEOUT_MS,
+          "Upload timed out — try again",
+        );
         if (!res.ok) {
           throw new Error(`Part ${partNumber} upload failed (${res.status})`);
         }
@@ -157,9 +219,17 @@ export async function completeGalleryDirectUpload(
     parts?: { partNumber: number; eTag: string }[];
   },
 ): Promise<unknown> {
-  const res = await postJson(`/api/galleries/${galleryId}/upload/complete`, payload);
-  const data = await res.json().catch(() => ({}));
+  const res = await postJson(
+    `/api/galleries/${galleryId}/upload/complete`,
+    payload,
+    COMPLETE_TIMEOUT_MS,
+    "Processing timed out — try again",
+  );
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) {
+    if (res.status === 504 || res.status === 408) {
+      throw new UploadTimeoutError("Processing timed out — try again");
+    }
     throw new Error(data.error || "Could not finish upload");
   }
   return data;
@@ -181,11 +251,16 @@ export async function uploadGalleryFileDirect(
   });
 
   if (init.mode === "presigned") {
-    const res = await fetch(init.url, {
-      method: "PUT",
-      body: file,
-      headers: { "Content-Type": init.contentType },
-    });
+    const res = await fetchWithTimeout(
+      init.url,
+      {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": init.contentType },
+      },
+      PUT_TIMEOUT_MS,
+      "Upload timed out — try again",
+    );
     if (!res.ok) {
       throw new Error(`Upload failed (${res.status})`);
     }

@@ -1,8 +1,44 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
+import { pwaSwSurfaceForPath } from "@/lib/pwa-sw-scope";
+
+function askSkipWaiting(worker: ServiceWorker | null | undefined) {
+  worker?.postMessage({ type: "SKIP_WAITING" });
+}
+
+function wireUpdate(reg: ServiceWorkerRegistration) {
+  void reg.update();
+  if (reg.waiting) askSkipWaiting(reg.waiting);
+  reg.addEventListener("updatefound", () => {
+    const installing = reg.installing;
+    if (!installing) return;
+    installing.addEventListener("statechange", () => {
+      if (
+        installing.state === "installed" &&
+        navigator.serviceWorker.controller
+      ) {
+        askSkipWaiting(installing);
+      }
+    });
+  });
+}
+
+/** Unregister legacy origin-wide `/` SW so surfaces stay isolated (AURA-368). */
+async function dropLegacyRootRegistration() {
+  const regs = await navigator.serviceWorker.getRegistrations();
+  const rootScope = `${window.location.origin}/`;
+  await Promise.all(
+    regs
+      .filter((reg) => reg.scope === rootScope)
+      .map((reg) => reg.unregister()),
+  );
+}
 
 export function RegisterSW() {
+  const pathname = usePathname() || "/";
+
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
@@ -20,7 +56,26 @@ export function RegisterSW() {
       return;
     }
 
-    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
-  }, []);
+    const surface = pwaSwSurfaceForPath(pathname);
+
+    void (async () => {
+      try {
+        await dropLegacyRootRegistration();
+
+        if (!surface.scope) {
+          return;
+        }
+
+        const reg = await navigator.serviceWorker.register("/sw.js", {
+          scope: surface.scope,
+          updateViaCache: "none",
+        });
+        wireUpdate(reg);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [pathname]);
+
   return null;
 }

@@ -11,6 +11,8 @@ import {
   useConfirm,
   useToast,
 } from "@/components/ui";
+import { mutateJson } from "@/lib/client/mutation";
+import { confirmRefreshPlan } from "@/lib/destructive-confirm";
 import type { Shoot, ShootPlan } from "@/lib/types";
 
 export function PrepStep({
@@ -34,70 +36,84 @@ export function PrepStep({
 
   async function createOrRefreshPlan() {
     if (!templateId) {
-      push("Add a shot list template in Prep first", "danger");
+      push("Add a shot list template in Library first", "danger");
       return;
     }
     if (plan) {
-      const ok = await confirm({
-        title: "Refresh plan from template?",
-        message:
-          "This replaces the current list. Checked-off progress on shoot day will be lost.",
-        confirmLabel: "Refresh plan",
-        tone: "danger",
-      });
+      const ok = await confirm(confirmRefreshPlan());
       if (!ok) return;
     }
     setBusy(true);
-    const res = await fetch(`/api/shoots/${shoot.id}/plan`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ templateId, force: true }),
-    });
-    if (!res.ok) {
+    try {
+      const created = await mutateJson(
+        `/api/sessions/${shoot.id}/plan`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ templateId, force: true }),
+        },
+        { action: "create plan" },
+      );
+      if (!created.ok) {
+        push(created.errorMessage, "danger");
+        return;
+      }
+      if (dayNotes) {
+        const notes = await mutateJson(
+          `/api/sessions/${shoot.id}/plan`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dayNotes }),
+          },
+          { action: "save notes" },
+        );
+        if (!notes.ok) {
+          push(notes.errorMessage, "danger");
+          return;
+        }
+      }
+      push("Shoot plan ready", "success");
+      await onChanged();
+    } finally {
       setBusy(false);
-      push("Could not create plan", "danger");
-      return;
     }
-    if (dayNotes) {
-      await fetch(`/api/shoots/${shoot.id}/plan`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dayNotes }),
-      });
-    }
-    setBusy(false);
-    push("Shoot plan ready", "success");
-    await onChanged();
   }
 
   async function saveNotes() {
     if (!plan) return;
     setBusy(true);
-    const res = await fetch(`/api/shoots/${shoot.id}/plan`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dayNotes }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      push("Could not save notes", "danger");
-      return;
+    try {
+      const result = await mutateJson(
+        `/api/sessions/${shoot.id}/plan`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dayNotes }),
+        },
+        { action: "save notes" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      push("Notes saved", "success");
+      await onChanged();
+    } finally {
+      setBusy(false);
     }
-    push("Notes saved", "success");
-    await onChanged();
   }
 
   return (
     <div className="space-y-5">
-      <div>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 className="font-display text-2xl">Prep</h2>
-        <p className="mt-1 text-sm text-muted">
-          Build this session&apos;s plan from your shot library — must-haves,
-          categories, and optional reference photos for shoot day.{" "}
-          <Link href="/admin/prep" className="text-accent">
-            Manage shot library
-          </Link>
-        </p>
+        <Link
+          href="/admin/prep"
+          className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
+        >
+          Library
+        </Link>
       </div>
 
       <Field>

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ShootPublicLinks } from "@/components/admin/ShootPublicLinks";
-import { Button, Tabs } from "@/components/ui";
+import { Button, ButtonLink, Tabs } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import type { WizardStepId } from "@/lib/types";
 import { WIZARD_STEPS } from "@/lib/wizard/steps";
 
@@ -24,6 +25,8 @@ export function ShootWizardShell({
   canSkip,
   nextLabel = "Continue",
   steps = WIZARD_STEPS,
+  /** Hide sticky Back/Continue (e.g. Delivery Layout designer). */
+  hideFooter = false,
   children,
   /** @deprecated use projectId */
   clientId,
@@ -54,6 +57,7 @@ export function ShootWizardShell({
   canSkip?: boolean;
   nextLabel?: string;
   steps?: typeof WIZARD_STEPS;
+  hideFooter?: boolean;
   children: ReactNode;
 }) {
   const pid = projectId || clientId || "";
@@ -62,6 +66,8 @@ export function ShootWizardShell({
   const sdate = sessionDate || shootDate;
   const navSteps = steps;
   const idx = navSteps.findIndex((s) => s.id === step);
+  const showFooter =
+    !hideFooter && Boolean(onBack || onNext || (canSkip && onSkip));
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -82,18 +88,20 @@ export function ShootWizardShell({
           </h1>
           {sdate ? <p className="text-muted">{sdate}</p> : null}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-col gap-2 sm:items-end">
           <ShootPublicLinks
             quoteToken={quoteToken}
             galleryToken={galleryToken}
             showCopy
+            density="header"
           />
-          <Link
+          <ButtonLink
             href={`/admin/projects/${pid}`}
-            className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
+            tone="ghost"
+            className="min-h-11 w-full justify-center sm:w-auto"
           >
             Back to workflow
-          </Link>
+          </ButtonLink>
         </div>
       </div>
 
@@ -112,23 +120,36 @@ export function ShootWizardShell({
 
       <div className="min-h-[12rem]">{children}</div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6">
-        <Button tone="ghost" disabled={idx <= 0} onClick={onBack} className="min-h-11">
-          Back
-        </Button>
-        <div className="flex flex-wrap gap-2">
-          {canSkip && onSkip ? (
-            <Button tone="ghost" onClick={onSkip} className="min-h-11">
-              Skip for now
-            </Button>
-          ) : null}
-          {onNext ? (
-            <Button onClick={onNext} className="min-h-11">
-              {nextLabel}
-            </Button>
-          ) : null}
+      {showFooter ? (
+        <div
+          className={cn(
+            "sticky z-30 flex flex-wrap items-center justify-between gap-3 border-t border-line bg-canvas/95 py-3 backdrop-blur",
+            /* Clear AdminShell bottom tabs + home indicator on phone */
+            "bottom-[calc(3.5rem+env(safe-area-inset-bottom))] md:bottom-0",
+          )}
+        >
+          <Button
+            tone="ghost"
+            disabled={idx <= 0}
+            onClick={onBack}
+            className="min-h-11"
+          >
+            Back
+          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {canSkip && onSkip ? (
+              <Button tone="ghost" onClick={onSkip} className="min-h-11">
+                Skip for now
+              </Button>
+            ) : null}
+            {onNext ? (
+              <Button onClick={onNext} className="min-h-11">
+                {nextLabel}
+              </Button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { StudioHomepageView } from "@/components/public/StudioHomepageView";
+import { DeviceFramePreview } from "@/components/admin/DeviceFramePreview";
 import { WebsiteReadinessChecklist } from "@/components/admin/WebsiteReadinessChecklist";
+import { StudioHomepageView } from "@/components/public/StudioHomepageView";
 import {
   Badge,
   Button,
@@ -18,6 +19,7 @@ import {
   useConfirm,
   useToast,
 } from "@/components/ui";
+import { mutateJson } from "@/lib/client/mutation";
 import {
   asHeroVariant,
   enabledHomepageModules,
@@ -205,33 +207,40 @@ export function WebsiteBuilder() {
 
   async function saveModules() {
     setSaving(true);
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "website",
-        homepage: { modules },
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Could not save modules", "danger");
-      return;
+    try {
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "website",
+            homepage: { modules },
+          }),
+        },
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setDirty(false);
+      setMeta((prev) =>
+        prev
+          ? {
+              ...prev,
+              modules,
+              layout: collectionsLayout(modules),
+            }
+          : prev,
+      );
+      push(
+        meta?.enabled ? "Live site updated" : "Saved to draft",
+        "success",
+      );
+    } finally {
+      setSaving(false);
     }
-    setDirty(false);
-    setMeta((prev) =>
-      prev
-        ? {
-            ...prev,
-            modules,
-            layout: collectionsLayout(modules),
-          }
-        : prev,
-    );
-    push(
-      meta?.enabled ? "Live site updated" : "Saved to draft",
-      "success",
-    );
   }
 
   async function applyLayout(templateId: SiteLayoutId) {
@@ -251,35 +260,44 @@ export function WebsiteBuilder() {
     const nextModules = cloneSiteLayoutModules(template);
     const theme = siteLayoutTheme(template);
     setApplyingLayout(true);
+    try {
+      const brandRes = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ section: "brand", theme }),
+        },
+        { action: "apply brand kit" },
+      );
+      if (!brandRes.ok) {
+        push(brandRes.errorMessage, "danger");
+        return;
+      }
 
-    const brandRes = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ section: "brand", theme }),
-    });
-    if (!brandRes.ok) {
+      const modRes = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "website",
+            homepage: { modules: nextModules },
+          }),
+        },
+        { action: "save modules" },
+      );
+      if (!modRes.ok) {
+        push("Brand updated; modules failed to save", "danger");
+        return;
+      }
+
+      setAppliedLayoutId(templateId);
+      push(`${template.label} applied`, "success");
+      await load();
+    } finally {
       setApplyingLayout(false);
-      push("Could not apply brand kit", "danger");
-      return;
     }
-
-    const modRes = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "website",
-        homepage: { modules: nextModules },
-      }),
-    });
-    setApplyingLayout(false);
-    if (!modRes.ok) {
-      push("Brand updated; modules failed to save", "danger");
-      return;
-    }
-
-    setAppliedLayoutId(templateId);
-    push(`${template.label} applied`, "success");
-    await load();
   }
 
   async function setPublished(enabled: boolean) {
@@ -292,24 +310,31 @@ export function WebsiteBuilder() {
       return;
     }
     setPublishing(true);
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "website",
-        homepage: { enabled },
-      }),
-    });
-    setPublishing(false);
-    if (!res.ok) {
-      push(enabled ? "Publish failed" : "Could not unpublish", "danger");
-      return;
+    try {
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "website",
+            homepage: { enabled },
+          }),
+        },
+        { action: enabled ? "publish" : "unpublish" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setMeta((prev) => (prev ? { ...prev, enabled } : prev));
+      push(
+        enabled ? "Site is live" : "Site is draft — visitors cannot open it",
+        "success",
+      );
+    } finally {
+      setPublishing(false);
     }
-    setMeta((prev) => (prev ? { ...prev, enabled } : prev));
-    push(
-      enabled ? "Site is live" : "Site is draft — visitors cannot open it",
-      "success",
-    );
   }
 
   if (loading) {
@@ -414,7 +439,7 @@ export function WebsiteBuilder() {
       <WebsiteReadinessChecklist items={readinessItems} />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-        <Card className="min-w-0 space-y-5 p-4">
+        <Card className="order-2 min-w-0 space-y-5 p-4 lg:order-1">
           <div>
             <h2 className="font-display text-xl">Layout</h2>
             <div
@@ -589,24 +614,19 @@ export function WebsiteBuilder() {
           </Button>
         </Card>
 
-        <div className="min-w-0">
-          <div className="mb-3 space-y-1 text-center">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-muted">
-              Preview · 375px
-            </p>
-            <p className="text-xs text-muted">
-              {dirty
+        <div className="order-1 min-w-0 lg:order-2">
+          <DeviceFramePreview
+            label="Site"
+            status={
+              dirty
                 ? "Unsaved — live site unchanged"
                 : published
                   ? "Matches live site"
-                  : "Draft — not on the public site"}
-            </p>
-          </div>
-          <div className="mx-auto w-full max-w-[375px] overflow-hidden rounded-device border-[6px] border-ink shadow-lg">
-            <div className="max-h-[min(70vh,640px)] overflow-y-auto overscroll-contain">
-              <StudioHomepageView data={preview} bareInner preview />
-            </div>
-          </div>
+                  : "Draft — not on the public site"
+            }
+          >
+            <StudioHomepageView data={preview} bareInner preview />
+          </DeviceFramePreview>
           {meta.hasPassword ? (
             <p className="mt-3 text-center text-xs text-muted">
               Site password on — visitors unlock before viewing.

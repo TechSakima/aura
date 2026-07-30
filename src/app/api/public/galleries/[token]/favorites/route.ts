@@ -132,6 +132,7 @@ export async function POST(
         projectId: gallery.projectId || undefined,
         meta: { action: "submit", count: doc.photoIds.length },
       });
+      const sessionId = gallery.sessionId || gallery.shootId;
       await notifyStudio({
         studioId: gallery.studioId,
         type: "selects_submitted",
@@ -140,7 +141,9 @@ export async function POST(
           doc.photoIds.length === 1 ? "" : "s"
         } · ${gallery.title}`,
         href: gallery.projectId
-          ? `/admin/projects/${gallery.projectId}`
+          ? sessionId
+            ? `/admin/projects/${gallery.projectId}/sessions/${sessionId}?step=delivery`
+            : `/admin/projects/${gallery.projectId}#workflow`
           : `/g/${gallery.publicToken}`,
         emailStudio: false,
       });

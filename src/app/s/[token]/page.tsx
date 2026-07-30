@@ -19,6 +19,7 @@ import {
 } from "@/components/gallery/GalleryGuestState";
 import type { MasonryPhoto } from "@/components/gallery/MasonryGrid";
 import { PhotoLightbox } from "@/components/gallery/PhotoLightbox";
+import { GalleryContactDialog } from "@/components/gallery/GalleryContactDialog";
 import { PinModal } from "@/components/gallery/PinModal";
 import { PublicShell } from "@/components/shells/PublicShell";
 import {
@@ -73,6 +74,7 @@ export default function SubAlbumPage() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
   const [guestReason, setGuestReason] = useState<GalleryGuestReason | null>(
     null,
   );
@@ -370,6 +372,10 @@ export default function SubAlbumPage() {
   const galleryHref = data.gallery?.publicToken
     ? `/g/${data.gallery.publicToken}`
     : undefined;
+  const hubToken = data.gallery?.publicToken;
+  const showGalleryContact = Boolean(
+    data.studio.showGalleryContactForm && hubToken,
+  );
 
   return (
     <PublicShell
@@ -394,6 +400,16 @@ export default function SubAlbumPage() {
         actions={
           <>
             <AlbumShareButton onShare={() => void shareAlbum()} />
+            {showGalleryContact ? (
+              <Button
+                size="sm"
+                tone="ghost"
+                className="min-h-11"
+                onClick={() => setContactOpen(true)}
+              >
+                Message
+              </Button>
+            ) : null}
             {data.photos.length ? (
               <Button
                 size="sm"
@@ -418,6 +434,16 @@ export default function SubAlbumPage() {
           index={lightboxIndex}
           onIndexChange={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
+        />
+      ) : null}
+
+      {showGalleryContact && hubToken ? (
+        <GalleryContactDialog
+          open={contactOpen}
+          onClose={() => setContactOpen(false)}
+          token={hubToken}
+          studioName={data.studio.name}
+          galleryTitle={data.galleryTitle || data.gallery?.title}
         />
       ) : null}
 

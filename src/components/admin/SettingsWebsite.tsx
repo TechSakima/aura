@@ -18,6 +18,7 @@ import {
 } from "@/components/ui";
 import { WebsiteReadinessChecklist } from "@/components/admin/WebsiteReadinessChecklist";
 import { primaryLogoFromKit } from "@/lib/brand-kit";
+import { mutateJson } from "@/lib/client/mutation";
 import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { studioShareCardFromBrand } from "@/lib/share-card";
@@ -68,8 +69,8 @@ export function SettingsWebsite() {
     async function load() {
       const [studioRes, galleriesRes, typesRes] = await Promise.all([
         fetch("/api/studio"),
-        fetch("/api/galleries"),
-        fetch("/api/bookings/session-types"),
+        fetch("/api/galleries?options=1"),
+        fetch("/api/bookings/session-types?view=requests"),
       ]);
       if (cancelled) return;
       setLoading(false);
@@ -141,54 +142,65 @@ export function SettingsWebsite() {
   async function saveWebsite(e?: FormEvent) {
     e?.preventDefault();
     setSaving(true);
-    const res = await fetch("/api/studio", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: "website",
-        homepage: {
-          enabled,
-          slug,
-          biography,
-          showBiography,
-          showSocialLinks,
-          showWebsite,
-          showEmail,
-          showPhone,
-          showAddress,
-          showContactForm,
-          sortOrder,
-          ...(password.trim() ? { password: password.trim() } : {}),
-          ...(clearPassword ? { clearPassword: true } : {}),
+    try {
+      const result = await mutateJson(
+        "/api/studio",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: "website",
+            homepage: {
+              enabled,
+              slug,
+              biography,
+              showBiography,
+              showSocialLinks,
+              showWebsite,
+              showEmail,
+              showPhone,
+              showAddress,
+              showContactForm,
+              sortOrder,
+              ...(password.trim() ? { password: password.trim() } : {}),
+              ...(clearPassword ? { clearPassword: true } : {}),
+            },
+          }),
         },
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      push("Save failed", "danger");
-      return;
+        { action: "save" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      setDirty(false);
+      setPassword("");
+      setClearPassword(false);
+      if (password.trim() || clearPassword) {
+        setHasPassword(clearPassword ? false : true);
+      }
+      push(enabled ? "Website saved" : "Website saved to draft", "success");
+    } finally {
+      setSaving(false);
     }
-    setDirty(false);
-    setPassword("");
-    setClearPassword(false);
-    if (password.trim() || clearPassword) {
-      setHasPassword(clearPassword ? false : true);
-    }
-    push(enabled ? "Website saved" : "Website saved to draft", "success");
   }
 
   async function toggleGallery(id: string, show: boolean) {
     setGalleries((prev) =>
       prev.map((g) => (g.id === id ? { ...g, showOnHomepage: show } : g)),
     );
-    const res = await fetch(`/api/galleries/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ showOnHomepage: show }),
-    });
-    if (!res.ok) {
-      push("Could not update collection", "danger");
-      const gRes = await fetch("/api/galleries");
+    const result = await mutateJson(
+      `/api/galleries/${id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ showOnHomepage: show }),
+      },
+      { action: "update" },
+    );
+    if (!result.ok) {
+      push(result.errorMessage, "danger");
+      const gRes = await fetch("/api/galleries?options=1");
       if (gRes.ok) {
         const gData = await gRes.json();
         setGalleries(gData.galleries || []);
@@ -244,14 +256,14 @@ export function SettingsWebsite() {
             tone="accent"
             className="w-full sm:w-auto"
           >
-            Edit layout
+            Site builder
           </ButtonLink>
           <ButtonLink
             href="/admin/website/preview"
             tone="ghost"
             className="w-full sm:w-auto"
           >
-            Open preview
+            Preview
           </ButtonLink>
           {enabled && slug ? (
             <Button
@@ -371,9 +383,6 @@ export function SettingsWebsite() {
 
         <Field>
           <Label htmlFor="site-password">Site password</Label>
-          <p className="mb-2 text-sm text-muted">
-            Visitors enter it on the site. Not included in the link.
-          </p>
           <Input
             id="site-password"
             type="password"
@@ -417,12 +426,10 @@ export function SettingsWebsite() {
         </Field>
 
         <div>
-          <Label>Show on site</Label>
+          <Label>Contact details on site</Label>
           <ul className="mt-2 space-y-1 text-sm">
             {(
               [
-                ["bio", "Biography", showBiography, setShowBiography],
-                ["social", "Social links", showSocialLinks, setShowSocialLinks],
                 ["web", "Website", showWebsite, setShowWebsite],
                 ["email", "Contact email", showEmail, setShowEmail],
                 ["phone", "Phone number", showPhone, setShowPhone],
@@ -443,6 +450,9 @@ export function SettingsWebsite() {
               </li>
             ))}
           </ul>
+          <p className="mt-2 text-xs text-muted">
+            Biography, social, and section order live in Site builder.
+          </p>
           <ButtonLink
             href="/admin/settings/booking"
             tone="ghost"
@@ -505,9 +515,17 @@ export function SettingsWebsite() {
             Live galleries on the public site portfolio.
           </p>
           {galleries.length === 0 ? (
-            <p className="text-sm text-muted">
-              No galleries yet. Create one from a project Delivery step.
-            </p>
+            <div className="space-y-2">
+              <p className="text-sm text-muted">No live galleries.</p>
+              <ButtonLink
+                href="/admin/galleries"
+                tone="ghost"
+                size="sm"
+                className="min-h-11"
+              >
+                Open galleries
+              </ButtonLink>
+            </div>
           ) : (
             <ul className="space-y-2">
               {galleries.map((g) => (

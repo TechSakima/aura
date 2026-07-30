@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withApiDeprecation } from "@/lib/api-deprecation";
 import { requireAdmin } from "@/lib/auth";
 import {
   archiveProject,
@@ -10,6 +11,11 @@ import { getClientBundle, updateStudioDb } from "@/lib/db/store";
 import type { ProjectStage } from "@/lib/types";
 import { isProjectWorkflowStep } from "@/lib/workflow/path";
 
+function dep(res: NextResponse, id: string) {
+  return withApiDeprecation(res, `/api/projects/${id}`);
+}
+
+/** @deprecated Use `/api/projects/[id]` (AURA-273). */
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -21,9 +27,10 @@ export async function GET(
   if (!bundle || bundle.client.studioId !== admin.studioId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  return NextResponse.json(bundle);
+  return dep(NextResponse.json(bundle), id);
 }
 
+/** @deprecated Use `/api/projects/[id]` (AURA-273). */
 export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -37,20 +44,26 @@ export async function PATCH(
     const ok = await archiveProject(admin.studioId, id);
     if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const bundle = await getClientBundle(id);
-    return NextResponse.json({
-      client: bundle?.client,
-      project: bundle?.client,
-    });
+    return dep(
+      NextResponse.json({
+        client: bundle?.client,
+        project: bundle?.client,
+      }),
+      id,
+    );
   }
 
   if (body.unarchive === true) {
     const ok = await unarchiveProject(admin.studioId, id);
     if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const bundle = await getClientBundle(id);
-    return NextResponse.json({
-      client: bundle?.client,
-      project: bundle?.client,
-    });
+    return dep(
+      NextResponse.json({
+        client: bundle?.client,
+        project: bundle?.client,
+      }),
+      id,
+    );
   }
 
   if (body.workflowStep != null && !isProjectWorkflowStep(body.workflowStep)) {
@@ -84,9 +97,10 @@ export async function PATCH(
     return c;
   });
   if (!client) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ client, project: client });
+  return dep(NextResponse.json({ client, project: client }), id);
 }
 
+/** @deprecated Use `/api/projects/[id]` (AURA-273). */
 export async function DELETE(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -96,5 +110,5 @@ export async function DELETE(
   const { id } = await ctx.params;
   const ok = await deleteProjectCascade(admin.studioId, id);
   if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ ok: true });
+  return dep(NextResponse.json({ ok: true }), id);
 }

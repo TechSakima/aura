@@ -86,10 +86,7 @@ export async function POST(
   }
 
   const now = new Date().toISOString();
-  const sortBase = db.photos.filter(
-    (p) => p.galleryId === galleryId && p.kind === kind,
-  ).length;
-
+  // Sharp runs before the write queue — never hold studio write lock during derivatives (AURA-267).
   const url = mediaProxyUrl(objectPath);
   let thumbUrl = url;
   let webUrl = url;
@@ -146,7 +143,7 @@ export async function POST(
     watermarkedUrl,
     videoUrl: kind === "video" ? url : undefined,
     mimeType: contentType,
-    sortOrder: sortBase,
+    sortOrder: 0, // assigned inside appendStudioPhotos write lock
     aspect: aspect ?? 1,
     version: 1,
     width: width ?? 1,
@@ -155,10 +152,10 @@ export async function POST(
     updatedAt: now,
   };
 
-  const needsCover = !gallery.coverPhotoUrl && kind !== "video";
   await appendStudioPhotos(admin.studioId, [photo], {
-    galleryId: needsCover ? galleryId : undefined,
-    coverPhotoUrl: needsCover ? photo.watermarkedUrl : undefined,
+    galleryId,
+    coverPhotoUrl: kind !== "video" ? photo.watermarkedUrl : undefined,
+    assignSortOrders: true,
   });
 
   return NextResponse.json({ photo, ok: true });

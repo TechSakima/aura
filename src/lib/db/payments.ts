@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { COL } from "@/lib/db/collections";
 import { assertFirebaseReady } from "@/lib/db/require-firebase";
 import { getStudioDoc, updateStudioDb } from "@/lib/db/store";
+import { workflowStepAfterDepositPaid } from "@/lib/workflow/state-rules";
 import type { AuraDatabase, PaymentLinkTemplate } from "@/lib/types";
 
 /** Find a payment link across studios (public pay page). */
@@ -133,7 +134,7 @@ export async function recordPaymentLinkCharge(opts: {
       if (project) {
         project.paidAmount = (project.paidAmount || 0) + opts.netAmount;
         project.stage = "booked";
-        project.workflowStep = "prep";
+        project.workflowStep = workflowStepAfterDepositPaid(project.workflowStep);
         project.updatedAt = now;
       }
       for (const prop of db.proposals.filter(
@@ -429,7 +430,7 @@ export async function restorePaymentAfterDisputeWon(opts: {
         project.paidAmount =
           Math.round(((project.paidAmount || 0) + netBack) * 100) / 100;
         project.stage = "booked";
-        project.workflowStep = "prep";
+        project.workflowStep = workflowStepAfterDepositPaid(project.workflowStep);
         project.updatedAt = now;
       }
       for (const prop of db.proposals.filter(

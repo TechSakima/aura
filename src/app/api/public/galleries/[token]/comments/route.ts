@@ -6,6 +6,7 @@ import {
   findGalleryByPublicToken,
 } from "@/lib/db/store";
 import { assertPublicGalleryAccess } from "@/lib/public-access";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import type { Comment } from "@/lib/types";
 
 export async function POST(
@@ -13,6 +14,17 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
+  const limited = rateLimit(`comments:${token}:${clientIp(req)}`, 10, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
+
   const body = await req.json();
   const photoId = String(body.photoId || "");
   const authorName = String(body.authorName || "Client");

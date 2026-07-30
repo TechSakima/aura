@@ -7,7 +7,7 @@ import {
   getStudioDoc,
   patchStudioDoc,
 } from "@/lib/db/store";
-import { emailContactToStudio } from "@/lib/notify/send";
+import { emailContactToStudio, notifyDeliveryIssue } from "@/lib/notify/send";
 import type { ContactMessage, EmailOutboxJob } from "@/lib/types";
 
 /** Backoff after each failed attempt (AURA-313). */
@@ -20,6 +20,25 @@ const CONTACT_BACKOFF_MS = [
 ] as const;
 
 const MAX_ATTEMPTS = CONTACT_BACKOFF_MS.length;
+
+async function alertDeadContactEmail(opts: {
+  studioId: string;
+  contactMessageId?: string;
+  reason: string;
+}) {
+  const href = opts.contactMessageId
+    ? "/admin#messages"
+    : "/admin/settings/notifications";
+  await notifyDeliveryIssue({
+    studioId: opts.studioId,
+    kind: "email",
+    title: "Message email failed",
+    body: opts.reason.slice(0, 200),
+    href,
+  }).catch((err) => {
+    console.error("[email-outbox] notify dead", err);
+  });
+}
 
 export async function getContactMessage(
   id: string,
@@ -70,6 +89,10 @@ async function processContactOutboxJob(
       lastError: "Contact message missing",
       attempts: job.attempts + 1,
     });
+    await alertDeadContactEmail({
+      studioId: job.studioId,
+      reason: "Contact message missing",
+    });
     return "dead";
   }
   if (message.emailStatus === "sent") {
@@ -83,6 +106,11 @@ async function processContactOutboxJob(
       status: "dead",
       lastError: "Studio missing",
       attempts: job.attempts + 1,
+    });
+    await alertDeadContactEmail({
+      studioId: job.studioId,
+      contactMessageId: message.id,
+      reason: "Studio missing",
     });
     return "dead";
   }
@@ -103,14 +131,20 @@ async function processContactOutboxJob(
   }
 
   if (delivered.skipped) {
+    const skipErr = delivered.error || "Email skipped";
     await patchStudioDoc(COL.emailOutbox, job.id, {
       status: "dead",
       attempts,
-      lastError: delivered.error || "Email skipped",
+      lastError: skipErr,
     });
     await patchStudioDoc(COL.contactMessages, message.id, {
       emailStatus: "skipped",
-      emailLastError: delivered.error || "Email skipped",
+      emailLastError: skipErr,
+    });
+    await alertDeadContactEmail({
+      studioId: job.studioId,
+      contactMessageId: message.id,
+      reason: skipErr,
     });
     return "dead";
   }
@@ -125,6 +159,11 @@ async function processContactOutboxJob(
     await patchStudioDoc(COL.contactMessages, message.id, {
       emailStatus: "failed",
       emailLastError: err,
+    });
+    await alertDeadContactEmail({
+      studioId: job.studioId,
+      contactMessageId: message.id,
+      reason: err,
     });
     return "dead";
   }
@@ -183,4 +222,24 @@ export async function drainEmailOutbox(opts?: {
   }
 
   return { processed: due.length, sent, dead };
+}
+
+/** Count dead contact email jobs for dashboard attention (AURA-279). */
+export async function countDeadContactOutbox(
+  studioId: string,
+): Promise<number> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  try {
+    const snap = await db
+      .collection(COL.emailOutbox)
+      .where("studioId", "==", studioId)
+      .where("status", "==", "dead")
+      .limit(50)
+      .get();
+    return snap.size;
+  } catch (err) {
+    console.error("[email-outbox] count dead", err);
+    return 0;
+  }
 }

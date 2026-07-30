@@ -1,3 +1,4 @@
+export { ActionStack, type ActionStackItem } from "./action-stack";
 export { Badge } from "./badge";
 export { Button, type ButtonProps } from "./button";
 export { ButtonLink } from "./button-link";
@@ -15,7 +16,12 @@ export {
   UploadStatusDialog,
   useUploadSession,
 } from "./file-upload";
-export type { UploadItem, UploadItemStatus } from "./file-upload";
+export type {
+  UploadFileContext,
+  UploadItem,
+  UploadItemStatus,
+} from "./file-upload";
+export { FILE_UPLOAD_CONCURRENCY } from "./file-upload";
 export { IconButton } from "./icon-button";
 export { Input } from "./input";
 export { Label } from "./label";
@@ -28,6 +34,7 @@ export { PublicCta } from "./public-cta";
 export { SectionIntro } from "./section-intro";
 export { Select } from "./select";
 export { SegmentedControl, type SegmentedOption } from "./segmented-control";
+export { ScrollRail } from "./scroll-rail";
 export { Skeleton } from "./skeleton";
 export { StatusBadge } from "./status-badge";
 

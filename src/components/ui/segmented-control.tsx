@@ -25,7 +25,7 @@ export function SegmentedControl<T extends string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className="flex flex-wrap gap-2"
+      className="flex w-full min-w-0 flex-wrap gap-[var(--density-control-gap,0.5rem)]"
     >
       {options.map((opt) => (
         <button
@@ -34,13 +34,16 @@ export function SegmentedControl<T extends string>({
           aria-pressed={value === opt.id}
           onClick={() => onChange(opt.id)}
           className={cn(
-            "min-h-11 border px-3 py-2 text-[11px] uppercase tracking-wider transition",
+            "min-h-11 min-w-0 grow basis-[calc(50%-0.25rem)] border px-3 py-2 text-[11px] uppercase tracking-wider transition",
+            "sm:grow-0 sm:basis-auto",
             value === opt.id
               ? "border-accent bg-accent text-accent-ink"
               : "border-line bg-surface text-ink hover:border-ink/30",
           )}
         >
-          {opt.icon ? <span className="mr-1.5 inline-flex align-middle">{opt.icon}</span> : null}
+          {opt.icon ? (
+            <span className="mr-1.5 inline-flex align-middle">{opt.icon}</span>
+          ) : null}
           {opt.label}
         </button>
       ))}

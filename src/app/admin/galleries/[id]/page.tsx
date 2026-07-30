@@ -1,37 +1,31 @@
-"use client";
+import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth";
+import { getGalleryById, getSessionById } from "@/lib/db/store";
+import { sessionDeliveryHref } from "@/lib/admin-deep-links";
 
-import { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+/** Legacy gallery URL → Delivery step (AURA-063). */
+export default async function GalleryRedirectPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const admin = await requireAdmin();
+  if (!admin) redirect("/admin/login");
 
-/** Legacy gallery URL → Delivery step in project workflow */
-export default function GalleryRedirectPage() {
-  const { id } = useParams<{ id: string }>();
-  const router = useRouter();
+  const { id } = await params;
+  const gallery = await getGalleryById(id);
+  if (!gallery || gallery.studioId !== admin.studioId) {
+    redirect("/admin/projects");
+  }
 
-  useEffect(() => {
-    void (async () => {
-      const res = await fetch(`/api/galleries/${id}`);
-      if (!res.ok) {
-        router.replace("/admin/projects");
-        return;
-      }
-      const data = await res.json();
-      const sessionId =
-        data.shoot?.id || data.gallery?.sessionId || data.gallery?.shootId;
-      const projectId =
-        data.client?.id ||
-        data.shoot?.projectId ||
-        data.shoot?.clientId ||
-        data.gallery?.projectId;
-      if (!sessionId || !projectId) {
-        router.replace("/admin/projects");
-        return;
-      }
-      router.replace(
-        `/admin/projects/${projectId}/sessions/${sessionId}?step=delivery`,
-      );
-    })();
-  }, [id, router]);
-
-  return <p className="text-muted">Opening delivery step…</p>;
+  const sessionId = gallery.sessionId || gallery.shootId;
+  let projectId: string | undefined = gallery.projectId;
+  if (!projectId && sessionId) {
+    const session = await getSessionById(sessionId);
+    projectId = session?.projectId || session?.clientId;
+  }
+  if (!sessionId || !projectId) {
+    redirect("/admin/projects");
+  }
+  redirect(sessionDeliveryHref(projectId, sessionId));
 }

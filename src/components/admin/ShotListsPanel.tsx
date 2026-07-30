@@ -97,10 +97,7 @@ export function ShotListsPanel({ embedded = false }: { embedded?: boolean }) {
   return (
     <div>
       {!embedded ? (
-        <PageHeader
-          title="Shot library"
-          description="Studio templates for prep and the shoot-day helper. Add shots with category, name, and optional reference photo — then attach a list to a session."
-        />
+        <PageHeader title="Shot library" />
       ) : (
         <h2 className="mb-4 font-display text-2xl">Shot lists</h2>
       )}
@@ -113,7 +110,7 @@ export function ShotListsPanel({ embedded = false }: { embedded?: boolean }) {
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
             <Field>
-              <Label htmlFor="type">Shoot type</Label>
+              <Label htmlFor="type">Applies to</Label>
               <Select
                 id="type"
                 value={shootType}
@@ -131,8 +128,8 @@ export function ShotListsPanel({ embedded = false }: { embedded?: boolean }) {
           <ul className="mt-6 space-y-2">
             {templates.map((t) => (
               <li key={t.id}>
-                <Card className="flex items-center justify-between gap-2 p-3">
-                  <div>
+                <Card className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="font-medium">{t.name}</p>
                     <p className="text-sm text-muted">
                       {t.shootType} · {t.items.length} shots
@@ -141,6 +138,7 @@ export function ShotListsPanel({ embedded = false }: { embedded?: boolean }) {
                   <Button
                     size="sm"
                     tone="ghost"
+                    className="min-h-11 w-full sm:w-auto"
                     onClick={() => setEditing(withCategories(structuredClone(t)))}
                   >
                     Edit
@@ -166,9 +164,15 @@ export function ShotListsPanel({ embedded = false }: { embedded?: boolean }) {
               onChange={(items) => setEditing({ ...editing, items })}
               onUploadImage={uploadImage}
             />
-            <div className="flex gap-2">
-              <Button onClick={() => void saveEdit()}>Save</Button>
-              <Button tone="ghost" onClick={() => setEditing(null)}>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button className="min-h-11 w-full sm:w-auto" onClick={() => void saveEdit()}>
+                Save
+              </Button>
+              <Button
+                tone="ghost"
+                className="min-h-11 w-full sm:w-auto"
+                onClick={() => setEditing(null)}
+              >
                 Cancel
               </Button>
             </div>

@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
 import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
+import { InstallHint } from "@/components/pwa/InstallHint";
 import { PublicShell } from "@/components/shells/PublicShell";
 import {
   Button,
@@ -139,11 +140,15 @@ export default function PublicProposalPage() {
         </div>
       }
     >
-      <section className="relative overflow-hidden bg-ink text-surface">
+      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-md">
+          <InstallHint storageKey={`aura-install-dismiss-p-${token}`} />
+        </div>
+      </div>
+      <section className="relative min-w-0 overflow-x-clip bg-ink text-surface">
         <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink to-accent/35" />
-        <div className="relative shell-pad mx-auto max-w-[var(--public-max)] py-14 sm:py-20">
-
-          <div className="max-w-2xl animate-enter">
+        <div className="relative shell-pad mx-auto max-w-[var(--public-max)] pt-[max(3.5rem,env(safe-area-inset-top))] pb-14 sm:pb-20 sm:pt-[max(5rem,env(safe-area-inset-top))]">
+          <div className="max-w-2xl min-w-0 animate-enter">
             <StudioMark
               logoUrl={studio.logoUrl}
               name={studio.name}
@@ -152,7 +157,7 @@ export default function PublicProposalPage() {
             {clientName ? (
               <p className="mb-2 text-sm text-surface/75">For {clientName}</p>
             ) : null}
-            <h1 className="font-display text-4xl tracking-tight sm:text-6xl">
+            <h1 className="max-w-full break-words font-display text-4xl tracking-tight sm:text-6xl">
               {proposal.title}
             </h1>
             <p className="mt-4 max-w-lg text-surface/70">
