@@ -158,7 +158,7 @@ POST https://aura.stroburm.app/api/cron/email-outbox
 Authorization: Bearer your-long-random-string
 ```
 
-Expect JSON like `{ "ok": true, "processed": N, "sent": N, "dead": N }`.
+Expect JSON like `{ "ok": true, "processed": N, "sent": N, "dead": N, "authSessionsDeleted": N, "galleriesExpired": N }` (AURA-112 maintenance bundle).
 
 ### Step 3 — Schedule it
 
@@ -170,7 +170,7 @@ Pick one:
 | **GitHub Action `schedule`** | Same POST to production |
 | **External ping service** | Authenticated POST only — don’t expose without `CRON_SECRET` |
 
-Without cron, retries still run when admins use the dashboard; cron just makes recovery automatic overnight.
+Without cron, email retries still run when admins use the dashboard; cron also expires past-due galleries and purges auth sessions (AURA-112 / AURA-110).
 
 ---
 

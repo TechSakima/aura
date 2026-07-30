@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { differenceInCalendarDays, format } from "date-fns";
@@ -129,6 +136,8 @@ export default function PublicGalleryPage() {
   const [downloadPhotoId, setDownloadPhotoId] = useState<string | null>(null);
   const [commentName, setCommentName] = useState("");
   const [commentBody, setCommentBody] = useState("");
+  const [commentCompany, setCommentCompany] = useState("");
+  const commentStartedAtRef = useRef(Date.now());
   const [subLabel, setSubLabel] = useState("");
   const [subOpen, setSubOpen] = useState(false);
   const [subSelected, setSubSelected] = useState<string[]>([]);
@@ -562,6 +571,8 @@ export default function PublicGalleryPage() {
           photoId: selected.id,
           authorName: commentName || "Guest",
           body: commentBody,
+          company: commentCompany,
+          startedAt: commentStartedAtRef.current,
         }),
       });
       if (!res.ok) {
@@ -570,6 +581,7 @@ export default function PublicGalleryPage() {
         return;
       }
       setCommentBody("");
+      commentStartedAtRef.current = Date.now();
       await load();
     } catch {
       push(mutationOfflineMessage("post comment"), "danger");
@@ -1121,7 +1133,21 @@ export default function PublicGalleryPage() {
                           ))}
                         </ul>
                       ) : null}
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                      <div className="relative flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div
+                          aria-hidden
+                          className="pointer-events-none absolute -left-[9999px] h-0 w-0 overflow-hidden opacity-0"
+                        >
+                          <Label htmlFor="lb-comment-company">Company</Label>
+                          <Input
+                            id="lb-comment-company"
+                            name="company"
+                            tabIndex={-1}
+                            autoComplete="off"
+                            value={commentCompany}
+                            onChange={(e) => setCommentCompany(e.target.value)}
+                          />
+                        </div>
                         <Field className="min-w-0 flex-1">
                           <Label htmlFor="lb-comment-name">Name</Label>
                           <Input

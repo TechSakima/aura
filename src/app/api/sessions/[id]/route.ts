@@ -172,18 +172,7 @@ export async function DELETE(
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const bundle = await getShootBundle(id);
-  const eventId =
-    bundle?.shoot.studioId === admin.studioId
-      ? bundle.shoot.googleEventId
-      : undefined;
   const ok = await deleteShootCascade(admin.studioId, id);
   if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (eventId) {
-    await deleteGoogleCalendarEvent({
-      studioId: admin.studioId,
-      eventId,
-    });
-  }
   return NextResponse.json({ ok: true, deleted: id });
 }

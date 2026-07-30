@@ -10,7 +10,7 @@ import {
   listSubAlbumsByGalleryId,
   patchStudioDoc,
 } from "@/lib/db/store";
-import { recordEvent } from "@/lib/analytics";
+import { linkedSessionId, recordEvent } from "@/lib/analytics";
 import { resolveBrowseMediaUrl } from "@/lib/media-url-server";
 import { assertPublicGalleryAccess } from "@/lib/public-access";
 import {
@@ -86,7 +86,7 @@ export async function GET(
     });
   }
 
-  const sessionId = gallery.sessionId || gallery.shootId;
+  const sessionId = linkedSessionId(gallery);
   const [session, rawSubAlbums, comments] = await Promise.all([
     sessionId ? getSessionById(sessionId) : Promise.resolve(null),
     listSubAlbumsByGalleryId(gallery.id),
@@ -124,7 +124,7 @@ export async function GET(
       type: "gallery_view",
       studioId: gallery.studioId,
       galleryId: gallery.id,
-      sessionId: gallery.sessionId || gallery.shootId,
+      sessionId,
       projectId: session?.projectId || project?.id,
     });
   }

@@ -1,6 +1,11 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -63,7 +68,18 @@ export function getFirebaseApp(): FirebaseApp | null {
 
 export function getFirebaseAuth() {
   const app = getFirebaseApp();
-  return app ? getAuth(app) : null;
+  if (!app) return null;
+  // Prefer IndexedDB so standalone PWA keeps Firebase Auth across cold starts (AURA-385).
+  if (typeof window !== "undefined") {
+    try {
+      return initializeAuth(app, {
+        persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      });
+    } catch {
+      /* already initialized */
+    }
+  }
+  return getAuth(app);
 }
 
 export function getFirebaseDb() {

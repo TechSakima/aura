@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { findGalleryByPublicToken } from "@/lib/db/store";
-import { recordEvent } from "@/lib/analytics";
-import { rateLimit } from "@/lib/rate-limit";
+import { linkedSessionId, recordEvent } from "@/lib/analytics";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 import {
   getVisitorFavoritesDoc,
   newVisitorId,
@@ -76,9 +76,18 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  const limited = rateLimit(`favorites:${token}:${ip}`, 120, 60_000);
+  const ip = clientIp(req);
+  const body = await req.json().catch(() => ({}));
+  const action = body.action === "submit" ? "submit" : "toggle";
+
+  // Shared limits (AURA-108) — tighter than per-process 120/min.
+  const limited = await rateLimitShared(
+    action === "submit"
+      ? `favorites-submit:${token}:${ip}`
+      : `favorites:${token}:${ip}`,
+    action === "submit" ? 5 : 60,
+    action === "submit" ? 10 * 60_000 : 60_000,
+  );
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -88,9 +97,6 @@ export async function POST(
       },
     );
   }
-
-  const body = await req.json();
-  const action = body.action === "submit" ? "submit" : "toggle";
 
   const gallery = await findGalleryByPublicToken(token);
   if (!gallery?.studioId) {
@@ -128,11 +134,11 @@ export async function POST(
         type: "favorite_toggle",
         studioId: gallery.studioId,
         galleryId: gallery.id,
-        sessionId: gallery.sessionId || gallery.shootId,
+        sessionId: linkedSessionId(gallery),
         projectId: gallery.projectId || undefined,
         meta: { action: "submit", count: doc.photoIds.length },
       });
-      const sessionId = gallery.sessionId || gallery.shootId;
+      const sessionId = linkedSessionId(gallery);
       await notifyStudio({
         studioId: gallery.studioId,
         type: "selects_submitted",
@@ -210,7 +216,7 @@ export async function POST(
     type: "favorite_toggle",
     studioId: gallery.studioId,
     galleryId: gallery.id,
-    sessionId: gallery.sessionId || gallery.shootId,
+    sessionId: linkedSessionId(gallery),
     projectId: gallery.projectId || undefined,
     photoId,
     meta: { on: toggledOn },

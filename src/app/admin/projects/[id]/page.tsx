@@ -7,7 +7,9 @@ import { ProjectMessagesTrail } from "@/components/admin/ProjectMessagesTrail";
 import { ProjectWorkflowPanel } from "@/components/admin/ProjectWorkflowPanel";
 import { ShootPublicLinks } from "@/components/admin/ShootPublicLinks";
 import {
+  ActionStack,
   Button,
+  Checkbox,
   EmptyState,
   Field,
   Input,
@@ -59,6 +61,7 @@ export default function ProjectDetailPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [updateCustomTitles, setUpdateCustomTitles] = useState(false);
   const [sessionType, setSessionType] = useState("Wedding");
   const [sessionDate, setSessionDate] = useState("");
 
@@ -148,12 +151,24 @@ export default function ProjectDetailPage() {
 
   async function saveProject(e: FormEvent) {
     e.preventDefault();
+    const nameChanged =
+      Boolean(project && name.trim() && name.trim() !== project.name);
     const result = await mutateJson<{ project: Project }>(
       `/api/projects/${id}`,
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, phone, notes }),
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          notes,
+          ...(nameChanged
+            ? {
+                renameTitles: updateCustomTitles ? "all" : "auto",
+              }
+            : {}),
+        }),
       },
       { action: "save" },
     );
@@ -163,6 +178,7 @@ export default function ProjectDetailPage() {
     }
     setProject(result.data.project);
     setEditing(false);
+    setUpdateCustomTitles(false);
     push("Project updated", "success");
   }
 
@@ -294,17 +310,32 @@ export default function ProjectDetailPage() {
           </span>
         }
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button tone="ghost" onClick={() => void archiveProjectAction()}>
-              {project.stage === "archived" ? "Unarchive" : "Archive"}
-            </Button>
-            <Button tone="danger" onClick={() => void deleteProjectAction()}>
-              Delete
-            </Button>
-            <Button tone="ghost" onClick={() => router.push("/admin/projects")}>
-              All projects
-            </Button>
-          </div>
+          <ActionStack
+            primaryId="all"
+            moreLabel="More"
+            menuIds={["archive", "delete"]}
+            actions={[
+              {
+                id: "all",
+                label: "All projects",
+                href: "/admin/projects",
+                tone: "ghost",
+              },
+              {
+                id: "archive",
+                label:
+                  project.stage === "archived" ? "Unarchive" : "Archive",
+                tone: "ghost",
+                onClick: () => void archiveProjectAction(),
+              },
+              {
+                id: "delete",
+                label: "Delete",
+                tone: "danger",
+                onClick: () => void deleteProjectAction(),
+              },
+            ]}
+          />
         }
       />
 
@@ -318,7 +349,16 @@ export default function ProjectDetailPage() {
         <SectionIntro
           title="Contact"
           actions={
-            <Button tone="ghost" size="sm" onClick={() => setEditing((v) => !v)}>
+            <Button
+              tone="ghost"
+              size="sm"
+              onClick={() => {
+                setEditing((v) => {
+                  if (v) setUpdateCustomTitles(false);
+                  return !v;
+                });
+              }}
+            >
               {editing ? "Cancel" : "Edit"}
             </Button>
           }
@@ -328,6 +368,20 @@ export default function ProjectDetailPage() {
             <Field>
               <Label>Project name</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} required />
+              {project && name.trim() && name.trim() !== project.name ? (
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-muted">
+                    Auto gallery and payment titles update.
+                  </p>
+                  <label className="flex min-h-11 items-center gap-2 text-sm text-muted">
+                    <Checkbox
+                      checked={updateCustomTitles}
+                      onChange={(e) => setUpdateCustomTitles(e.target.checked)}
+                    />
+                    Update custom titles too
+                  </label>
+                </div>
+              ) : null}
             </Field>
             <Field>
               <Label>Email</Label>

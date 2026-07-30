@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
+import { recordEvent } from "@/lib/analytics";
 import { nextStepHtml, offeringLabel } from "@/lib/copy/offering";
 import { COL } from "@/lib/db/collections";
 import { findStudioByHomepageSlug } from "@/lib/db/homepage-slug";
@@ -227,6 +228,14 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Could not create booking" }, { status: 500 });
   }
+
+  await recordEvent({
+    type: "booking_submitted",
+    studioId: studio.id,
+    projectId: project.id,
+    sessionId: session.id,
+    meta: { sessionTypeId, bookingId: booking.id },
+  });
 
   await notifyStudio({
     studioId: studio.id,

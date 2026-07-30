@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import { findGalleryByPublicToken } from "@/lib/db/store";
-import { recordEvent } from "@/lib/analytics";
+import { linkedSessionId, recordEvent } from "@/lib/analytics";
 import { assertPublicGalleryAccess } from "@/lib/public-access";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const limited = rateLimit(`photo-view:${token}:${clientIp(req)}`, 60, 60_000);
+  const limited = await rateLimitShared(
+    `photo-view:${token}:${clientIp(req)}`,
+    40,
+    60_000,
+  );
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -34,7 +38,7 @@ export async function POST(
     type: "photo_view",
     studioId: gallery.studioId,
     galleryId: gallery.id,
-    sessionId: gallery.sessionId || gallery.shootId,
+    sessionId: linkedSessionId(gallery),
     projectId: gallery.projectId || undefined,
     photoId: String(body.photoId || ""),
   });

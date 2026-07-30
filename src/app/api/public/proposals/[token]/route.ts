@@ -7,7 +7,7 @@ import {
   patchStudioDoc,
   readStudioDb,
 } from "@/lib/db/store";
-import { recordEvent } from "@/lib/analytics";
+import { linkedSessionId, recordEvent } from "@/lib/analytics";
 import { resolveBrowseMediaUrl, resolveBrowseMediaUrls } from "@/lib/media-url-server";
 import { notifyQuoteAccepted } from "@/lib/notify/send";
 import { assertPublicProposalAccess } from "@/lib/public-access";
@@ -38,7 +38,7 @@ export async function GET(
   }
 
   const session = db.sessions.find(
-    (s) => s.id === (proposal.sessionId || proposal.shootId),
+    (s) => s.id === linkedSessionId(proposal),
   );
   const project = session
     ? db.projects.find((c) => c.id === session.projectId)
@@ -49,7 +49,8 @@ export async function GET(
       type: "proposal_view",
       studioId: proposal.studioId,
       proposalId: proposal.id,
-      shootId: proposal.shootId,
+      sessionId: linkedSessionId(proposal),
+      projectId: project?.id || proposal.projectId,
     });
   }
 
@@ -143,7 +144,7 @@ export async function POST(
       updatedAt: now,
     };
 
-    const sessionId = proposal.sessionId || proposal.shootId;
+    const sessionId = linkedSessionId(proposal);
     if (sessionId) {
       await patchStudioDoc(COL.projectSessions, sessionId, {
         status: "booked",
@@ -168,7 +169,8 @@ export async function POST(
       type: "proposal_accept",
       studioId: proposal.studioId,
       proposalId: proposal.id,
-      shootId: proposal.shootId,
+      sessionId: linkedSessionId(proposal),
+      projectId: projectId || proposal.projectId,
     });
     await notifyQuoteAccepted({
       studioId: proposal.studioId,

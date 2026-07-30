@@ -7,8 +7,9 @@ import {
   readStudioDb,
   updateStudioDoc,
 } from "@/lib/db/store";
-import { deleteStorageObject, getSignedMediaDownloadUrl } from "@/lib/storage/upload";
 import { downloadFilename } from "@/lib/images/download-filename";
+import { derivativePathsToDelete } from "@/lib/images/storage-paths";
+import { deleteStorageObject, getSignedMediaDownloadUrl } from "@/lib/storage/upload";
 import type { Project, ProjectSession } from "@/lib/types";
 import { deleteFavoritesForGalleries } from "@/lib/gallery-favorites";
 
@@ -76,13 +77,11 @@ export async function POST(
 
   for (const photo of photos) {
     if (!photo.storagePath.startsWith("studios/")) continue;
-    const stem = photo.storagePath.replace(/\/originals\/[^/]+$/, "");
-    const base = photo.storagePath.split("/").pop()?.replace(/\.jpg$/i, "") || "";
     await Promise.all([
       deleteStorageObject(photo.storagePath).catch(() => undefined),
-      deleteStorageObject(`${stem}/derivatives/${base}-thumb.webp`).catch(() => undefined),
-      deleteStorageObject(`${stem}/derivatives/${base}-web.webp`).catch(() => undefined),
-      deleteStorageObject(`${stem}/derivatives/${base}-wm.webp`).catch(() => undefined),
+      ...derivativePathsToDelete(photo.storagePath).map((p) =>
+        deleteStorageObject(p).catch(() => undefined),
+      ),
     ]);
   }
 

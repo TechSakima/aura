@@ -1,9 +1,11 @@
 import { nanoid } from "nanoid";
 import { COL } from "@/lib/db/collections";
 import { appendStudioDoc } from "@/lib/db/store";
+import { linkedSessionId } from "@/lib/linked-session";
 import type { AnalyticsEvent, AnalyticsEventType } from "@/lib/types";
 
 export { analyticsEventLabel } from "@/lib/analytics-labels";
+export { linkedSessionId } from "@/lib/linked-session";
 
 /** Append-only analytics write — never full-studio RMW (AURA-003). */
 export async function recordEvent(input: {
@@ -13,12 +15,13 @@ export async function recordEvent(input: {
   proposalId?: string;
   projectId?: string;
   sessionId?: string;
-  /** @deprecated prefer sessionId */
+  /** @deprecated prefer sessionId — accepted for callers, not persisted (AURA-116) */
   shootId?: string;
   photoId?: string;
   meta?: Record<string, string | number | boolean>;
 }) {
   if (!input.studioId) return;
+  const sessionId = linkedSessionId(input);
   const event: AnalyticsEvent = {
     id: nanoid(),
     studioId: input.studioId,
@@ -26,8 +29,7 @@ export async function recordEvent(input: {
     galleryId: input.galleryId,
     proposalId: input.proposalId,
     projectId: input.projectId,
-    sessionId: input.sessionId || input.shootId,
-    shootId: input.shootId,
+    sessionId,
     photoId: input.photoId,
     meta: input.meta,
     at: new Date().toISOString(),

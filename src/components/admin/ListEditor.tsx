@@ -7,6 +7,8 @@ import {
   FileUploadButton,
   Input,
   Label,
+  Panel,
+  Select,
   Textarea,
   useUploadSession,
 } from "@/components/ui";
@@ -54,6 +56,7 @@ export function StringListEditor({
         <Button
           type="button"
           tone="neutral"
+          className="min-h-11"
           onClick={() => onChange([...values, ""])}
         >
           {placeholder}
@@ -77,46 +80,58 @@ export function PartnerListEditor({
       <Label>Print partners</Label>
       <div className="space-y-4">
         {partners.map((p, i) => (
-          <div key={p.id} className="space-y-2 rounded-md border border-line p-3">
-            <Input
-              placeholder="Name"
-              value={p.name}
-              onChange={(e) => {
-                const next = [...partners];
-                next[i] = { ...p, name: e.target.value };
-                onChange(next);
-              }}
-            />
-            <Input
-              placeholder="https://"
-              value={p.url}
-              onChange={(e) => {
-                const next = [...partners];
-                next[i] = { ...p, url: e.target.value };
-                onChange(next);
-              }}
-            />
-            <Textarea
-              placeholder="Short note"
-              value={p.note}
-              onChange={(e) => {
-                const next = [...partners];
-                next[i] = { ...p, note: e.target.value };
-                onChange(next);
-              }}
-            />
+          <Panel key={p.id} className="space-y-3">
+            <Field>
+              <Label htmlFor={`partner-name-${p.id}`}>Name</Label>
+              <Input
+                id={`partner-name-${p.id}`}
+                value={p.name}
+                onChange={(e) => {
+                  const next = [...partners];
+                  next[i] = { ...p, name: e.target.value };
+                  onChange(next);
+                }}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor={`partner-url-${p.id}`}>URL</Label>
+              <Input
+                id={`partner-url-${p.id}`}
+                placeholder="https://"
+                value={p.url}
+                onChange={(e) => {
+                  const next = [...partners];
+                  next[i] = { ...p, url: e.target.value };
+                  onChange(next);
+                }}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor={`partner-note-${p.id}`}>Note</Label>
+              <Textarea
+                id={`partner-note-${p.id}`}
+                value={p.note}
+                onChange={(e) => {
+                  const next = [...partners];
+                  next[i] = { ...p, note: e.target.value };
+                  onChange(next);
+                }}
+              />
+            </Field>
             <Button
               type="button"
               tone="ghost"
+              className="min-h-11"
               onClick={() => onChange(partners.filter((_, j) => j !== i))}
             >
               Remove partner
             </Button>
-          </div>
+          </Panel>
         ))}
         <Button
           type="button"
           tone="neutral"
+          className="min-h-11"
           onClick={() =>
             onChange([
               ...partners,
@@ -158,35 +173,41 @@ export function IntakeListEditor({
       <Label>{label}</Label>
       <div className="space-y-3">
         {questions.map((q, i) => (
-          <div key={q.id} className="space-y-2 rounded-md border border-line p-3">
-            <Input
-              placeholder="Question label"
-              value={q.label}
-              onChange={(e) => {
-                const next = [...questions];
-                next[i] = { ...q, label: e.target.value };
-                onChange(next);
-              }}
-            />
-            <div className="flex flex-wrap gap-2">
-              <select
-                className="min-h-11 rounded-md border border-line bg-surface px-3"
-                value={q.type}
+          <Panel key={q.id} className="space-y-3">
+            <Field>
+              <Label htmlFor={`q-label-${q.id}`}>Question</Label>
+              <Input
+                id={`q-label-${q.id}`}
+                value={q.label}
                 onChange={(e) => {
                   const next = [...questions];
-                  next[i] = {
-                    ...q,
-                    type: e.target.value as IntakeRow["type"],
-                  };
+                  next[i] = { ...q, label: e.target.value };
                   onChange(next);
                 }}
-              >
-                <option value="text">Short text</option>
-                <option value="textarea">Long text</option>
-                <option value="select">Dropdown</option>
-                <option value="date">Date</option>
-              </select>
-              <label className="inline-flex min-h-11 items-center gap-2 text-sm">
+              />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field>
+                <Label htmlFor={`q-type-${q.id}`}>Type</Label>
+                <Select
+                  id={`q-type-${q.id}`}
+                  value={q.type}
+                  onChange={(e) => {
+                    const next = [...questions];
+                    next[i] = {
+                      ...q,
+                      type: e.target.value as IntakeRow["type"],
+                    };
+                    onChange(next);
+                  }}
+                >
+                  <option value="text">Short text</option>
+                  <option value="textarea">Long text</option>
+                  <option value="select">Dropdown</option>
+                  <option value="date">Date</option>
+                </Select>
+              </Field>
+              <label className="flex min-h-11 items-end gap-2 pb-2 text-sm">
                 <Checkbox
                   checked={Boolean(q.required)}
                   onChange={(e) => {
@@ -198,35 +219,41 @@ export function IntakeListEditor({
                 Required
               </label>
             </div>
-            {q.type === "select" && (
-              <Input
-                placeholder="Options, comma-separated"
-                value={(q.options || []).join(", ")}
-                onChange={(e) => {
-                  const next = [...questions];
-                  next[i] = {
-                    ...q,
-                    options: e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  };
-                  onChange(next);
-                }}
-              />
-            )}
+            {q.type === "select" ? (
+              <Field>
+                <Label htmlFor={`q-options-${q.id}`}>Options</Label>
+                <Input
+                  id={`q-options-${q.id}`}
+                  placeholder="Comma-separated"
+                  value={(q.options || []).join(", ")}
+                  onChange={(e) => {
+                    const next = [...questions];
+                    next[i] = {
+                      ...q,
+                      options: e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    };
+                    onChange(next);
+                  }}
+                />
+              </Field>
+            ) : null}
             <Button
               type="button"
               tone="ghost"
+              className="min-h-11"
               onClick={() => onChange(questions.filter((_, j) => j !== i))}
             >
               Remove
             </Button>
-          </div>
+          </Panel>
         ))}
         <Button
           type="button"
           tone="neutral"
+          className="min-h-11"
           onClick={() =>
             onChange([
               ...questions,
@@ -266,35 +293,44 @@ export function PricingListEditor({
       <Label>Pricing tiers</Label>
       <div className="space-y-3">
         {tiers.map((t, i) => (
-          <div key={t.id} className="space-y-2 rounded-md border border-line p-3">
-            <Input
-              placeholder="Tier name"
-              value={t.name}
-              onChange={(e) => {
-                const next = [...tiers];
-                next[i] = { ...t, name: e.target.value };
-                onChange(next);
-              }}
-            />
-            <Input
-              type="number"
-              placeholder="Price"
-              value={Number.isFinite(t.price) ? t.price : 0}
-              onChange={(e) => {
-                const next = [...tiers];
-                next[i] = { ...t, price: Number(e.target.value) || 0 };
-                onChange(next);
-              }}
-            />
-            <Textarea
-              placeholder="Description"
-              value={t.description}
-              onChange={(e) => {
-                const next = [...tiers];
-                next[i] = { ...t, description: e.target.value };
-                onChange(next);
-              }}
-            />
+          <Panel key={t.id} className="space-y-3">
+            <Field>
+              <Label htmlFor={`tier-name-${t.id}`}>Name</Label>
+              <Input
+                id={`tier-name-${t.id}`}
+                value={t.name}
+                onChange={(e) => {
+                  const next = [...tiers];
+                  next[i] = { ...t, name: e.target.value };
+                  onChange(next);
+                }}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor={`tier-price-${t.id}`}>Price</Label>
+              <Input
+                id={`tier-price-${t.id}`}
+                type="number"
+                value={Number.isFinite(t.price) ? t.price : 0}
+                onChange={(e) => {
+                  const next = [...tiers];
+                  next[i] = { ...t, price: Number(e.target.value) || 0 };
+                  onChange(next);
+                }}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor={`tier-desc-${t.id}`}>Description</Label>
+              <Textarea
+                id={`tier-desc-${t.id}`}
+                value={t.description}
+                onChange={(e) => {
+                  const next = [...tiers];
+                  next[i] = { ...t, description: e.target.value };
+                  onChange(next);
+                }}
+              />
+            </Field>
             <label className="inline-flex min-h-11 items-center gap-2 text-sm">
               <Checkbox
                 checked={Boolean(t.highlighted)}
@@ -309,15 +345,17 @@ export function PricingListEditor({
             <Button
               type="button"
               tone="ghost"
+              className="min-h-11"
               onClick={() => onChange(tiers.filter((_, j) => j !== i))}
             >
               Remove tier
             </Button>
-          </div>
+          </Panel>
         ))}
         <Button
           type="button"
           tone="neutral"
+          className="min-h-11"
           onClick={() =>
             onChange([
               ...tiers,
@@ -384,41 +422,48 @@ export function ShotItemsEditor({
       {uploadSession.dialog}
       <div className="space-y-3">
         {items.map((item, i) => (
-          <div key={item.id} className="space-y-2 rounded-md border border-line p-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <select
-                className="min-h-11 w-full rounded-md border border-line bg-surface-elevated px-3"
-                value={item.category}
-                onChange={(e) => {
-                  const next = [...items];
-                  next[i] = {
-                    ...item,
-                    category: e.target.value,
-                    section: e.target.value,
-                  };
-                  onChange(next);
-                }}
-              >
-                {SHOT_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-                {!SHOT_CATEGORIES.includes(
-                  item.category as (typeof SHOT_CATEGORIES)[number],
-                ) && item.category ? (
-                  <option value={item.category}>{item.category}</option>
-                ) : null}
-              </select>
-              <Input
-                placeholder="Name (e.g. Rings)"
-                value={item.label}
-                onChange={(e) => {
-                  const next = [...items];
-                  next[i] = { ...item, label: e.target.value };
-                  onChange(next);
-                }}
-              />
+          <Panel key={item.id} className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field>
+                <Label htmlFor={`shot-cat-${item.id}`}>Category</Label>
+                <Select
+                  id={`shot-cat-${item.id}`}
+                  value={item.category}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[i] = {
+                      ...item,
+                      category: e.target.value,
+                      section: e.target.value,
+                    };
+                    onChange(next);
+                  }}
+                >
+                  {SHOT_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                  {!SHOT_CATEGORIES.includes(
+                    item.category as (typeof SHOT_CATEGORIES)[number],
+                  ) && item.category ? (
+                    <option value={item.category}>{item.category}</option>
+                  ) : null}
+                </Select>
+              </Field>
+              <Field>
+                <Label htmlFor={`shot-label-${item.id}`}>Name</Label>
+                <Input
+                  id={`shot-label-${item.id}`}
+                  placeholder="Rings"
+                  value={item.label}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[i] = { ...item, label: e.target.value };
+                    onChange(next);
+                  }}
+                />
+              </Field>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               {item.referenceImageUrl ? (
@@ -426,7 +471,7 @@ export function ShotItemsEditor({
                 <img
                   src={item.referenceImageUrl}
                   alt=""
-                  className="h-14 w-14 rounded object-cover"
+                  className="h-14 w-14 rounded-md object-cover"
                 />
               ) : null}
               {onUploadImage ? (
@@ -453,15 +498,17 @@ export function ShotItemsEditor({
             <Button
               type="button"
               tone="ghost"
+              className="min-h-11"
               onClick={() => onChange(items.filter((_, j) => j !== i))}
             >
               Remove shot
             </Button>
-          </div>
+          </Panel>
         ))}
         <Button
           type="button"
           tone="neutral"
+          className="min-h-11"
           onClick={() =>
             onChange([
               ...items,

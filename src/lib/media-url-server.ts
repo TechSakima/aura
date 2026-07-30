@@ -11,7 +11,9 @@ import { isR2Configured } from "@/lib/storage/r2-store";
 export { BROWSE_SIGNED_TTL_SEC };
 
 /**
- * Public browse URL (AURA-357): R2 signed GET when configured, else `/api/media` proxy.
+ * Public browse URL (AURA-357 / AURA-106): R2 signed GET when configured
+ * (expiring; refreshed on page load), else `/api/media` proxy → signed redirect.
+ * Originals never. PIN does not apply here (download-only).
  * Server-only — do not import from client components.
  */
 export async function resolveBrowseMediaUrl(

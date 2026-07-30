@@ -735,7 +735,7 @@ export function ProjectWorkflowPanel({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        shootId: session.id,
+        sessionId: session.id,
         title: `${project.name} gallery`,
         pin,
         goLive: false,

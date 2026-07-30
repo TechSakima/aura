@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { Button, Field, Label, PageHeader, Select } from "@/components/ui";
+import { clientLogout } from "@/lib/client-logout";
 import { cn } from "@/lib/cn";
 import {
   SETTINGS_LAST_SECTION_KEY,
@@ -35,7 +36,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
             tone="ghost"
             className="w-full sm:w-auto"
             onClick={async () => {
-              await fetch("/api/auth/logout", { method: "POST" });
+              await clientLogout();
               router.push("/admin/login");
             }}
           >

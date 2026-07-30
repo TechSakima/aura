@@ -11,12 +11,25 @@ import {
 } from "@/lib/db/store";
 import { firebaseReady } from "@/lib/db/require-firebase";
 import { getAdminAuth } from "@/lib/firebase/admin";
+import {
+  clearSessionCookieOptions,
+  mintSessionCookieValue,
+  SESSION_COOKIE,
+  SESSION_DAYS,
+  SESSION_MAX_AGE_SEC,
+  sessionCookieOptions,
+  verifySessionCookie,
+} from "@/lib/session-cookie";
 import type { AdminContext } from "@/lib/types";
 
-const COOKIE = "aura_session";
-const SESSION_DAYS = 14;
+export {
+  clearSessionCookieOptions,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE_SEC,
+  sessionCookieOptions,
+};
 
-async function createSessionCookie(opts: {
+async function openSession(opts: {
   uid: string;
   email: string;
   studioId: string;
@@ -34,16 +47,7 @@ async function createSessionCookie(opts: {
     studioId: opts.studioId,
   });
 
-  const jar = await cookies();
-  jar.set(COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-    expires: new Date(expiresAt),
-  });
-
-  return token;
+  return { token, expiresAt };
 }
 
 /** Verify Firebase Auth ID token and open an Aura session for an existing studio member. */
@@ -74,12 +78,17 @@ export async function loginWithFirebaseIdToken(idToken: string) {
       };
     }
 
-    await createSessionCookie({
+    const session = await openSession({
       uid,
       email,
       studioId: member.studioId,
     });
-    return { ok: true as const, studioId: member.studioId };
+    return {
+      ok: true as const,
+      studioId: member.studioId,
+      token: session.token,
+      expiresAt: session.expiresAt,
+    };
   } catch {
     return { ok: false as const, error: "Invalid email or password" };
   }
@@ -122,12 +131,18 @@ export async function signupWithFirebaseIdToken(opts: {
     // Migrated owner email should claim, not create a second studio.
     const claimed = await claimStudioMembership({ uid, email });
     if (claimed) {
-      await createSessionCookie({
+      const session = await openSession({
         uid,
         email,
         studioId: claimed.studioId,
       });
-      return { ok: true as const, studioId: claimed.studioId, claimed: true };
+      return {
+        ok: true as const,
+        studioId: claimed.studioId,
+        claimed: true as const,
+        token: session.token,
+        expiresAt: session.expiresAt,
+      };
     }
 
     const { studio } = await createStudioWithDefaults({
@@ -136,47 +151,52 @@ export async function signupWithFirebaseIdToken(opts: {
       ownerUid: uid,
     });
 
-    await createSessionCookie({
+    const session = await openSession({
       uid,
       email,
       studioId: studio.id,
     });
-    return { ok: true as const, studioId: studio.id, claimed: false };
+    return {
+      ok: true as const,
+      studioId: studio.id,
+      claimed: false as const,
+      token: session.token,
+      expiresAt: session.expiresAt,
+    };
   } catch {
     return { ok: false as const, error: "Could not create studio" };
   }
 }
 
+/** Mint signed cookie value for Set-Cookie (AURA-104). */
+export async function mintAuthCookieValue(
+  token: string,
+  expiresAt: string,
+): Promise<string> {
+  return mintSessionCookieValue(token, expiresAt);
+}
+
 export async function getSessionToken(): Promise<string | null> {
   const jar = await cookies();
-  return jar.get(COOKIE)?.value || null;
+  const verified = await verifySessionCookie(jar.get(SESSION_COOKIE)?.value);
+  return verified?.token || null;
 }
 
-function clearSessionCookie(
-  jar: Awaited<ReturnType<typeof cookies>>,
-) {
-  jar.set(COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 0,
-  });
-}
-
+/**
+ * Delete Firestore auth session for the current cookie.
+ * Caller clears Set-Cookie on the response. Does not touch Firebase client Auth —
+ * browser callers use `clientLogout` for both (AURA-110).
+ */
 export async function logout() {
-  const jar = await cookies();
-  const token = jar.get(COOKIE)?.value;
+  const token = await getSessionToken();
   if (token) {
     await deleteSession(token).catch(() => undefined);
   }
-  clearSessionCookie(jar);
 }
 
 export async function requireAdmin(): Promise<AdminContext | null> {
   if (!firebaseReady()) return null;
-  const jar = await cookies();
-  const token = jar.get(COOKIE)?.value;
+  const token = await getSessionToken();
   if (!token) return null;
 
   const session = await getSession(token);
@@ -189,6 +209,12 @@ export async function requireAdmin(): Promise<AdminContext | null> {
     return null;
   }
 
+  // Live membership — revoked / deleted members stop immediately (AURA-105).
+  const member = await getMemberByUid(session.uid);
+  if (!member || member.studioId !== session.studioId) {
+    return null;
+  }
+
   const studio = await getStudioDoc(session.studioId);
   if (!studio) return null;
 
@@ -196,11 +222,6 @@ export async function requireAdmin(): Promise<AdminContext | null> {
     studio,
     studioId: studio.id,
     uid: session.uid,
-    email: session.email,
+    email: session.email || member.email,
   };
-}
-
-export async function hashPassword(password: string) {
-  const bcrypt = await import("bcryptjs");
-  return bcrypt.hash(password, 10);
 }

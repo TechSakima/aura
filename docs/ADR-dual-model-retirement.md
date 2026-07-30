@@ -47,14 +47,14 @@ Aura had parallel entities: `Client`/`Shoot` (legacy) and `Project`/`ProjectSess
 | `appendStudioDoc` | New docs (notifications, events, contact, outbox) |
 | `patchStudioDoc` / `updateStudioDoc` | Field updates on one doc |
 | `appendStudioPhotos` | Gallery photo batches |
-| `deleteStudioDocs` | Explicit deletes / cascades |
-| `writeStudioCollection` | Upsert-only bulk (never delete-missing) |
+| `deleteStudioDocs` | Explicit deletes / cascades (+ `deletedDocs` tombstones) |
+| `writeStudioCollection` | Upsert-only bulk (never delete-missing; skips tombstoned ids) |
 
 **Avoid on hot / public paths:** full-studio `updateStudioDb` RMW. Public gallery traffic, favorites, comments, contact, and analytics must not rewrite the whole studio.
 
 **Still OK:** rare admin mutations that already load a studio bundle and need multi-doc consistency — prefer narrowing over time (**AURA-055** for photos/analytics off every path).
 
-**Multi-instance:** upsert-only collection writes + per-doc patches prevent wipe races. Shared rate-limit store remains **AURA-107**.
+**Multi-instance:** upsert-only collection writes + per-doc patches prevent wipe races. **AURA-099:** hard deletes write tombstones so a concurrent stale `updateStudioDb` cannot resurrect projects/sessions (or cascade children). Session cascade owns Google Calendar event cleanup. Shared rate-limit store remains **AURA-107**.
 
 ## Agent contract (AURA-280 / AURA-303)
 

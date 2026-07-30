@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { InstallHint } from "@/components/pwa/InstallHint";
+import { AdminCommandPalette } from "@/components/shells/AdminCommandPalette";
 import { NotificationBell } from "@/components/shells/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { rememberAdminRoute } from "@/lib/admin-last-route";
+import { clientLogout } from "@/lib/client-logout";
 import { cn } from "@/lib/cn";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { useDisplayModeStandalone } from "@/lib/use-display-mode-standalone";
@@ -26,28 +28,38 @@ function RememberAdminRoute() {
   return null;
 }
 
+type NavIcon = "dashboard" | "projects" | "bookings" | "more";
+
 type NavItem = {
   href: string;
   label: string;
   match: (p: string) => boolean;
   /** Optional badge key shown when count > 0 */
   badgeKey?: "pendingBookings";
+  icon?: NavIcon;
 };
 
 const primaryNav: NavItem[] = [
-  { href: "/admin", label: "Dashboard", match: (p) => p === "/admin" },
+  {
+    href: "/admin",
+    label: "Dashboard",
+    match: (p) => p === "/admin",
+    icon: "dashboard",
+  },
   {
     href: "/admin/projects",
     label: "Projects",
     // Legacy indexes server-redirect (AURA-063). Keep shoots* for day-of helper.
     match: (p) =>
       p.startsWith("/admin/projects") || p.startsWith("/admin/shoots"),
+    icon: "projects",
   },
   {
     href: "/admin/bookings",
     label: "Bookings",
     match: (p) => p.startsWith("/admin/bookings"),
     badgeKey: "pendingBookings",
+    icon: "bookings",
   },
 ];
 
@@ -91,6 +103,55 @@ const moreNav: NavItem[] = [
 ];
 
 const allNav = [...primaryNav, ...moreNav];
+
+function TabIcon({ name, className }: { name: NavIcon; className?: string }) {
+  const common = {
+    width: 22,
+    height: 22,
+    viewBox: "0 0 24 24",
+    fill: "none" as const,
+    stroke: "currentColor",
+    strokeWidth: 1.75,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true as const,
+    className,
+  };
+  switch (name) {
+    case "dashboard":
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+      );
+    case "projects":
+      return (
+        <svg {...common}>
+          <path d="M4 7h16v12H4z" />
+          <path d="M8 7V5h8v2" />
+        </svg>
+      );
+    case "bookings":
+      return (
+        <svg {...common}>
+          <rect x="3" y="5" width="18" height="16" rx="1.5" />
+          <path d="M3 10h18" />
+          <path d="M8 3v4M16 3v4" />
+        </svg>
+      );
+    case "more":
+      return (
+        <svg {...common}>
+          <circle cx="6" cy="12" r="1.25" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="12" r="1.25" fill="currentColor" stroke="none" />
+          <circle cx="18" cy="12" r="1.25" fill="currentColor" stroke="none" />
+        </svg>
+      );
+  }
+}
 
 function NavBadge({ count }: { count: number }) {
   if (count <= 0) return null;
@@ -180,7 +241,7 @@ export function AdminShell({
   }, [pathname]);
 
   async function signOut() {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await clientLogout();
     router.push("/admin/login");
   }
 
@@ -207,25 +268,33 @@ export function AdminShell({
         <RememberAdminRoute />
       </Suspense>
       <header className="sticky top-0 z-40 border-b border-line bg-canvas/90 pt-[env(safe-area-inset-top)] backdrop-blur-md">
-        <div className="shell-pad mx-auto flex max-w-[var(--shell-max)] items-center justify-between gap-3 py-3 md:py-4">
+        <div className="shell-pad mx-auto flex max-w-[var(--shell-max)] items-center justify-between gap-3 py-2 md:py-4">
           <Link
             href="/admin"
-            className="inline-flex min-w-0 items-center gap-2 no-underline sm:gap-3"
+            className="inline-flex min-h-11 min-w-0 items-center gap-2 no-underline sm:gap-3"
           >
             {logo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={logo}
                 alt=""
-                className="h-8 w-auto max-w-[8rem] object-contain sm:h-9 sm:max-w-[11rem]"
+                className="h-7 w-auto max-w-[7rem] object-contain sm:h-9 sm:max-w-[11rem]"
               />
             ) : null}
-            <span className="truncate font-display text-lg tracking-tight text-ink sm:text-2xl">
+            <span
+              className={cn(
+                "truncate font-display tracking-tight text-ink",
+                logo
+                  ? "text-base sm:text-2xl"
+                  : "text-lg sm:text-2xl",
+              )}
+            >
               {studioName}
             </span>
           </Link>
 
           <div className="flex items-center gap-1 sm:gap-2">
+            <AdminCommandPalette />
             <NotificationBell />
 
             {/* Desktop nav */}
@@ -253,44 +322,24 @@ export function AdminShell({
                 Log out
               </Button>
             ) : null}
-
-            {/* Mobile menu toggle */}
-            <button
-              type="button"
-              className="relative inline-flex h-11 w-11 items-center justify-center rounded-md text-ink md:hidden"
-              aria-label={menuOpen ? "Close menu" : "Open menu"}
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((v) => !v)}
-            >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                aria-hidden
-              >
-                {menuOpen ? (
-                  <path d="M6 6l12 12M18 6L6 18" />
-                ) : (
-                  <>
-                    <path d="M4 7h16" />
-                    <path d="M4 12h16" />
-                    <path d="M4 17h16" />
-                  </>
-                )}
-              </svg>
-            </button>
           </div>
         </div>
 
         {menuOpen ? (
-          <div className="max-h-[min(70dvh,calc(100dvh-8rem))] overflow-y-auto border-t border-line bg-canvas pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:hidden">
+          <div className="max-h-[min(70dvh,calc(100dvh-8rem))] overflow-y-auto border-t border-line bg-canvas pb-[calc(var(--admin-tab-bar)+env(safe-area-inset-bottom))] md:hidden">
             <nav aria-label="More" className="shell-pad py-3">
-              <p className="px-3 pb-2 text-xs uppercase tracking-[0.14em] text-muted">
-                More
-              </p>
+              <div className="mb-2 flex items-center justify-between px-3">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted">
+                  More
+                </p>
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-sm text-muted hover:bg-line/50 hover:text-ink"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
               <ul className="flex flex-col gap-1">
                 {moreNav.map((item) => (
                   <li key={item.href}>
@@ -334,22 +383,22 @@ export function AdminShell({
         ) : null}
       </header>
 
-      <main className="shell-pad mx-auto w-full max-w-[var(--shell-max)] animate-enter pt-[var(--density-section-y,2rem)] pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-[var(--density-section-y,2.5rem)]">
+      <main className="shell-pad mx-auto w-full max-w-[var(--shell-max)] animate-enter pt-[var(--density-section-y,2rem)] pb-[calc(var(--admin-tab-bar)+env(safe-area-inset-bottom)+0.75rem)] md:pb-[var(--density-section-y,2.5rem)]">
         {children}
       </main>
 
-      <div className="pointer-events-none fixed inset-x-0 z-50 shell-pad md:bottom-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))]">
+      <div className="pointer-events-none fixed inset-x-0 z-50 shell-pad md:bottom-4 bottom-[calc(var(--admin-tab-bar)+env(safe-area-inset-bottom))]">
         <div className="mx-auto max-w-[var(--shell-max)]">
           <InstallHint storageKey="aura-install-dismiss-admin" />
         </div>
       </div>
 
-      {/* Mobile bottom tabs — safe-area clears home indicator (AURA-292) */}
+      {/* Mobile bottom tabs — icons reclaim width; safe-area clears home indicator (AURA-096) */}
       <nav
         aria-label="Primary"
         className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/95 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-md md:hidden"
       >
-        <ul className="mx-auto grid max-w-[var(--shell-max)] grid-cols-4 gap-0 px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <ul className="mx-auto grid max-w-[var(--shell-max)] grid-cols-4 gap-0 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1">
           {primaryNav.map((item) => {
             const active = item.match(pathname);
             const count = badgeFor(item);
@@ -358,19 +407,20 @@ export function AdminShell({
                 <Link
                   href={item.href}
                   className={cn(
-                    "relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium uppercase tracking-[0.12em] no-underline",
+                    "relative flex min-h-11 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium no-underline",
                     active ? "text-ink" : "text-muted",
                   )}
                 >
-                  <span className="relative inline-flex items-center">
-                    {item.label}
+                  <span className="relative inline-flex">
+                    {item.icon ? <TabIcon name={item.icon} /> : null}
                     {count > 0 ? (
                       <span
-                        className="absolute -right-2.5 -top-1 h-2 w-2 rounded-full bg-accent"
+                        className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-accent"
                         aria-label={`${count} pending`}
                       />
                     ) : null}
                   </span>
+                  <span>{item.label}</span>
                 </Link>
               </li>
             );
@@ -378,13 +428,16 @@ export function AdminShell({
           <li>
             <button
               type="button"
-              onClick={() => setMenuOpen(true)}
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-expanded={menuOpen}
+              aria-label={menuOpen ? "Close more menu" : "Open more menu"}
               className={cn(
-                "flex min-h-14 w-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium uppercase tracking-[0.12em]",
+                "flex min-h-11 w-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium",
                 moreActive || menuOpen ? "text-ink" : "text-muted",
               )}
             >
-              More
+              <TabIcon name="more" />
+              <span>More</span>
             </button>
           </li>
         </ul>

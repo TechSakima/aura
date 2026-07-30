@@ -1,5 +1,27 @@
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  isSealedGoogleRefreshToken,
+  openGoogleRefreshToken,
+  sealGoogleRefreshToken,
+} from "@/lib/google-token-crypto";
 import { notifyDeliveryIssue } from "@/lib/notify/send";
+
+/** Plain refresh token for Google API; lazily seals legacy plaintext (AURA-109). */
+async function plainGoogleRefreshToken(
+  studioId: string,
+  stored: string,
+): Promise<string> {
+  const plain = openGoogleRefreshToken(stored);
+  if (!isSealedGoogleRefreshToken(stored) && plain) {
+    await updateStudioDb(studioId, (db) => {
+      const cur = db.studio.googleCalendarRefreshToken;
+      if (cur && !isSealedGoogleRefreshToken(cur)) {
+        db.studio.googleCalendarRefreshToken = sealGoogleRefreshToken(cur);
+      }
+    }).catch(() => undefined);
+  }
+  return plain;
+}
 
 function calendarDeliveryBody(raw: string): string {
   if (/oauth is not configured/i.test(raw)) return "Calendar sync unavailable";
@@ -90,7 +112,19 @@ export async function getBusyIntervals(opts: {
     };
   }
 
-  const refresh = db.studio.googleCalendarRefreshToken!;
+  let refresh: string;
+  try {
+    refresh = await plainGoogleRefreshToken(
+      opts.studioId,
+      db.studio.googleCalendarRefreshToken!,
+    );
+  } catch {
+    return {
+      busy: [],
+      syncFailed: true,
+      syncError: "Google Calendar token could not be read",
+    };
+  }
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
@@ -204,7 +238,19 @@ async function getGoogleAccessToken(studioId: string): Promise<
   if (!studioGoogleCalendarReady(db.studio)) {
     return { ok: false, skipped: true };
   }
-  const refresh = db.studio.googleCalendarRefreshToken!;
+  let refresh: string;
+  try {
+    refresh = await plainGoogleRefreshToken(
+      studioId,
+      db.studio.googleCalendarRefreshToken!,
+    );
+  } catch {
+    return {
+      ok: false,
+      skipped: false,
+      error: "Google Calendar token could not be read",
+    };
+  }
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {

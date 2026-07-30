@@ -44,7 +44,7 @@ export function confirmArchiveGallery(): DestructiveConfirmCopy {
   return {
     title: "Archive gallery?",
     message:
-      "A zip downloads for your records. Photos are removed from the live gallery and the project may mark complete.",
+      "A zip downloads for your records. The public link stops working and photos leave the live gallery. The project may mark complete.",
     confirmLabel: "Archive",
     tone: "danger",
   };
@@ -53,16 +53,16 @@ export function confirmArchiveGallery(): DestructiveConfirmCopy {
 export function confirmArchiveProject(name: string): DestructiveConfirmCopy {
   return {
     title: "Archive project?",
-    message: `“${name}” leaves the default project list. You can unarchive later.`,
+    message: `“${name}” leaves the active list. You can unarchive later. Public gallery and quote links stay live until you archive each gallery or delete the project.`,
     confirmLabel: "Archive",
-    tone: "danger",
+    tone: "neutral",
   };
 }
 
 export function confirmUnarchiveProject(name: string): DestructiveConfirmCopy {
   return {
     title: "Unarchive project?",
-    message: `“${name}” returns to active projects.`,
+    message: `“${name}” returns to active projects. Sessions stay archived until you update them. Public links are unchanged.`,
     confirmLabel: "Unarchive",
     tone: "neutral",
   };
@@ -71,7 +71,7 @@ export function confirmUnarchiveProject(name: string): DestructiveConfirmCopy {
 export function confirmDeleteProject(name: string): DestructiveConfirmCopy {
   return {
     title: "Delete project permanently?",
-    message: `“${name}” and its sessions, quotes, contracts, and galleries are removed. This cannot be undone.`,
+    message: `“${name}” and its sessions, quotes, contracts, and galleries are removed — including photos. Public links stop working. Export a gallery zip from Wrap first if you need the files. This cannot be undone.`,
     confirmLabel: "Delete",
     tone: "danger",
   };
@@ -80,7 +80,7 @@ export function confirmDeleteProject(name: string): DestructiveConfirmCopy {
 export function confirmDeleteSession(label: string): DestructiveConfirmCopy {
   return {
     title: "Delete session?",
-    message: `“${label}” and its quote, plan, and gallery photos are removed. This cannot be undone.`,
+    message: `“${label}” and its quote, plan, and gallery photos are removed. Public links for this session stop working. Export from Wrap first if you need the files. This cannot be undone.`,
     confirmLabel: "Delete",
     tone: "danger",
   };

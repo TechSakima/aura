@@ -16,6 +16,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { mutateJson } from "@/lib/client/mutation";
+import { clientLogout } from "@/lib/client-logout";
 import { firebaseConfigured, getFirebaseAuth } from "@/lib/firebase/client";
 import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 
@@ -297,7 +298,7 @@ export function SettingsAccount() {
         <div>
           <h2 className="font-display text-2xl">Signed-in devices</h2>
           <p className="mt-1 text-sm text-muted">
-            Active studio sign-ins for this owner.
+            Active studio sign-ins. Log out ends this device only.
           </p>
         </div>
         {sessionsLoading ? (
@@ -345,7 +346,7 @@ export function SettingsAccount() {
           tone="ghost"
           className="w-full sm:w-auto"
           onClick={async () => {
-            await fetch("/api/auth/logout", { method: "POST" });
+            await clientLogout();
             router.push("/admin/login");
           }}
         >

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { signupWithFirebaseIdToken } from "@/lib/auth";
+import {
+  mintAuthCookieValue,
+  SESSION_COOKIE,
+  sessionCookieOptions,
+  signupWithFirebaseIdToken,
+} from "@/lib/auth";
 import { firebaseReady } from "@/lib/db/require-firebase";
 
 export async function POST(req: Request) {
@@ -31,9 +36,17 @@ export async function POST(req: Request) {
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
-  return NextResponse.json({
+
+  const cookieValue = await mintAuthCookieValue(result.token, result.expiresAt);
+  const res = NextResponse.json({
     ok: true,
     studioId: result.studioId,
     claimed: result.claimed,
   });
+  res.cookies.set(
+    SESSION_COOKIE,
+    cookieValue,
+    sessionCookieOptions(new Date(result.expiresAt)),
+  );
+  return res;
 }

@@ -19,7 +19,7 @@ import {
   readPublicContactJson,
   resolveContactStudio,
 } from "@/lib/public-contact-server";
-import { rateLimit } from "@/lib/rate-limit";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   const raw = await readPublicContactJson(req);
@@ -41,9 +41,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  const ipLimit = rateLimit(`contact-ip:${ip}`, 5, 10 * 60_000);
+  const ip = clientIp(req);
+  const ipLimit = await rateLimitShared(`contact-ip:${ip}`, 5, 10 * 60_000);
   if (!ipLimit.ok) {
     return NextResponse.json(
       { error: "Too many messages. Try again shortly." },
@@ -54,7 +53,11 @@ export async function POST(req: Request) {
     );
   }
 
-  const emailLimit = rateLimit(`contact-email:${data.email}`, 3, 30 * 60_000);
+  const emailLimit = await rateLimitShared(
+    `contact-email:${data.email}`,
+    3,
+    30 * 60_000,
+  );
   if (!emailLimit.ok) {
     return NextResponse.json(
       { error: "Too many messages. Try again shortly." },
@@ -74,7 +77,7 @@ export async function POST(req: Request) {
   }
   const { studio, gallery } = resolved.resolved;
 
-  const studioLimit = rateLimit(
+  const studioLimit = await rateLimitShared(
     `contact-studio:${studio.id}`,
     30,
     60 * 60_000,

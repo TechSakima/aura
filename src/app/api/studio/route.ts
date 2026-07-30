@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { logout, requireAdmin } from "@/lib/auth";
+import {
+  clearSessionCookieOptions,
+  logout,
+  requireAdmin,
+  SESSION_COOKIE,
+} from "@/lib/auth";
 import { COL } from "@/lib/db/collections";
 import { deleteStudioCascade } from "@/lib/db/delete-studio";
 import { assertFirebaseReady } from "@/lib/db/require-firebase";
@@ -488,7 +493,9 @@ export async function DELETE(req: Request) {
       ownerUid: admin.uid,
     });
     await logout();
-    return NextResponse.json({ ok: true });
+    const res = NextResponse.json({ ok: true });
+    res.cookies.set(SESSION_COOKIE, "", clearSessionCookieOptions());
+    return res;
   } catch (e) {
     console.error("[studio DELETE]", e);
     return NextResponse.json(

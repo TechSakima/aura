@@ -34,6 +34,8 @@ export const COL = {
   /**
    * Auth cookie sessions (login tokens) — NOT product sessions.
    * Product sessions are `projectSessions` (jobs under a Project). Rename candidate: `authSessions`.
+   * Expired docs purged by `deleteExpiredAuthSessions` (AURA-110); logout deletes current row + cookie
+   * (Firebase client Auth cleared separately via `clientLogout`).
    */
   sessions: "sessions",
   ideaCards: "ideaCards",
@@ -62,9 +64,24 @@ export const COL = {
    * Durable email retry queue (AURA-313 / AURA-149) — not in TENANT_COLLECTIONS.
    */
   emailOutbox: "emailOutbox",
+  /**
+   * Hard-delete tombstones (AURA-099) — block upsert-only RMW from resurrecting
+   * deleted tenant docs. Doc id = `${collection}__${docId}`.
+   */
+  deletedDocs: "deletedDocs",
+  /**
+   * Shared rate-limit buckets (AURA-107) — not tenant-scoped.
+   * Doc id = sha256(key).slice(0, 40); fields: count, resetAt, updatedAt.
+   */
+  rateLimits: "rateLimits",
   /** Legacy monolith — read once for migration */
   legacy: "aura",
 } as const;
+
+/** Tombstone doc id — unique per collection + entity id (AURA-099). */
+export function deletedDocKey(collection: string, id: string): string {
+  return `${collection}__${id}`;
+}
 
 export const STUDIO_SETTINGS_DOC = "settings";
 export const LEGACY_DATABASE_DOC = "database";

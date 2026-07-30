@@ -8,7 +8,7 @@ import {
   listSubAlbumsByGalleryId,
   patchStudioDoc,
 } from "@/lib/db/store";
-import { recordEvent } from "@/lib/analytics";
+import { linkedSessionId, recordEvent } from "@/lib/analytics";
 import { assertPublicGalleryAccess } from "@/lib/public-access";
 import {
   publicGalleryUnavailablePayload,
@@ -82,7 +82,7 @@ export async function GET(
       type: "subalbum_view",
       studioId: gallery.studioId,
       galleryId: gallery.id,
-      sessionId: gallery.sessionId || gallery.shootId,
+      sessionId: linkedSessionId(gallery),
       projectId: gallery.projectId || undefined,
       meta: { subAlbumId: album.id },
     });

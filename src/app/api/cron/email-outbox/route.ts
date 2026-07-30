@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
-import { drainEmailOutbox } from "@/lib/email-outbox";
+import { runMaintenanceJobs } from "@/lib/jobs/maintenance";
 
 /**
- * Drain durable email outbox (AURA-313 contact; AURA-149 generalizes).
+ * Scheduled maintenance (AURA-112 / AURA-313 / AURA-110 / AURA-117).
+ * - Drain email outbox
+ * - Purge expired auth sessions
+ * - Expire past-due live galleries (patch, not RMW)
+ * - Compact analyticsEvents (age retention + per-studio soft cap)
+ *
  * Auth: Authorization: Bearer $CRON_SECRET
+ * URL kept as `/api/cron/email-outbox` for existing schedulers.
  */
 export async function POST(req: Request) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -20,6 +26,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await drainEmailOutbox({ limit: 20 });
+  const result = await runMaintenanceJobs();
   return NextResponse.json({ ok: true, ...result });
 }

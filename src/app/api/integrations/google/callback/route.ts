@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  isSealedGoogleRefreshToken,
+  sealGoogleRefreshToken,
+} from "@/lib/google-token-crypto";
 import { appOrigin } from "@/lib/notify/send";
 
 /** OAuth callback — stores this studio's Google Calendar refresh token. */
@@ -59,8 +63,15 @@ export async function GET(req: Request) {
   };
 
   const existing = await readStudioDb(admin.studioId);
-  const refreshToken =
-    tokens.refresh_token || existing.studio.googleCalendarRefreshToken;
+  // New tokens from Google are plaintext — seal before persist (AURA-109).
+  // Reuse existing store value as-is when Google omits refresh_token.
+  const refreshToken = tokens.refresh_token
+    ? sealGoogleRefreshToken(tokens.refresh_token)
+    : existing.studio.googleCalendarRefreshToken
+      ? isSealedGoogleRefreshToken(existing.studio.googleCalendarRefreshToken)
+        ? existing.studio.googleCalendarRefreshToken
+        : sealGoogleRefreshToken(existing.studio.googleCalendarRefreshToken)
+      : null;
   if (!refreshToken) {
     return NextResponse.redirect(
       new URL(`${settingsPath}?gcal=error`, browserOrigin),

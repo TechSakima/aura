@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { recordEvent } from "@/lib/analytics";
 import { COL } from "@/lib/db/collections";
 import {
   findContractByToken,
   getProjectById,
+  getProjectBundle,
   getStudioDoc,
   patchStudioDoc,
 } from "@/lib/db/store";
@@ -110,6 +112,22 @@ export async function POST(
       workflowStep: nextStep,
     });
   }
+  let sessionId: string | undefined;
+  if (contract.projectId) {
+    const bundle = await getProjectBundle(contract.projectId).catch(() => null);
+    const sessions = bundle?.sessions || [];
+    sessionId =
+      sessions.find((s) => s.status !== "archived")?.id || sessions[0]?.id;
+  }
+
+  await recordEvent({
+    type: "contract_signed",
+    studioId: contract.studioId,
+    projectId: contract.projectId,
+    sessionId,
+    meta: { contractId: contract.id },
+  });
+
   await notifyStudio({
     studioId: contract.studioId,
     type: "contract_signed",

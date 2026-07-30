@@ -40,9 +40,10 @@ export default async function AdminLayout({
     return children;
   }
 
+  // Authoritative gate (AURA-104): Firestore session + studio. Middleware only
+  // checks signed cookie shape/expiry — never render AdminShell without this.
   const admin = await requireAdmin();
   if (!admin) {
-    // Expired/invalid session — bounce within /admin scope with return path (AURA-294)
     const search = h.get("x-aura-search") || "";
     const next = safeAdminNext(`${pathname || "/admin"}${search}`);
     redirect(`/admin/login?next=${encodeURIComponent(next)}`);

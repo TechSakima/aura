@@ -296,4 +296,37 @@ assert(
   "shoots alias = sessions (in-memory only)",
 );
 
+// AURA-116: analytics events promote shootId → sessionId
+const analyticsSession = normalizeDb(
+  baseDb({
+    analyticsEvents: [
+      {
+        id: "e1",
+        studioId: "s1",
+        type: "gallery_view",
+        galleryId: "g1",
+        shootId: "sess-legacy",
+        at: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "e2",
+        studioId: "s1",
+        type: "photo_view",
+        galleryId: "g1",
+        sessionId: "sess-new",
+        shootId: "ignored",
+        at: "2026-01-02T00:00:00.000Z",
+      },
+    ],
+  }),
+);
+assert(
+  analyticsSession.analyticsEvents[0]!.sessionId === "sess-legacy",
+  "legacy shootId promoted to sessionId",
+);
+assert(
+  analyticsSession.analyticsEvents[1]!.sessionId === "sess-new",
+  "existing sessionId wins over shootId",
+);
+
 console.log("normalize.test: all assertions passed");

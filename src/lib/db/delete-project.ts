@@ -22,7 +22,10 @@ export async function archiveProject(
   return Boolean(ok);
 }
 
-/** Restore an archived project (sessions stay archived until edited). */
+/**
+ * Restore an archived project (AURA-101).
+ * Sessions keep `archived` until edited — never force every session to `booked`.
+ */
 export async function unarchiveProject(
   studioId: string,
   projectId: string,
@@ -39,12 +42,6 @@ export async function unarchiveProject(
     if (!p) return false;
     p.stage = restoreStage;
     p.updatedAt = now;
-    for (const s of db.sessions.filter((x) => x.projectId === projectId)) {
-      if (s.status === "archived") {
-        s.status = "booked";
-        s.updatedAt = now;
-      }
-    }
     return true;
   });
   return Boolean(ok);
@@ -93,41 +90,19 @@ export async function deleteProjectCascade(
     .filter((s) => s.projectId === projectId)
     .map((s) => s.id);
 
-  await deleteStudioDocs(COL.questionnaireResponses, questionnaireIds);
-  await deleteStudioDocs(COL.contracts, contractIds);
-  await deleteStudioDocs(COL.bookingRequests, bookingIds);
-  await deleteStudioDocs(COL.invoices, invoiceIds);
-  await deleteStudioDocs(COL.paymentLinks, linkIds);
-  await deleteStudioDocs(COL.paymentTransactions, txIds);
-  await deleteStudioDocs(COL.proposals, proposalIds);
-  await deleteStudioDocs(COL.projectSessions, orphanSessionIds);
-  await deleteStudioDocs(COL.shoots, orphanSessionIds);
-  await deleteStudioDocs(COL.projects, [projectId]);
-  await deleteStudioDocs(COL.clients, [projectId]);
+  const del = { studioId };
+  await deleteStudioDocs(COL.questionnaireResponses, questionnaireIds, del);
+  await deleteStudioDocs(COL.contracts, contractIds, del);
+  await deleteStudioDocs(COL.bookingRequests, bookingIds, del);
+  await deleteStudioDocs(COL.invoices, invoiceIds, del);
+  await deleteStudioDocs(COL.paymentLinks, linkIds, del);
+  await deleteStudioDocs(COL.paymentTransactions, txIds, del);
+  await deleteStudioDocs(COL.proposals, proposalIds, del);
+  await deleteStudioDocs(COL.projectSessions, orphanSessionIds, del);
+  await deleteStudioDocs(COL.shoots, orphanSessionIds, del);
+  await deleteStudioDocs(COL.projects, [projectId], del);
+  await deleteStudioDocs(COL.clients, [projectId], del);
 
-  await updateStudioDb(studioId, (d) => {
-    d.questionnaireResponses = d.questionnaireResponses.filter(
-      (r) => r.projectId !== projectId,
-    );
-    d.contracts = d.contracts.filter((c) => c.projectId !== projectId);
-    d.bookingRequests = d.bookingRequests.filter(
-      (b) => b.projectId !== projectId,
-    );
-    d.invoices = d.invoices.filter((i) => i.projectId !== projectId);
-    d.paymentLinks = d.paymentLinks.filter((l) => l.projectId !== projectId);
-    d.paymentTransactions = d.paymentTransactions.filter(
-      (t) => t.projectId !== projectId,
-    );
-    d.proposals = d.proposals.filter((p) => p.projectId !== projectId);
-    d.projects = d.projects.filter((p) => p.id !== projectId);
-    d.clients = d.projects;
-    d.sessions = d.sessions.filter((s) => s.projectId !== projectId);
-    d.shoots = d.sessions.map((s) => ({
-      ...s,
-      clientId: s.projectId,
-      shootDate: s.startsAt,
-    }));
-  });
-
+  // No trailing updateStudioDb — tombstones block stale RMW resurrection (AURA-099).
   return true;
 }

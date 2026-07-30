@@ -144,3 +144,25 @@ Browse → R2 signed URLs (direct or via /api/media 302)
 PIN OK → signed R2 GET for originals (direct to client)
 Bulk   → signed URL list + client-side zip (no App Hosting buffer)
 ```
+
+## Access model (AURA-106)
+
+**Product decision: signed / expiring URLs** — not secrecy-of-URL alone.
+
+| Surface | Access | TTL |
+|---------|--------|-----|
+| Gallery discovery | Unguessable `publicToken` (`/g/{token}`) | — |
+| Browse (thumb / web / wm) | R2 signed GET minted at read time (AURA-357); page refresh re-signs | **6h** |
+| Legacy `/api/media/…` | **302 →** signed R2 GET (AURA-362); `/originals/` always **403** | **1h** |
+| Originals download | `POST …/download` after access check → signed R2 GET; client fetches R2 directly | **15m** |
+| R2 bucket | Private — no anonymous public GET | — |
+
+### PIN = download-only
+
+- Gallery **view** (grid, lightbox, favorites) is gated by **gallery token** only.
+- **PIN** (when set) is checked only on the **download** API before minting original signed URLs.
+- Previews are not PIN-gated. Expired galleries may still show meta; downloads stay blocked (`mutate`).
+
+### Residual risk (not secrecy theater)
+
+Object paths under `studios/{studioId}/…/derivatives/…` are hard to guess but not authorization. `/api/media` will re-mint a derivative signed URL if the path is known (no gallery token). Prefer browse URLs from the gallery API; treat proxy re-mint binding as optional hardening (see backlog).

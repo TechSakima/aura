@@ -9,10 +9,14 @@ import {
   LEGACY_DATABASE_DOC,
   STUDIO_SETTINGS_DOC,
   TENANT_COLLECTIONS,
+  deletedDocKey,
   legacyCollectionsEnabled,
 } from "@/lib/db/collections";
+
+export { deletedDocKey } from "@/lib/db/collections";
 import { assertFirebaseReady } from "@/lib/db/require-firebase";
 import { normalizeDb } from "@/lib/db/normalize";
+import { linkedSessionId } from "@/lib/linked-session";
 import type {
   AnalyticsEvent,
   AuraDatabase,
@@ -77,10 +81,32 @@ async function listAll<T extends { id: string }>(
   });
 }
 
+async function tombstonedIds(
+  db: Firestore,
+  collection: string,
+  ids: string[],
+): Promise<Set<string>> {
+  const dead = new Set<string>();
+  if (!ids.length) return dead;
+  const chunk = 100;
+  for (let i = 0; i < ids.length; i += chunk) {
+    const slice = ids.slice(i, i + chunk);
+    const refs = slice.map((id) =>
+      db.collection(COL.deletedDocs).doc(deletedDocKey(collection, id)),
+    );
+    const snaps = await db.getAll(...refs);
+    for (let j = 0; j < snaps.length; j++) {
+      if (snaps[j]?.exists) dead.add(slice[j]!);
+    }
+  }
+  return dead;
+}
+
 /**
  * Upsert docs for one studio (AURA-002 / DoD AURA-272).
  * Never deletes missing docs — concurrent uploads / multi-instance App Hosting
  * cannot wipe photos that another writer already persisted.
+ * Skips ids with delete tombstones so stale RMW cannot resurrect (AURA-099).
  */
 async function writeStudioCollection<T extends { id: string; studioId: string }>(
   db: Firestore,
@@ -88,6 +114,15 @@ async function writeStudioCollection<T extends { id: string; studioId: string }>
   studioId: string,
   items: T[],
 ) {
+  const blocked = await tombstonedIds(
+    db,
+    name,
+    items.map((item) => item.id),
+  );
+  const alive = blocked.size
+    ? items.filter((item) => !blocked.has(item.id))
+    : items;
+
   const batchSize = 400;
   let batch = db.batch();
   let ops = 0;
@@ -98,7 +133,7 @@ async function writeStudioCollection<T extends { id: string; studioId: string }>
     ops = 0;
   };
 
-  for (const item of items) {
+  for (const item of alive) {
     const { id, ...rest } = { ...item, studioId };
     batch.set(db.collection(name).doc(id), stripUndefined(rest));
     ops++;
@@ -107,12 +142,18 @@ async function writeStudioCollection<T extends { id: string; studioId: string }>
   await commit();
 }
 
-/** Explicit deletes — required now that collection writes are upsert-only (AURA-002). */
+/**
+ * Explicit deletes — required now that collection writes are upsert-only (AURA-002).
+ * Writes tombstones so concurrent `updateStudioDb` upserts cannot resurrect (AURA-099).
+ */
 export async function deleteStudioDocs(
   collection: string,
   ids: string[],
+  opts?: { studioId?: string },
 ): Promise<void> {
   if (!ids.length) return;
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return;
   writeQueue = writeQueue.then(async () => {
     await ensureMigrated();
     const { db } = assertFirebaseReady();
@@ -125,8 +166,19 @@ export async function deleteStudioDocs(
       batch = db.batch();
       ops = 0;
     };
-    for (const id of ids) {
+    const deletedAt = new Date().toISOString();
+    for (const id of unique) {
       batch.delete(db.collection(collection).doc(id));
+      ops++;
+      batch.set(
+        db.collection(COL.deletedDocs).doc(deletedDocKey(collection, id)),
+        stripUndefined({
+          studioId: opts?.studioId,
+          collection,
+          docId: id,
+          deletedAt,
+        }),
+      );
       ops++;
       if (ops >= batchSize) await commit();
     }
@@ -143,6 +195,8 @@ export async function appendStudioDoc<T extends { id: string; studioId: string }
   writeQueue = writeQueue.then(async () => {
     await ensureMigrated();
     const { db } = assertFirebaseReady();
+    const blocked = await tombstonedIds(db, collection, [doc.id]);
+    if (blocked.has(doc.id)) return;
     const { id, ...rest } = { ...doc };
     await db.collection(collection).doc(id).set(stripUndefined(rest));
   });
@@ -203,6 +257,8 @@ export async function patchStudioDoc(
   writeQueue = writeQueue.then(async () => {
     await ensureMigrated();
     const { db } = assertFirebaseReady();
+    const blocked = await tombstonedIds(db, collection, [id]);
+    if (blocked.has(id)) return;
     await db
       .collection(collection)
       .doc(id)
@@ -226,6 +282,11 @@ export async function updateStudioDoc<T extends { id: string }>(
   writeQueue = writeQueue.then(async () => {
     await ensureMigrated();
     const { db } = assertFirebaseReady();
+    const blocked = await tombstonedIds(db, collection, [id]);
+    if (blocked.has(id)) {
+      result = null;
+      return;
+    }
     const snap = await db.collection(collection).doc(id).get();
     if (!snap.exists) {
       result = null;
@@ -916,6 +977,8 @@ export async function createSession(session: AuthSession): Promise<void> {
   const { db } = assertFirebaseReady();
   const { token, ...rest } = session;
   await db.collection(COL.sessions).doc(token).set(stripUndefined(rest));
+  // Opportunistic global sweep (AURA-110) — never block login.
+  void deleteExpiredAuthSessions(25).catch(() => undefined);
 }
 
 export async function getSession(token: string): Promise<AuthSession | null> {
@@ -924,7 +987,12 @@ export async function getSession(token: string): Promise<AuthSession | null> {
   const snap = await db.collection(COL.sessions).doc(token).get();
   if (!snap.exists) return null;
   const data = snap.data() as Omit<AuthSession, "token">;
-  return { token: snap.id, ...data };
+  const session: AuthSession = { token: snap.id, ...data };
+  if (new Date(session.expiresAt).getTime() <= Date.now()) {
+    await db.collection(COL.sessions).doc(token).delete().catch(() => undefined);
+    return null;
+  }
+  return session;
 }
 
 export async function deleteSession(token: string): Promise<void> {
@@ -933,15 +1001,53 @@ export async function deleteSession(token: string): Promise<void> {
   await db.collection(COL.sessions).doc(token).delete();
 }
 
+/**
+ * Delete expired Aura auth cookie sessions (AURA-110).
+ * Doc id = opaque token; `expiresAt` is ISO string (lexicographic ≤ works for ISO-8601).
+ */
+export async function deleteExpiredAuthSessions(
+  limit = 40,
+): Promise<number> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const now = new Date().toISOString();
+  const snap = await db
+    .collection(COL.sessions)
+    .where("expiresAt", "<=", now)
+    .limit(Math.min(Math.max(limit, 1), 100))
+    .get();
+  if (snap.empty) return 0;
+  const batch = db.batch();
+  for (const d of snap.docs) batch.delete(d.ref);
+  await batch.commit();
+  return snap.size;
+}
+
 /** Auth cookie sessions for a Firebase uid (not product projectSessions). */
 export async function listSessionsForUid(uid: string): Promise<AuthSession[]> {
   await ensureMigrated();
   const { db } = assertFirebaseReady();
   const snap = await db.collection(COL.sessions).where("uid", "==", uid).get();
-  return snap.docs.map((d) => ({
-    token: d.id,
-    ...(d.data() as Omit<AuthSession, "token">),
-  }));
+  const now = Date.now();
+  const active: AuthSession[] = [];
+  const expiredIds: string[] = [];
+  for (const d of snap.docs) {
+    const session: AuthSession = {
+      token: d.id,
+      ...(d.data() as Omit<AuthSession, "token">),
+    };
+    if (new Date(session.expiresAt).getTime() <= now) {
+      expiredIds.push(session.token);
+    } else {
+      active.push(session);
+    }
+  }
+  if (expiredIds.length) {
+    await Promise.all(
+      expiredIds.map((id) => deleteSession(id).catch(() => undefined)),
+    );
+  }
+  return active;
 }
 
 /** Delete auth sessions for uid, optionally keeping one token (current device). */
@@ -963,6 +1069,13 @@ export async function getStudio(): Promise<Studio> {
   throw new Error("getStudio() removed — use getStudioDoc(studioId)");
 }
 
+/** Fill sessionId from deprecated shootId on single-doc gallery reads (AURA-116). */
+function coerceGallerySession(gallery: Gallery): Gallery {
+  const sessionId = linkedSessionId(gallery);
+  if (!sessionId || gallery.sessionId === sessionId) return gallery;
+  return { ...gallery, sessionId };
+}
+
 export async function findGalleryByPublicToken(
   token: string,
 ): Promise<Gallery | null> {
@@ -975,7 +1088,7 @@ export async function findGalleryByPublicToken(
     .get();
   if (snap.empty) return null;
   const d = snap.docs[0]!;
-  return { id: d.id, ...d.data() } as Gallery;
+  return coerceGallerySession({ id: d.id, ...d.data() } as Gallery);
 }
 
 export async function findStudioIdByProjectCancelToken(
@@ -1086,7 +1199,7 @@ export async function getGalleryById(
   const { db } = assertFirebaseReady();
   const snap = await db.collection(COL.galleries).doc(galleryId).get();
   if (!snap.exists) return null;
-  return { id: snap.id, ...snap.data() } as Gallery;
+  return coerceGallerySession({ id: snap.id, ...snap.data() } as Gallery);
 }
 
 export async function getPhotosByIds(ids: string[]): Promise<Photo[]> {
@@ -1145,12 +1258,12 @@ export async function getGalleryBundle(galleryId: string) {
   const { db } = assertFirebaseReady();
   const gallerySnap = await db.collection(COL.galleries).doc(galleryId).get();
   if (!gallerySnap.exists) return null;
-  const gallery = {
+  const gallery = coerceGallerySession({
     id: gallerySnap.id,
     ...gallerySnap.data(),
-  } as Gallery;
+  } as Gallery);
   const photos = await listPhotosByGalleryId(galleryId);
-  const sessionId = gallery.sessionId || gallery.shootId || "";
+  const sessionId = linkedSessionId(gallery) || "";
   const shoot = sessionId ? await getSessionById(sessionId) : null;
   const projectId =
     gallery.projectId || shoot?.projectId || shoot?.clientId || "";

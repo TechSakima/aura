@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import {
   createUserWithEmailAndPassword,
+  onAuthStateChanged,
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { Button, Field, Input, Label } from "@/components/ui";
@@ -11,6 +12,16 @@ import { firebaseConfigured, getFirebaseAuth } from "@/lib/firebase/client";
 import { mergeAdminNextWithLast } from "@/lib/admin-last-route";
 
 type Mode = "signin" | "signup";
+
+async function exchangeIdToken(idToken: string) {
+  const res = await fetch("/api/auth/login", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  });
+  return res;
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -21,6 +32,55 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(true);
+
+  // If Firebase Auth still has the user (common after PWA cookie loss), mint a fresh Aura cookie.
+  useEffect(() => {
+    if (!firebaseConfigured()) {
+      setRestoring(false);
+      return;
+    }
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      setRestoring(false);
+      return;
+    }
+
+    let cancelled = false;
+    const failOpen = window.setTimeout(() => {
+      if (!cancelled) setRestoring(false);
+    }, 8000);
+
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (cancelled) return;
+      if (!user) {
+        window.clearTimeout(failOpen);
+        setRestoring(false);
+        return;
+      }
+      try {
+        const idToken = await user.getIdToken();
+        const res = await exchangeIdToken(idToken);
+        if (cancelled) return;
+        window.clearTimeout(failOpen);
+        if (!res.ok) {
+          setRestoring(false);
+          return;
+        }
+        router.replace(mergeAdminNextWithLast(params.get("next") || "/admin"));
+        router.refresh();
+      } catch {
+        window.clearTimeout(failOpen);
+        if (!cancelled) setRestoring(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(failOpen);
+      unsub();
+    };
+  }, [params, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -52,6 +112,7 @@ function LoginForm() {
         const idToken = await cred.user.getIdToken();
         const res = await fetch("/api/auth/signup", {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ idToken, studioName: studioName.trim() }),
         });
@@ -63,11 +124,7 @@ function LoginForm() {
       } else {
         const cred = await signInWithEmailAndPassword(auth, email, password);
         const idToken = await cred.user.getIdToken();
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idToken }),
-        });
+        const res = await exchangeIdToken(idToken);
         if (!res.ok) {
           const data = await res.json();
           setError(data.error || "Login failed");
@@ -86,6 +143,15 @@ function LoginForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (restoring) {
+    return (
+      <div className="mx-auto w-full max-w-md space-y-3">
+        <h1 className="font-display text-4xl text-ink">Aura</h1>
+        <p className="text-muted">Signing you in…</p>
+      </div>
+    );
   }
 
   return (

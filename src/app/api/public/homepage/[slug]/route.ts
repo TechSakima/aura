@@ -11,7 +11,7 @@ import {
 } from "@/lib/homepage-unlock";
 import { buildHomepagePayload } from "@/lib/homepage-payload";
 import { resolveBrowseMediaUrl } from "@/lib/media-url-server";
-import { rateLimit } from "@/lib/rate-limit";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 
 async function buildGate(studio: {
   name: string;
@@ -83,11 +83,8 @@ export async function POST(
     return NextResponse.json(await homepageJson(studio));
   }
 
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown";
-  const limited = rateLimit(`homepage-pw:${slug}:${ip}`, 12, 60_000);
+  const ip = clientIp(req);
+  const limited = await rateLimitShared(`homepage-pw:${slug}:${ip}`, 12, 60_000);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },

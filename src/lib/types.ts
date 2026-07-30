@@ -774,7 +774,7 @@ export type Studio = {
   stripeConnectLastCheckedAt?: string;
   /** Last Connect health error when incomplete or retrieve failed. */
   stripeConnectLastError?: string;
-  /** Google Calendar OAuth (refresh token stored server-side encrypted if needed) */
+  /** Google Calendar OAuth refresh token — AES-GCM sealed at rest (`enc:v1:…`, AURA-109). */
   googleCalendarRefreshToken?: string;
   googleCalendarConnected?: boolean;
   /** Last successful GCal freeBusy/write (AURA-343). */

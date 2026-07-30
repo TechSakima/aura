@@ -13,8 +13,9 @@ import {
 const PROXY_SIGNED_TTL_SEC = 60 * 60;
 
 /**
- * Legacy media proxy. When R2 is configured (AURA-362), redirect to a signed
- * R2 GET so App Hosting does not egress image bytes. Originals stay forbidden.
+ * Legacy media proxy (AURA-362 / AURA-106).
+ * When R2 is configured: 302 → short-lived signed R2 GET (not secrecy-of-URL).
+ * Originals stay forbidden — PIN download API only.
  */
 export async function GET(
   _req: Request,

@@ -7,8 +7,8 @@ import {
   downloadFilename,
 } from "@/lib/images/download-filename";
 import { verifyPin } from "@/lib/pin";
-import { recordEvent } from "@/lib/analytics";
-import { rateLimit } from "@/lib/rate-limit";
+import { linkedSessionId, recordEvent } from "@/lib/analytics";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 import { getSignedMediaDownloadUrl } from "@/lib/storage/upload";
 import {
   getVisitorFavorites,
@@ -54,8 +54,8 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  const limited = rateLimit(`download:${token}:${ip}`, 30, 60_000);
+  const ip = clientIp(req);
+  const limited = await rateLimitShared(`download:${token}:${ip}`, 30, 60_000);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -149,7 +149,7 @@ export async function POST(
       studioId: gallery.studioId,
       galleryId: gallery.id,
       photoId: photos[0].id,
-      sessionId: gallery.sessionId || gallery.shootId,
+      sessionId: linkedSessionId(gallery),
       projectId: gallery.projectId || undefined,
     });
     return NextResponse.json({
@@ -184,7 +184,7 @@ export async function POST(
     type: "download_bulk",
     studioId: gallery.studioId,
     galleryId: gallery.id,
-    sessionId: gallery.sessionId || gallery.shootId,
+    sessionId: linkedSessionId(gallery),
     projectId: gallery.projectId || undefined,
     meta: {
       count: urls.length,

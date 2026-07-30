@@ -8,6 +8,7 @@ import {
 } from "@/lib/storage/upload";
 import { mediaProxyUrl } from "@/lib/storage/paths";
 import { readImageDimensions } from "@/lib/images/dimensions";
+import { derivativeObjectPaths } from "@/lib/images/storage-paths";
 import type { WatermarkPreset } from "@/lib/types";
 import { DEFAULT_WATERMARK_SCALE } from "@/lib/watermark-scale";
 
@@ -366,23 +367,28 @@ export async function processUpload(opts: {
 /**
  * Rebuild the watermarked derivative from the stored original
  * (or existing web derivative). Returns a new public URL (new download token).
+ * Supports jpg/png/webp/bin originals and raw same-ext derivatives (AURA-113).
  */
 export async function reprocessWatermarkedDerivative(opts: {
   storagePath: string;
   watermark: WatermarkPreset | null;
 }): Promise<{ watermarkedUrl: string }> {
   const sharp = await loadSharp();
-  const webPath = opts.storagePath
-    .replace("/originals/", "/derivatives/")
-    .replace(/\.jpe?g$/i, "-web.webp");
-  const wmPath = opts.storagePath
-    .replace("/originals/", "/derivatives/")
-    .replace(/\.jpe?g$/i, "-wm.webp");
+  const paths = derivativeObjectPaths(opts.storagePath);
+  if (!paths) {
+    throw new Error("Invalid original storage path");
+  }
 
-  let webBuf: Buffer;
-  try {
-    webBuf = await downloadStorageBuffer(webPath);
-  } catch {
+  let webBuf: Buffer | null = null;
+  for (const candidate of [paths.webPath, paths.rawWebPath]) {
+    try {
+      webBuf = await downloadStorageBuffer(candidate);
+      break;
+    } catch {
+      /* try next */
+    }
+  }
+  if (!webBuf) {
     const original = await downloadStorageBuffer(opts.storagePath);
     webBuf = await sharp(original)
       .rotate()
@@ -397,7 +403,7 @@ export async function reprocessWatermarkedDerivative(opts: {
 
   const uploaded = await uploadBuffer({
     buffer: wmBuf,
-    objectPath: wmPath,
+    objectPath: paths.wmPath,
     contentType: "image/webp",
     makePublic: false,
   });

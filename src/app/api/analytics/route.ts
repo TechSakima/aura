@@ -6,6 +6,7 @@ import {
   projectWorkflowHref,
   sessionDeliveryHref,
 } from "@/lib/admin-deep-links";
+import { linkedSessionId } from "@/lib/linked-session";
 import { readStudioDb } from "@/lib/db/store";
 import type { AnalyticsEvent, AuraDatabase } from "@/lib/types";
 
@@ -26,13 +27,13 @@ function deliveryHref(
 
 function eventHref(e: AnalyticsEvent, db: AuraDatabase): string | undefined {
   let projectId = e.projectId;
-  let sessionId = e.sessionId || e.shootId;
+  let sessionId = linkedSessionId(e);
 
   if (e.galleryId) {
     const g = db.galleries.find((x) => x.id === e.galleryId);
     if (g) {
       projectId = projectId || g.projectId;
-      sessionId = sessionId || g.sessionId || g.shootId;
+      sessionId = sessionId || linkedSessionId(g);
     }
   }
 
@@ -66,10 +67,7 @@ function photoDeliveryHref(
   if (!photo) return undefined;
   const gallery = db.galleries.find((g) => g.id === photo.galleryId);
   if (!gallery) return undefined;
-  return deliveryHref(
-    gallery.projectId,
-    gallery.sessionId || gallery.shootId,
-  );
+  return deliveryHref(gallery.projectId, linkedSessionId(gallery));
 }
 
 export async function GET(req: Request) {

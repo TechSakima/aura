@@ -78,13 +78,15 @@
   --shell-gutter: 1rem;
 
   /*
-   * Admin sticky offset (AURA-381) — matches AdminShell header:
-   * safe-area + py-3 + min-h-11 row (+ border). Use --admin-sticky-top for
+   * Admin sticky offset (AURA-381 / AURA-096) — matches AdminShell header:
+   * safe-area + py-2 + min-h-11 row (+ border). Use --admin-sticky-top for
    * panels that stick under the shell header.
+   * --admin-tab-bar: mobile bottom tab content height (excl. safe-area).
    */
-  --admin-header-inner: 4.25rem;
+  --admin-header-inner: 3.75rem;
+  --admin-tab-bar: 3.25rem;
   --admin-sticky-top: calc(
-    env(safe-area-inset-top, 0px) + var(--admin-header-inner) + 1rem
+    env(safe-area-inset-top, 0px) + var(--admin-header-inner) + 0.75rem
   );
 
   /*

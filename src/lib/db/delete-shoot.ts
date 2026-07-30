@@ -5,24 +5,18 @@ import {
   updateStudioDb,
   updateStudioDoc,
 } from "@/lib/db/store";
+import { derivativePathsToDelete } from "@/lib/images/storage-paths";
+import { deleteGoogleCalendarEvent } from "@/lib/google-calendar";
 import { deleteStorageObject } from "@/lib/storage/upload";
 import { deleteFavoritesForGalleries } from "@/lib/gallery-favorites";
-import type { ProjectSession } from "@/lib/types";
+import type { BookingRequest, ProjectSession } from "@/lib/types";
 
 export async function deletePhotoFiles(storagePath: string) {
   if (!storagePath.startsWith("studios/")) return;
-  const stem = storagePath.replace(/\/originals\/[^/]+$/, "");
-  const base = storagePath.split("/").pop()?.replace(/\.jpg$/i, "") || "";
   await Promise.all([
     deleteStorageObject(storagePath).catch(() => undefined),
-    deleteStorageObject(`${stem}/derivatives/${base}-thumb.webp`).catch(
-      () => undefined,
-    ),
-    deleteStorageObject(`${stem}/derivatives/${base}-web.webp`).catch(
-      () => undefined,
-    ),
-    deleteStorageObject(`${stem}/derivatives/${base}-wm.webp`).catch(
-      () => undefined,
+    ...derivativePathsToDelete(storagePath).map((p) =>
+      deleteStorageObject(p).catch(() => undefined),
     ),
   ]);
 }
@@ -43,8 +37,8 @@ export async function deletePhotosByIds(
     .filter((c) => idSet.has(c.photoId))
     .map((c) => c.id);
 
-  await deleteStudioDocs(COL.photos, photoIds);
-  await deleteStudioDocs(COL.comments, commentIds);
+  await deleteStudioDocs(COL.photos, photoIds, { studioId });
+  await deleteStudioDocs(COL.comments, commentIds, { studioId });
 
   await updateStudioDb(studioId, (d) => {
     d.photos = d.photos.filter((p) => !idSet.has(p.id));
@@ -83,6 +77,8 @@ export async function deleteShootCascade(
   );
   if (!session) return false;
 
+  const googleEventId = session.googleEventId?.trim() || undefined;
+
   const galleries = db.galleries.filter((g) => {
     const sid = g.sessionId || g.shootId;
     if (sid === shootId) return true;
@@ -120,50 +116,52 @@ export async function deleteShootCascade(
         (e.proposalId && proposalIds.has(e.proposalId)),
     )
     .map((e) => e.id);
+  const bookingIds = db.bookingRequests
+    .filter((b) => b.sessionId === shootId)
+    .map((b) => b.id);
 
+  const del = { studioId };
   await deleteStudioDocs(
     COL.photos,
     photos.map((p) => p.id),
+    del,
   );
-  await deleteStudioDocs(COL.comments, commentIds);
-  await deleteStudioDocs(COL.subAlbums, subAlbumIds);
-  await deleteStudioDocs(COL.galleries, [...galleryIds]);
+  await deleteStudioDocs(COL.comments, commentIds, del);
+  await deleteStudioDocs(COL.subAlbums, subAlbumIds, del);
+  await deleteStudioDocs(COL.galleries, [...galleryIds], del);
   await deleteFavoritesForGalleries([...galleryIds]);
-  await deleteStudioDocs(COL.shootPlans, planIds);
-  await deleteStudioDocs(COL.proposals, [...proposalIds]);
-  await deleteStudioDocs(COL.analyticsEvents, eventIds);
-  await deleteStudioDocs(COL.projectSessions, [shootId]);
-  await deleteStudioDocs(COL.shoots, [shootId]);
+  await deleteStudioDocs(COL.shootPlans, planIds, del);
+  await deleteStudioDocs(COL.proposals, [...proposalIds], del);
+  await deleteStudioDocs(COL.analyticsEvents, eventIds, del);
+  await deleteStudioDocs(COL.projectSessions, [shootId], del);
+  await deleteStudioDocs(COL.shoots, [shootId], del);
 
-  await updateStudioDb(studioId, (d) => {
-    d.photos = d.photos.filter((p) => !galleryIds.has(p.galleryId));
-    d.comments = d.comments.filter((c) => !galleryIds.has(c.galleryId));
-    d.subAlbums = d.subAlbums.filter((a) => !galleryIds.has(a.galleryId));
-    d.galleries = d.galleries.filter((g) => !galleryIds.has(g.id));
-    d.shootPlans = d.shootPlans.filter(
-      (p) => p.sessionId !== shootId && p.shootId !== shootId,
-    );
-    d.proposals = d.proposals.filter((p) => !proposalIds.has(p.id));
-    d.analyticsEvents = d.analyticsEvents.filter(
-      (e) =>
-        e.sessionId !== shootId &&
-        e.shootId !== shootId &&
-        !(e.galleryId && galleryIds.has(e.galleryId)) &&
-        !(e.proposalId && proposalIds.has(e.proposalId)),
-    );
-    for (const b of d.bookingRequests) {
-      if (b.sessionId === shootId) {
+  // Unlink + reconcile booking status (AURA-100) — pending/confirmed must not
+  // stay actionable after the session is gone.
+  const now = new Date().toISOString();
+  for (const bookingId of bookingIds) {
+    await updateStudioDoc<BookingRequest>(
+      COL.bookingRequests,
+      bookingId,
+      (b) => {
+        if (b.sessionId !== shootId) return b;
         b.sessionId = undefined;
-        b.updatedAt = new Date().toISOString();
-      }
-    }
-    d.sessions = d.sessions.filter((s) => s.id !== shootId);
-    d.shoots = d.sessions.map((s) => ({
-      ...s,
-      clientId: s.projectId,
-      shootDate: s.startsAt,
-    }));
-  });
+        if (b.status === "pending" || b.status === "confirmed") {
+          b.status = "canceled";
+          b.cancelReason = b.cancelReason?.trim() || "Session deleted";
+        }
+        b.updatedAt = now;
+        return b;
+      },
+    );
+  }
+
+  if (googleEventId) {
+    await deleteGoogleCalendarEvent({
+      studioId,
+      eventId: googleEventId,
+    }).catch(() => undefined);
+  }
 
   return true;
 }
@@ -181,8 +179,8 @@ export async function deleteProposalCascade(
     .filter((e) => e.proposalId === proposalId)
     .map((e) => e.id);
 
-  await deleteStudioDocs(COL.proposals, [proposalId]);
-  await deleteStudioDocs(COL.analyticsEvents, eventIds);
+  await deleteStudioDocs(COL.proposals, [proposalId], { studioId });
+  await deleteStudioDocs(COL.analyticsEvents, eventIds, { studioId });
 
   const sessionId = proposal.sessionId || proposal.shootId;
   if (sessionId) {
@@ -202,26 +200,6 @@ export async function deleteProposalCascade(
       },
     );
   }
-
-  await updateStudioDb(studioId, (d) => {
-    d.proposals = d.proposals.filter((p) => p.id !== proposalId);
-    d.analyticsEvents = d.analyticsEvents.filter(
-      (e) => e.proposalId !== proposalId,
-    );
-    const session = d.sessions.find(
-      (s) => s.id === (proposal.sessionId || proposal.shootId),
-    );
-    if (session) {
-      if (session.proposalId === proposalId) {
-        session.proposalId = undefined;
-      }
-      if (session.status === "proposed" || session.status === "booked") {
-        session.status = "inquiry";
-      }
-      session.wizardSkippedProposal = false;
-      session.updatedAt = new Date().toISOString();
-    }
-  });
 
   return true;
 }

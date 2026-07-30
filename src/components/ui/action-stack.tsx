@@ -29,7 +29,14 @@ function ActionControl({
     return (
       <ButtonLink
         href={item.href}
-        tone={tone === "accent" || tone === "ghost" || tone === "danger" || tone === "neutral" ? tone : "neutral"}
+        tone={
+          tone === "accent" ||
+          tone === "ghost" ||
+          tone === "danger" ||
+          tone === "neutral"
+            ? tone
+            : "neutral"
+        }
         className={cn("min-h-11 w-full", className)}
         {...(item.external
           ? { target: "_blank", rel: "noreferrer" }
@@ -57,9 +64,11 @@ function ActionControl({
 function MoreMenu({
   label,
   items,
+  className,
 }: {
   label: string;
   items: ActionStackItem[];
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -81,8 +90,10 @@ function MoreMenu({
     };
   }, [open]);
 
+  if (!items.length) return null;
+
   return (
-    <div ref={rootRef} className="relative sm:hidden">
+    <div ref={rootRef} className={cn("relative", className)}>
       <Button
         type="button"
         tone="ghost"
@@ -104,7 +115,6 @@ function MoreMenu({
               key={item.id}
               role="none"
               onClick={() => {
-                /* close after choose; href navigation still works */
                 window.setTimeout(() => setOpen(false), 0);
               }}
             >
@@ -119,17 +129,21 @@ function MoreMenu({
 
 /**
  * Primary action + overflow “More” below `sm`; full stack from `sm` (AURA-088).
+ * Pass `menuIds` to keep destructive actions behind More at every breakpoint (AURA-127).
  */
 export function ActionStack({
   actions,
   primaryId,
   moreLabel = "More",
+  menuIds,
   className,
 }: {
   actions: ActionStackItem[];
   /** Defaults to first accent action, else first item. */
   primaryId?: string;
   moreLabel?: string;
+  /** Always shown inside More (all breakpoints) — e.g. Archive / Delete. */
+  menuIds?: string[];
   className?: string;
 }) {
   const items = actions.filter(Boolean);
@@ -138,22 +152,33 @@ export function ActionStack({
   const primary =
     items.find((a) => a.id === primaryId) ||
     items.find((a) => a.tone === "accent") ||
-    items[0];
-  const secondary = items.filter((a) => a.id !== primary.id);
+    items[0]!;
+  const rest = items.filter((a) => a.id !== primary.id);
+  const menuSet = new Set(menuIds || []);
+  const alwaysMenu = rest.filter((a) => menuSet.has(a.id));
+  const inlineSecondary = rest.filter((a) => !menuSet.has(a.id));
+  const mobileMenuItems = [...inlineSecondary, ...alwaysMenu];
 
   return (
     <div className={cn("flex w-full min-w-0 flex-col gap-2", className)}>
       <ActionControl item={{ ...primary, tone: primary.tone || "accent" }} />
-      {secondary.length ? (
-        <>
-          <div className="hidden flex-col gap-2 sm:flex">
-            {secondary.map((item) => (
-              <ActionControl key={item.id} item={item} />
-            ))}
-          </div>
-          <MoreMenu label={moreLabel} items={secondary} />
-        </>
+      {inlineSecondary.length ? (
+        <div className="hidden flex-col gap-2 sm:flex">
+          {inlineSecondary.map((item) => (
+            <ActionControl key={item.id} item={item} />
+          ))}
+        </div>
       ) : null}
+      <MoreMenu
+        label={moreLabel}
+        items={mobileMenuItems}
+        className="sm:hidden"
+      />
+      <MoreMenu
+        label={moreLabel}
+        items={alwaysMenu}
+        className="hidden sm:block"
+      />
     </div>
   );
 }

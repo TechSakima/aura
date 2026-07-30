@@ -46,14 +46,14 @@ Work top → bottom. Within a wave, keep listed sequence.
 | **W9**  | Settings OS                     | **349**–**353** (**317**–**348**/ **070**/ **087**/ **090**/ **091**/ **098**/ **123**/ **121**/ **265**/ **310** done) | W8 where ThemeSwatch etc. noted                                           |
 | **W10** | Website + gallery designer      | **222**–**259**                                                                                                         | W8 tokens; W9 Brand/Website; W1 media                                     |
 | **W11** | Contact (Resend)                | **304**–**316**, then **371**–**374** (project inbound Reply-To)                                                        | W0; **041** escape before **306**; **315** before **371**                 |
-| **W12** | Responsive + PWA productization | **281**–**287**, pull **088**/**089**, then **375**–**383** (deep audit), then **288**–**303**, **368**                 | Continuous bar always; this wave closes systemic gaps                     |
-| **W13** | No-headache workflows + DoD     | **260**–**280** done; remaining Phase 5/7/8/9/10/11 debt in ID order (**095** next; skip blocked **055**)               | Prior foundations                                                         |
-| **W14** | Leftover polish                 | **384** (remove clients/shoots API aliases), then any still-open IDs not pulled into earlier waves                       | —                                                                         |
+| **W12** | Responsive + PWA productization | **281**–**287**, pull **088**/**089**, then **375**–**383** (deep audit), then **288**–**303**, **368**, **385**       | Continuous bar always; this wave closes systemic gaps                     |
+| **W13** | No-headache workflows + DoD     | **260**–**280** done; remaining Phase 5/7/8/9/10/11 debt in ID order (**128** next; skip blocked **055**)               | Prior foundations                                                         |
+| **W14** | Leftover polish                 | **384**, **386**, **387** (watermark job), then any still-open IDs not pulled earlier                                   | —                                                                         |
 
 
-**Next to implement:** first open checkbox in **W13** residual debt → currently **AURA-095**.
+**Next to implement:** first open checkbox in **W13** residual debt → currently **AURA-128**.
 
-**R2:** **W1 complete** incl. **361** unified direct upload. **W2 complete** (**009–016**, **365**). **W3 complete** (**017–030**). **W4 complete** (**031–050**, **364**). **W5 complete** (**051–057**, **367**; 055 blocked). **W6 complete** (**366**, **073–081**). **W7 complete** (**153–199**). **W8 complete** (**201–221**, **363**). **W9 complete** (**349**–**353**). **W10 complete** (**222**–**259**). **W11 complete** (**304**–**316**, **371**–**374**). **W12 complete** (**281**–**303**, **088**/**089**, **375**–**383**, **368**). **W13 DoD 260–280 complete** → residual **AURA-095** (skip **055**).
+**R2:** **W1 complete** incl. **361** unified direct upload. **W2 complete** (**009–016**, **365**). **W3 complete** (**017–030**). **W4 complete** (**031–050**, **364**). **W5 complete** (**051–057**, **367**; 055 blocked). **W6 complete** (**366**, **073–081**). **W7 complete** (**153–199**). **W8 complete** (**201–221**, **363**). **W9 complete** (**349**–**353**). **W10 complete** (**222**–**259**). **W11 complete** (**304**–**316**, **371**–**374**). **W12 complete** (**281**–**303**, **088**/**089**, **375**–**383**, **368**, **385**). **W13 DoD 260–280 complete** → residual **AURA-128** (skip **055**; **103**–**117**, **124**–**125**, **127** done).
 
 **Dedup (do not double-implement):**
 
@@ -479,14 +479,17 @@ When implementing any AURA-###:
   Shorten Bookings / Prep / Projects PageHeader essays to label-first Aura tone.
   **Done:** Bookings header description removed; Library/Projects already title-only; projects empty essay dropped.
 
-- [ ] **AURA-095** · P2 · Design system · ListEditor  
+- [x] **AURA-095** · P2 · Design system · ListEditor  
   Use design-system controls throughout intake/questionnaire editors.
+  **Done:** Raw selects → `Select`; row chrome → `Panel`; Field/Label on intake/pricing/partners/shots.
 
-- [ ] **AURA-096** · P2 · Responsive · Admin chrome  
+- [x] **AURA-096** · P2 · Responsive · Admin chrome  
   Revisit sticky header + bottom tabs viewport tax; consider icons on bottom tabs.
+  **Done:** Icon+label tabs; drop duplicate hamburger; slimmer header; `--admin-tab-bar` clearances.
 
-- [ ] **AURA-097** · P3 · Polish · NotificationBell  
+- [x] **AURA-097** · P3 · Polish · NotificationBell  
   Stronger unread affordance; mark-read UX consistency.
+  **Done:** Count badge; unread accent bar/dot; optimistic mark-all; Escape/outside dismiss.
 
 - [x] **AURA-098** · P3 · Polish · Homepage preview in Settings  
   Preview should reflect chosen theme/layout, not a fake wireframe.
@@ -495,54 +498,74 @@ When implementing any AURA-###:
 
 ## Phase 8 — Deletes, cascade, rename edge cases
 
-- [ ] **AURA-099** · P1 · Reliability · Delete cascades vs RMW races  
+- [x] **AURA-099** · P1 · Reliability · Delete cascades vs RMW races  
   After AURA-002, ensure session/project delete cannot resurrect via stale full writes; include Google event cleanup.
+  **Done:** `deletedDocs` tombstones skip upserts; cascade drops trailing RMW; Google cleanup inside `deleteShootCascade`.
 
-- [ ] **AURA-100** · P2 · Bug · Delete session leaves booking orphans  
+- [x] **AURA-100** · P2 · Bug · Delete session leaves booking orphans  
   Clearing `sessionId` while leaving `pending` bookings — reconcile status.
+  **Done:** Linked pending/confirmed bookings → `canceled` + “Session deleted”; clear `sessionId`.
 
-- [ ] **AURA-101** · P2 · Bug · Unarchive project  
+- [x] **AURA-101** · P2 · Bug · Unarchive project  
   Don’t force every archived session to `booked` blindly.
+  **Done:** Unarchive restores project stage only; sessions stay archived; confirm copy updated.
 
-- [ ] **AURA-102** · P2 · Workflow · Project rename cascade  
+- [x] **AURA-102** · P2 · Workflow · Project rename cascade  
   Update custom titles when user opts in, or document that only auto titles update.
+  **Done:** Auto cascade (+ Balance); opt-in `renameTitles: all` + project edit checkbox; helper copy.
 
-- [ ] **AURA-103** · P1 · Workflow · Archive vs delete messaging  
-  Archive shouldn’t leave photographers unsure about live public links; delete should warn about irreversible gallery loss (export reminder).
+- [x] **AURA-103** · P1 · Workflow · Archive vs delete messaging  
+  Archive shouldn’t leave photographers unsure about live public links; delete should warn about irreversible gallery loss (export reminder).  
+  **Done:** `destructive-confirm` — project archive notes links stay live; gallery archive notes link stops; delete project/session remind Wrap zip export.
 
 ---
 
 ## Phase 9 — Auth, media, rate limits, ops
 
-- [ ] **AURA-104** · P1 · Security · Middleware cookie check  
-  Validate session token (or move gate entirely to layout with no false admin chrome).
+- [x] **AURA-104** · P1 · Security · Middleware cookie check  
+  Validate session token (or move gate entirely to layout with no false admin chrome).  
+  **Done:** Signed `token.exp.sig` cookie (Web Crypto HMAC); middleware verifies + drops invalid/legacy; layout `requireAdmin` remains authoritative; optional `AURA_SESSION_SECRET`.
 
-- [ ] **AURA-105** · P1 · Security · `requireAdmin` membership  
-  Re-check `studioMembers` on each request so revoked users stop immediately.
+- [x] **AURA-105** · P1 · Security · `requireAdmin` membership  
+  Re-check `studioMembers` on each request so revoked users stop immediately.  
+  **Done:** `requireAdmin` loads `getMemberByUid` and requires `member.studioId === session.studioId` before studio access.
 
-- [ ] **AURA-106** · P2 · Security · Media proxy  
-  Decide product: secrecy-of-URL vs signed/expiring URLs for derivatives; document PIN = download-only.
+- [x] **AURA-106** · P2 · Security · Media proxy  
+  Decide product: secrecy-of-URL vs signed/expiring URLs for derivatives; document PIN = download-only.  
+  **Done:** Decision = signed/expiring R2 (browse 6h, proxy 1h, originals 15m). PIN = download-only. Documented in `CLOUDFLARE_R2.md` + `PUBLIC_ROUTES.md`. Proxy re-mint → **AURA-386**.
 
-- [ ] **AURA-107** · P2 · Security · Rate limit  
-  Move PIN/download rate limits to a shared store (not per-instance memory).
+- [x] **AURA-107** · P2 · Security · Rate limit  
+  Move PIN/download rate limits to a shared store (not per-instance memory).  
+  **Done:** `rateLimitShared` → Firestore `rateLimits` (txn); download + homepage password use it; memory fallback. Other routes keep in-process `rateLimit`.
 
-- [ ] **AURA-108** · P2 · Security · Homepage / comments spam  
-  CAPTCHA or tighter limits on public comments/favorites writes (especially while analytics/writes are expensive).
+- [x] **AURA-108** · P2 · Security · Homepage / comments spam  
+  CAPTCHA or tighter limits on public comments/favorites writes (especially while analytics/writes are expensive).  
+  **Done:** No CAPTCHA — honeypot + time-trap on comments; `rateLimitShared` + tighter caps on comments/favorites/contact/photo-view; comment length sanitize.
 
-- [ ] **AURA-109** · P2 · Security · Google refresh tokens  
-  Encrypt tokens at rest (types already hint at this).
+- [x] **AURA-109** · P2 · Security · Google refresh tokens  
+  Encrypt tokens at rest (types already hint at this).  
+  **Done:** AES-256-GCM `enc:v1:` via `google-token-crypto`; seal on OAuth callback; open + lazy upgrade on GCal use; optional `GOOGLE_TOKEN_SECRET`.
 
-- [ ] **AURA-110** · P1 · Reliability · Auth sessions cleanup  
-  Delete expired Firestore auth sessions; clarify Firebase client vs Aura cookie logout.
+- [x] **AURA-110** · P1 · Reliability · Auth sessions cleanup  
+  Delete expired Firestore auth sessions; clarify Firebase client vs Aura cookie logout.  
+  **Done:** `deleteExpiredAuthSessions`; purge on get/list/login + cron; `clientLogout` = cookie/row + Firebase Auth; API logout cookie-only documented.
+
+- [ ] **AURA-386** · P2 · Security · Media proxy re-mint  
+  `/api/media` re-signs derivatives if object path is known (no gallery token). Harden (token/HMAC bind) or retire public proxy once all clients use gallery-minted browse URLs.
+
+- [ ] **AURA-387** · P2 · Performance · Watermark reprocess job  
+  Move gallery/preset rewatermark off request-path `updateStudioDb` (no image I/O under full-studio lock). Enqueue + worker; patch photo docs only. Pairs **AURA-113**.
 
 - [x] **AURA-111** · P2 · Performance · `findStudioBySlug`  
   Index slug → studioId instead of scanning all studios on book/homepage.
 
-- [ ] **AURA-112** · P2 · Incomplete · Background jobs  
-  Watermark reprocess, analytics compaction, gallery expiry, email retries should not all be request-path RMW.
+- [x] **AURA-112** · P2 · Incomplete · Background jobs
+  Watermark reprocess, analytics compaction, gallery expiry, email retries should not all be request-path RMW.  
+  **Done:** `runMaintenanceJobs` cron — email outbox + auth purge + `expireDueGalleries` via `patchStudioDoc` (index status+expiresAt). Email already outbox (313). Watermark job → **AURA-387**; analytics → **117**.
 
-- [ ] **AURA-113** · P2 · Bug · Upload/rewatermark non-jpg assumptions  
-  Derivative paths and rewatermark must handle png/webp/bin fallbacks.
+- [x] **AURA-113** · P2 · Bug · Upload/rewatermark non-jpg assumptions
+  Derivative paths and rewatermark must handle png/webp/bin fallbacks.  
+  **Done:** `storage-paths` helper (any ext + raw twins); rewatermark tries webp then same-ext; delete/archive clean both.
 
 - [x] **AURA-114** · P2 · Bug · Shoot PATCH  
   Support `endsAt` updates so calendar duration stays accurate. *(Shipped in AURA-152/026; POST also defaults endsAt.)*
@@ -551,17 +574,20 @@ When implementing any AURA-###:
 
 ## Phase 10 — Analytics product, state machines, scale
 
-- [ ] **AURA-115** · P1 · Incomplete · Analytics funnel events  
-  Record `booking_submitted`, `contract_signed` (and fix `sessionId`/`projectId` on events) — money still from transactions.
+- [x] **AURA-115** · P1 · Incomplete · Analytics funnel events
+  Record `booking_submitted`, `contract_signed` (and fix `sessionId`/`projectId` on events) — money still from transactions.  
+  **Done:** `booking_submitted` + `contract_signed` via `recordEvent`; quote view/accept carry `sessionId`+`projectId`. Money still from txs.
 
-- [ ] **AURA-116** · P2 · Bug · Analytics attribution  
-  Gallery events should use `sessionId` after migration, not only deprecated `shootId`.
+- [x] **AURA-116** · P2 · Bug · Analytics attribution
+  Gallery events should use `sessionId` after migration, not only deprecated `shootId`.  
+  **Done:** `linkedSessionId` + `recordEvent` persists `sessionId` only; normalize promotes legacy `shootId`; gallery single-doc reads coerce; create gallery posts `sessionId`.
 
 - [ ] **AURA-369** · P2 · Bug · Google Calendar scope  
   Hardcodes `primary` calendar for freeBusy + CRUD; `dateTime` omits `timeZone` (DST risk). Multi-calendar / local time when studios need it (W0/W3 debt).
 
-- [ ] **AURA-117** · P2 · Reliability · Analytics retention  
-  Bound/compacts `analyticsEvents` growth.
+- [x] **AURA-117** · P2 · Reliability · Analytics retention  
+  Bound/compacts `analyticsEvents` growth.  
+  **Done:** Cron `compactAnalyticsEvents` — delete by age (default 180d) + rotating per-studio soft cap (default 8k); tombstoned deletes; index `studioId+at`.
 
 - [x] **AURA-118** · P2 · Workflow · Triple state machines  
   Document and sync `project.stage`, `session.status`, `workflowStep` — reduce contradictory badges.
@@ -583,10 +609,12 @@ Superseded by **AURA-248** (X of Y + submit + Wrap review).
 
 - [x] **AURA-123** · P3 · Incomplete · Currency  
   USD-only declared in Settings → Payments (`DEFAULT_PAYMENT_CURRENCY`); multi-currency deferred.
-- [ ] **AURA-124** · P3 · Polish · Command palette / jump-to-project  
-  Scale aid once project counts grow.
-- [ ] **AURA-125** · P3 · TechDebt · Dead stubs  
-  Remove or implement `firestore-store` stubs, unused Countdown divergence, unused hashPassword paths, empty `firestore.indexes.json` when needed.
+- [x] **AURA-124** · P3 · Polish · Command palette / jump-to-project
+  Scale aid once project counts grow.  
+  **Done:** Admin `Jump` + ⌘/Ctrl+K palette; pages + `/api/projects?options=1`; arrow/Enter; workflow deep link.
+- [x] **AURA-125** · P3 · TechDebt · Dead stubs
+  Remove or implement `firestore-store` stubs, unused Countdown divergence, unused hashPassword paths, empty `firestore.indexes.json` when needed.  
+  **Done:** Deleted unused `firestore-store` + `Countdown.tsx`; removed unused `hashPassword`; indexes already present (galleries expiry + analytics).
 - [x] **AURA-126** · P3 · TechDebt · ADR  
   Write a short architecture note: target persistence model (per-entity writes), so agents stop extending the document-document antipattern.
   **Done:** With **AURA-280** — persistence section in `ADR-dual-model-retirement.md`.
@@ -595,10 +623,11 @@ Superseded by **AURA-248** (X of Y + submit + Wrap review).
 
 ## Phase 11 — Remaining UX debt (explicit, still in scope)
 
-- [ ] **AURA-127** · P1 · UX · Project header destructive actions  
-  Separate Archive/Delete from primary nav actions; reduce mis-tap on mobile.
+- [x] **AURA-127** · P1 · UX · Project header destructive actions
+  Separate Archive/Delete from primary nav actions; reduce mis-tap on mobile.  
+  **Done:** Project header `ActionStack` — All projects primary; Archive/Delete always under More (`menuIds`).
 
-- [ ] **AURA-128** · P1 · UX · Quote/session required path  
+- [ ] **AURA-128** · P1 · UX · Quote/session required path
   When Pricing needs a session, CTA to create session inline — don’t bury “New session” below the fold.
 
 - [ ] **AURA-129** · P1 · UX · Multi-session workflow status  
@@ -1250,6 +1279,10 @@ Parallel audit of admin + public + wizard/builder + CSS anti-patterns. Enrich ex
   Cookie/session works in standalone; login → return to intended admin route; no bounce to wrong origin/scope.  
   **Done:** `safeAdminNext`; middleware keeps query; layout bounce on expired session; logout clears cookie with path; Google callback stays on request host.
 
+- [x] **AURA-385** · P0 · PWA · Stay signed in (standalone)
+  Installed admin loses Aura cookie across cold starts while Firebase Auth often remains; user must re-enter password.  
+  **Done:** Set-Cookie on login/signup/logout `NextResponse` + `maxAge`; IndexedDB Firebase persistence; silent idToken→cookie restore on `/admin/login`; `clientLogout` clears Firebase too.
+
 - [x] **AURA-295** · P1 · PWA · Theme color sync
   `theme-color` meta + manifest track active studio/gallery theme (light/dark kits) so OS chrome matches experience (extends AURA-043).  
   **Done:** theme-color / theme_color = kit canvas; apple statusBar from bg; Brand save `router.refresh()`.
@@ -1802,6 +1835,7 @@ Do not narrate “Aura / Resend / Firebase” in UI copy — labels like “Mess
 | AURA-292     | 2026-07-30 | Standalone detect; Account/Log out in shell; .browser-only                                                 |
 | AURA-293     | 2026-07-30 | InstallHint admin+gallery; iOS Share one-liner; dismissible                                                |
 | AURA-294     | 2026-07-30 | safeAdminNext + expiry→login?next; logout cookie path                                                      |
+| AURA-385     | 2026-07-30 | PWA stay signed in: Response Set-Cookie, IndexedDB Auth, silent restore, clientLogout                      |
 | AURA-295     | 2026-07-30 | theme-color = kit background; statusBar + Brand refresh                                                    |
 | AURA-296     | 2026-07-30 | Admin last-route resume; launch_handler; hash-safe next                                                    |
 | AURA-297     | 2026-07-30 | Gallery launch_handler; standalone downloadSignedUrl                                                       |
@@ -1828,6 +1862,29 @@ Do not narrate “Aura / Resend / Firebase” in UI copy — labels like “Mess
 | AURA-275     | 2026-07-30 | DoD website builder MVP verified; Settings defers layout to Site builder                                   |
 | AURA-276     | 2026-07-30 | DoD gallery designer MVP verified (schema/presets/hero/chrome/grid/checklist)                              |
 | AURA-277     | 2026-07-30 | Happy-path DoD; deposit/contract workflow advance rules (119/120); closed 118                               |
+| AURA-102     | 2026-07-30 | Rename cascade: auto titles + opt-in custom; Balance titles included                                       |
+| AURA-103     | 2026-07-30 | Archive vs delete copy: live links on project archive; Wrap export before delete                           |
+| AURA-104     | 2026-07-30 | Signed session cookie; middleware HMAC verify; layout still authoritative                                  |
+| AURA-105     | 2026-07-30 | requireAdmin re-checks studioMembers uid→studioId on every request                                         |
+| AURA-106     | 2026-07-30 | Media access = signed/expiring R2; PIN download-only; residual → 386                                       |
+| AURA-107     | 2026-07-30 | rateLimitShared via Firestore rateLimits; download + homepage-pw                                           |
+| AURA-108     | 2026-07-30 | Comments honeypot/time-trap; shared tighter limits favorites/contact/photo-view                            |
+| AURA-109     | 2026-07-30 | Google refresh tokens AES-GCM sealed at rest; lazy plaintext upgrade                                       |
+| AURA-110     | 2026-07-30 | Expired auth sessions purged; clientLogout = Aura + Firebase Auth                                          |
+| AURA-112     | 2026-07-30 | Maintenance cron: expire galleries + email/auth; watermark→387 analytics→117                               |
+| AURA-113     | 2026-07-30 | Derivative paths for png/webp/bin; rewatermark + delete use storage-paths                                   |
+| AURA-127     | 2026-07-30 | Project header: Archive/Delete behind More; All projects primary (ActionStack menuIds)                     |
+| AURA-125     | 2026-07-30 | Removed dead firestore-store, Countdown.tsx, hashPassword; indexes already wired                           |
+| AURA-124     | 2026-07-30 | Admin Jump/⌘K command palette → projects + pages                                                          |
+| AURA-117     | 2026-07-30 | Cron analytics retention: age prune + per-studio soft cap; no studio RMW                                   |
+| AURA-116     | 2026-07-30 | Gallery/analytics attribution via sessionId; legacy shootId promoted on read; new events omit shootId      |
+| AURA-115     | 2026-07-30 | Funnel: booking_submitted + contract_signed; quote events get project/session ids                           |
+| AURA-101     | 2026-07-30 | Unarchive project only; sessions stay archived (no blind booked)                                           |
+| AURA-100     | 2026-07-30 | Session delete cancels linked pending/confirmed bookings (no orphan requests)                              |
+| AURA-099     | 2026-07-30 | Delete tombstones block RMW resurrection; GCal cleanup in deleteShootCascade                               |
+| AURA-097     | 2026-07-30 | NotificationBell: count badge, unread chrome, optimistic mark-all, dismiss UX                              |
+| AURA-096     | 2026-07-30 | Admin chrome: icon tabs, no hamburger duplex, slimmer header + --admin-tab-bar                             |
+| AURA-095     | 2026-07-30 | ListEditor: Select/Panel/Field throughout intake, pricing, partners, shots                                 |
 | AURA-094     | 2026-07-30 | Bookings/Library/Projects PageHeaders label-first (no header essays)                                       |
 | AURA-093     | 2026-07-30 | Analytics human labels + project·session filter (no id slices)                                             |
 | AURA-092     | 2026-07-30 | Dialog/lightbox a11y: autofocus priority, labelledby, Escape ownership                                     |

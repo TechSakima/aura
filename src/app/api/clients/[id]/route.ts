@@ -79,7 +79,11 @@ export async function PATCH(
     if (body.name != null) {
       const nextName = String(body.name).trim();
       if (nextName && nextName !== c.name) {
-        cascadeProjectRename(db, id, c.name, nextName);
+        const renameMode =
+          body.renameTitles === "all" || body.updateCustomTitles === true
+            ? "all"
+            : "auto";
+        cascadeProjectRename(db, id, c.name, nextName, renameMode);
         c.name = nextName;
       }
     }

@@ -345,7 +345,11 @@ export function normalizeDb(db: AuraDatabase): AuraDatabase {
   db.comments = stampStudioId(db.comments, studioId);
   db.subAlbums = stampStudioId(db.subAlbums, studioId);
   db.watermarkPresets = stampStudioId(db.watermarkPresets, studioId);
-  db.analyticsEvents = stampStudioId(db.analyticsEvents, studioId);
+  db.analyticsEvents = stampStudioId(db.analyticsEvents, studioId).map((e) => ({
+    ...e,
+    // Promote deprecated shootId → sessionId for attribution (AURA-116).
+    sessionId: e.sessionId || e.shootId,
+  }));
   db.notifications = stampStudioId(db.notifications || [], studioId);
   db.paymentLinks = stampStudioId(db.paymentLinks || [], studioId);
   db.invoices = stampStudioId(db.invoices || [], studioId);
