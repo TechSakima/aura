@@ -5,11 +5,14 @@ import {
   getSessionById,
   getStudioDoc,
 } from "@/lib/db/store";
+import { stripInboundSignatureNoise } from "@/lib/inbound-text";
 import {
   stripContactHtml,
   stripContactMessage,
 } from "@/lib/public-contact-server";
 import type { Studio } from "@/lib/types";
+
+export { stripInboundSignatureNoise } from "@/lib/inbound-text";
 
 export function resendInboundClient(): Resend | null {
   const key = process.env.RESEND_API_KEY?.trim();
@@ -203,9 +206,13 @@ export function sanitizeInboundBody(opts: {
   html?: string | null;
   subject?: string | null;
 }): { message: string; context: string } {
-  const text = stripContactMessage(String(opts.text || "")).slice(0, 4000);
+  const text = stripInboundSignatureNoise(
+    stripContactMessage(String(opts.text || "")),
+  ).slice(0, 4000);
   const fromHtml = opts.html
-    ? stripContactMessage(String(opts.html)).slice(0, 4000)
+    ? stripInboundSignatureNoise(
+        stripContactMessage(String(opts.html)),
+      ).slice(0, 4000)
     : "";
   const message = text || fromHtml || "(No message body)";
   const context = stripContactHtml(

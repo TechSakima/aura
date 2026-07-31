@@ -1,13 +1,18 @@
 import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import {
+  ensureProjectAdminSlug,
+  findProjectByRef,
+  findSessionByRef,
+} from "@/lib/admin-slug";
 import { COL } from "@/lib/db/collections";
 import {
   appendStudioDoc,
-  getProjectById,
-  getSessionById,
   getStudioDoc,
   listContactMessagesForProject,
+  readStudioDb,
+  updateStudioDb,
 } from "@/lib/db/store";
 import { emailProjectClientReply } from "@/lib/notify/send";
 import {
@@ -16,7 +21,12 @@ import {
   stripContactMessage,
 } from "@/lib/public-contact-server";
 import { rateLimit } from "@/lib/rate-limit";
-import type { ContactMessage } from "@/lib/types";
+import type { ContactMessage, Project } from "@/lib/types";
+
+const LIGHT_STUDIO: { photos: false; analytics: false } = {
+  photos: false,
+  analytics: false,
+};
 
 function mapMessage(m: ContactMessage) {
   return {
@@ -33,26 +43,46 @@ function mapMessage(m: ContactMessage) {
   };
 }
 
+/** Same slug/id resolution as GET /api/projects/[id] — trail broke on adminSlug URLs. */
+async function resolveProject(
+  studioId: string,
+  ref: string,
+): Promise<Project | null> {
+  const db = await readStudioDb(studioId, LIGHT_STUDIO);
+  const project = findProjectByRef(db, ref);
+  if (!project || project.studioId !== studioId) return null;
+  if (!project.adminSlug) {
+    await updateStudioDb(studioId, (d) => {
+      const p = d.projects.find((x) => x.id === project.id);
+      if (p) ensureProjectAdminSlug(d, p);
+    });
+  }
+  return project;
+}
+
 async function assertProjectSession(
   studioId: string,
-  projectId: string,
-  sessionId: string | undefined,
+  projectRef: string,
+  sessionRef: string | undefined,
 ) {
-  const project = await getProjectById(projectId);
-  if (!project || project.studioId !== studioId) {
+  const project = await resolveProject(studioId, projectRef);
+  if (!project) {
     return { ok: false as const, status: 404 as const, error: "Not found" };
   }
-  if (!sessionId) {
-    return { ok: true as const, project };
+  if (!sessionRef) {
+    return { ok: true as const, project, projectId: project.id };
   }
-  const session = await getSessionById(sessionId);
-  const owner =
-    session?.projectId ||
-    (session as { clientId?: string } | null)?.clientId;
-  if (!session || session.studioId !== studioId || owner !== projectId) {
+  const db = await readStudioDb(studioId, LIGHT_STUDIO);
+  const session = findSessionByRef(db, sessionRef, { projectId: project.id });
+  if (!session || session.studioId !== studioId) {
     return { ok: false as const, status: 404 as const, error: "Not found" };
   }
-  return { ok: true as const, project, sessionId };
+  return {
+    ok: true as const,
+    project,
+    projectId: project.id,
+    sessionId: session.id,
+  };
 }
 
 /** Linked contact / inbound messages for a project (AURA-373). No full-studio RMW. */
@@ -62,22 +92,26 @@ export async function GET(
 ) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { id: projectId } = await ctx.params;
-  const sessionId =
+  const { id: projectRef } = await ctx.params;
+  const sessionRef =
     new URL(req.url).searchParams.get("sessionId")?.trim() || undefined;
   const gate = await assertProjectSession(
     admin.studioId,
-    projectId,
-    sessionId,
+    projectRef,
+    sessionRef,
   );
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
 
-  const rows = await listContactMessagesForProject(admin.studioId, projectId, {
-    sessionId,
-    limit: 40,
-  });
+  const rows = await listContactMessagesForProject(
+    admin.studioId,
+    gate.projectId,
+    {
+      sessionId: gate.sessionId,
+      limit: 40,
+    },
+  );
 
   return NextResponse.json({ messages: rows.map(mapMessage) });
 }
@@ -89,7 +123,7 @@ export async function POST(
 ) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { id: projectId } = await ctx.params;
+  const { id: projectRef } = await ctx.params;
 
   const rl = rateLimit(`project-reply:${admin.studioId}`, 30, 60 * 60_000);
   if (!rl.ok) {
@@ -109,7 +143,7 @@ export async function POST(
     .slice(0, 254);
   const message = stripContactMessage(String(b.message || "")).slice(0, 4000);
   const clientName = stripContactHtml(String(b.clientName || "")).slice(0, 120);
-  const sessionId = String(b.sessionId || "").trim().slice(0, 80) || undefined;
+  const sessionRef = String(b.sessionId || "").trim().slice(0, 80) || undefined;
 
   if (!to.includes("@")) {
     return NextResponse.json({ error: "Email required" }, { status: 400 });
@@ -120,8 +154,8 @@ export async function POST(
 
   const gate = await assertProjectSession(
     admin.studioId,
-    projectId,
-    sessionId,
+    projectRef,
+    sessionRef,
   );
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
@@ -132,6 +166,8 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const projectId = gate.projectId;
+  const sessionId = gate.sessionId;
   const outboundId = nanoid();
   const delivered = await emailProjectClientReply({
     studio,

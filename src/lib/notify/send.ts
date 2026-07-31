@@ -13,7 +13,12 @@ import {
   studioContactPrefs,
   studioContactRecipientEmail,
 } from "@/lib/contact-prefs";
-import { readStudioDb, appendStudioDoc, getStudioDoc } from "@/lib/db/store";
+import {
+  appendStudioDoc,
+  getProjectById,
+  getStudioDoc,
+  readStudioDb,
+} from "@/lib/db/store";
 import { COL } from "@/lib/db/collections";
 import { contactSourceLabel } from "@/lib/public-contact-server";
 import { emailShellColors } from "@/lib/notify/email-theme";
@@ -928,18 +933,19 @@ export async function emailContactToStudio(opts: {
   if (msg.context) {
     rows.push(`<p><strong>Context</strong> ${escapeHtml(msg.context)}</p>`);
   }
+  let projectLabel = "";
   if (msg.projectId) {
+    const project = await getProjectById(msg.projectId);
+    projectLabel =
+      project?.name?.trim() ||
+      project?.email?.trim() ||
+      "Project";
     const projectPath = msg.sessionId
       ? `/admin/projects/${msg.projectId}/sessions/${msg.sessionId}#messages`
       : `/admin/projects/${msg.projectId}#messages`;
     const projectHref = absoluteUrl(projectPath);
     rows.push(
-      `<p><strong>Project</strong> <a href="${escapeHtml(projectHref)}">Open messages</a></p>`,
-    );
-  }
-  if (msg.sessionId) {
-    rows.push(
-      `<p><strong>Session</strong> ${escapeHtml(msg.sessionId)}</p>`,
+      `<p><strong>Project</strong> ${escapeHtml(projectLabel)} · <a href="${escapeHtml(projectHref)}">View</a></p>`,
     );
   }
   rows.push(
@@ -951,8 +957,9 @@ export async function emailContactToStudio(opts: {
     msg.phone ? `Phone: ${msg.phone}` : null,
     `Via: ${source}`,
     msg.context ? `Context: ${msg.context}` : null,
-    msg.projectId ? `Project: ${msg.projectId}` : null,
-    msg.sessionId ? `Session: ${msg.sessionId}` : null,
+    msg.projectId
+      ? `Project: ${projectLabel || msg.projectId}`
+      : null,
     "",
     msg.message,
   ].filter((line): line is string => line != null);
