@@ -18,6 +18,7 @@ export async function listStudiosWithPaymentLink(linkId: string) {
   return {
     studioId: link.studioId,
     studioName: studio.name,
+    theme: studio.theme ?? null,
     ownerEmail: studio.ownerEmail,
     stripeAccountId: studio.stripeAccountId,
     stripeOnboardingComplete: studio.stripeOnboardingComplete,

@@ -6,9 +6,12 @@ import {
   slicePage,
 } from "@/lib/admin-list-page";
 import { allocateProjectAdminSlug } from "@/lib/admin-slug";
+import { COL } from "@/lib/db/collections";
+import { getContactMessage } from "@/lib/email-outbox";
 import {
   listProjectsForStudio,
   listSessionsForStudio,
+  patchStudioDoc,
   updateStudioDb,
 } from "@/lib/db/store";
 import { publicToken } from "@/lib/tokens";
@@ -127,5 +130,21 @@ export async function POST(req: Request) {
     project.adminSlug = allocateProjectAdminSlug(db, project.name, project.id);
     db.projects.unshift(project);
   });
+
+  // Link originating contact so project Messages trail can show it (AURA-421).
+  const contactMessageId = String(body.contactMessageId || "").trim();
+  if (contactMessageId) {
+    const msg = await getContactMessage(contactMessageId);
+    if (
+      msg &&
+      msg.studioId === admin.studioId &&
+      !msg.projectId
+    ) {
+      await patchStudioDoc(COL.contactMessages, contactMessageId, {
+        projectId: project.id,
+      });
+    }
+  }
+
   return NextResponse.json({ project, sessions: [] });
 }

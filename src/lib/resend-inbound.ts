@@ -5,6 +5,7 @@ import {
   getSessionById,
   getStudioDoc,
 } from "@/lib/db/store";
+import { contactNotifyHref } from "@/lib/admin-deep-links";
 import { stripInboundSignatureNoise } from "@/lib/inbound-text";
 import {
   stripContactHtml,
@@ -232,16 +233,11 @@ export function inboundContactMessageId(emailId: string): string {
   return `inbound_${safe || "unknown"}`;
 }
 
-/** Admin deep-link for inbound / contact notify (AURA-371 / AURA-373). */
+/** Admin deep-link for inbound / contact notify (AURA-371 / AURA-419 / 421). */
 export function inboundNotifyHref(route: {
   projectId?: string;
   sessionId?: string;
+  contactMessageId?: string;
 }): string {
-  if (route.projectId) {
-    if (route.sessionId) {
-      return `/admin/projects/${route.projectId}/sessions/${route.sessionId}#messages`;
-    }
-    return `/admin/projects/${route.projectId}#messages`;
-  }
-  return "/admin#messages";
+  return contactNotifyHref(route);
 }

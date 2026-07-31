@@ -485,7 +485,7 @@ export function SettingsWebsite() {
 
         <div
           id="contact"
-          className="scroll-mt-24 space-y-3 border-t border-line pt-6"
+          className="scroll-mt-[var(--admin-scroll-mt)] space-y-3 border-t border-line pt-6"
         >
           <Label>Contact form</Label>
           <div className="flex min-h-11 items-center justify-between gap-3">
@@ -509,7 +509,7 @@ export function SettingsWebsite() {
           </ButtonLink>
         </div>
 
-        <div id="featured" className="scroll-mt-24 space-y-3">
+        <div id="featured" className="scroll-mt-[var(--admin-scroll-mt)] space-y-3">
           <Label>Featured collections</Label>
           <p className="text-xs text-muted">
             Live galleries on the public site portfolio.

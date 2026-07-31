@@ -73,19 +73,23 @@ export function ContractPublicView({
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto min-w-0 max-w-2xl">
       {preview ? (
         <p className="mb-4 text-xs uppercase tracking-[0.14em] text-muted">
           Preview
         </p>
       ) : null}
       {studioName ? (
-        <p className="text-sm tracking-wide text-muted uppercase">
+        <p className="min-w-0 break-words text-sm tracking-wide text-muted uppercase">
           {studioName}
         </p>
       ) : null}
-      <h1 className="mt-2 font-display text-4xl">{title || "Contract"}</h1>
-      <div className="prose mt-8 whitespace-pre-wrap text-ink">{body}</div>
+      <h1 className="mt-2 max-w-full min-w-0 break-words font-display text-4xl">
+        {title || "Contract"}
+      </h1>
+      <div className="prose mt-8 min-w-0 max-w-full break-words whitespace-pre-wrap text-ink">
+        {body}
+      </div>
 
       {isCompleted ? (
         <div className="mt-10 space-y-3 border-t border-line pt-8">
@@ -104,7 +108,7 @@ export function ContractPublicView({
       ) : (
         <>
           {!preview ? (
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/95 py-3 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur desk:hidden">
+            <div className="fixed inset-x-0 z-40 border-t border-line bg-canvas/95 py-3 pl-[max(1rem,var(--safe-inset-left))] pr-[max(1rem,var(--safe-inset-right))] pb-[max(0.75rem,var(--safe-inset-bottom))] backdrop-blur print:hidden desk:hidden bottom-[var(--install-hint-clearance,0px)]">
               <div className="mx-auto flex max-w-2xl min-w-0 items-center justify-between gap-3">
                 <p className="min-w-0 truncate text-sm text-muted">
                   {acknowledged ? "Ready to sign" : "Read & agree below"}
@@ -128,7 +132,11 @@ export function ContractPublicView({
           <form
             id="sign-contract-form"
             onSubmit={onSubmit}
-            className={`mt-10 space-y-5 border-t border-line pt-8 ${preview ? "" : "pb-24 desk:pb-0"}`}
+            className={
+              preview
+                ? "mt-10 space-y-5 border-t border-line pt-8"
+                : "mt-10 space-y-5 border-t border-line pt-8 pb-[calc(var(--install-hint-clearance,0px)+var(--safe-inset-bottom)+6rem)] desk:pb-[calc(var(--install-hint-clearance,0px)+var(--safe-inset-bottom)+1.5rem)]"
+            }
           >
             <Field>
               <Label htmlFor="signed-date">Date</Label>

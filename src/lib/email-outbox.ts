@@ -142,7 +142,7 @@ async function processContactOutboxJob(
       studioId: job.studioId,
       title: "Message email failed",
       reason: "Studio missing",
-      href: "/admin#messages",
+      href: "/admin/settings/notifications",
     });
     return "dead";
   }
@@ -177,7 +177,7 @@ async function processContactOutboxJob(
       studioId: job.studioId,
       title: "Message email failed",
       reason: skipErr,
-      href: "/admin#messages",
+      href: "/admin/settings/notifications",
     });
     return "dead";
   }
@@ -197,7 +197,7 @@ async function processContactOutboxJob(
       studioId: job.studioId,
       title: "Message email failed",
       reason: err,
-      href: "/admin#messages",
+      href: "/admin/settings/notifications",
     });
     return "dead";
   }

@@ -222,7 +222,7 @@ export function SettingsLibrary() {
         </List>
       </Panel>
 
-      <Card id="legal" className="min-w-0 scroll-mt-24 p-5">
+      <Card id="legal" className="min-w-0 scroll-mt-[var(--admin-scroll-mt)] p-5">
         <h2 className="font-display text-2xl">Legal defaults</h2>
         <p className="mt-1 text-sm text-muted">
           Default contract for new sends.

@@ -12,7 +12,7 @@ export function GalleryPrintPartners({
 
   return (
     <section
-      className="mx-auto max-w-[var(--public-max)] px-4 pb-2 pt-10 sm:px-8"
+      className="gallery-pad-x gallery-pad-x-md mx-auto max-w-[var(--public-max)] pb-2 pt-10"
       aria-label="Print"
     >
       <p className="text-[11px] uppercase tracking-[0.16em] text-muted">

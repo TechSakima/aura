@@ -5,10 +5,12 @@ import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
 import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
-import { InstallHint } from "@/components/pwa/InstallHint";
+import { InstallHintDock } from "@/components/pwa/InstallHintDock";
 import { PublicShell } from "@/components/shells/PublicShell";
-import { Button, Field, Input, Label } from "@/components/ui";
+import { Button, EmptyState, Field, Input, Label } from "@/components/ui";
+import { publicStudioShellProps } from "@/lib/public-studio-shell";
 import { grossUpAmount } from "@/lib/stripe-fees";
+import type { StudioTheme } from "@/lib/types";
 
 export default function PublicPayPage() {
   const params = useParams<{ id: string }>();
@@ -26,6 +28,7 @@ export default function PublicPayPage() {
       netAmount: number;
     };
   } | null>(null);
+  const [studioTheme, setStudioTheme] = useState<StudioTheme | null>(null);
   const [amount, setAmount] = useState("");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -59,12 +62,15 @@ export default function PublicPayPage() {
             studioName: d.studioName,
             feePreview: d.feePreview,
           });
+          setStudioTheme(d.studio?.theme ?? null);
           setCheckoutReady(d.checkoutReady !== false);
           if (d.paymentLink?.amount) setAmount(String(d.paymentLink.amount));
         }
       })
       .catch(() => setError("Could not load payment link"));
   }, [params.id]);
+
+  const shell = publicStudioShellProps(studioTheme);
 
   const busy = pending || redirecting;
 
@@ -109,21 +115,29 @@ export default function PublicPayPage() {
 
   if (error && !link) {
     return (
-      <PublicShell>
-        <p className="py-16 text-center text-muted">{error}</p>
+      <PublicShell {...shell}>
+        <EmptyState
+          variant="error"
+          title={error}
+          className="items-center text-center"
+        />
       </PublicShell>
     );
   }
   if (!link) {
     return (
-      <PublicShell>
-        <p className="py-16 text-center text-muted">Loading…</p>
+      <PublicShell {...shell}>
+        <EmptyState
+          variant="loading"
+          title="Loading…"
+          className="py-16 text-center"
+        />
       </PublicShell>
     );
   }
   if (done) {
     return (
-      <PublicShell>
+      <PublicShell {...shell}>
         <PublicSuccess title="Payment received">
           {link.studioName ? (
             <p>Payment to {link.studioName}</p>
@@ -147,17 +161,17 @@ export default function PublicPayPage() {
     : "Pay now";
 
   return (
-    <PublicShell>
-      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-        <div className="mx-auto max-w-md">
-          <InstallHint storageKey={`aura-install-dismiss-pay-${params.id}`} />
-        </div>
-      </div>
-      <div className="mx-auto max-w-md">
+    <PublicShell {...shell}>
+      <InstallHintDock
+        storageKey={`aura-install-dismiss-pay-${params.id}`}
+      />
+      <div className="install-hint-pad mx-auto max-w-md">
         {link.studioName ? (
           <StudioMark name={link.studioName} tone="dark" className="mb-2" />
         ) : null}
-        <h1 className="font-display text-4xl">{link.title}</h1>
+        <h1 className="max-w-full min-w-0 break-words font-display text-4xl">
+          {link.title}
+        </h1>
         {link.studioName ? (
           <p className="mt-2 text-sm text-muted">Payment to {link.studioName}</p>
         ) : null}

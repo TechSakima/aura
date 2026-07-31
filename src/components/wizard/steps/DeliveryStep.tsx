@@ -11,7 +11,9 @@ import {
   Input,
   Label,
   Select,
+  Sheet,
   Switch,
+  Tabs,
   useConfirm,
   useToast,
   useUploadSession,
@@ -25,7 +27,10 @@ import {
   confirmDeletePhotos,
   confirmGoLive,
 } from "@/lib/destructive-confirm";
-import { deliveryPublishItems } from "@/lib/delivery-publish";
+import {
+  deliveryPublishDoneCount,
+  deliveryPublishItems,
+} from "@/lib/delivery-publish";
 import type {
   DownloadPinPolicy,
   Shoot,
@@ -67,6 +72,8 @@ export function DeliveryStep({
   const [tab, setTab] = useState<"photos" | "design">("photos");
   const [goingLive, setGoingLive] = useState(false);
   const [emailBusy, setEmailBusy] = useState(false);
+  /** Layout tab phone — checklist sheet (AURA-442). */
+  const [layoutChecklistOpen, setLayoutChecklistOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -353,10 +360,14 @@ export function DeliveryStep({
     pinPolicy,
     projectEmail,
   });
+  const publishProgress = deliveryPublishDoneCount(publishItems);
+  const showLayoutChecklistEntry =
+    !publishProgress.complete && publishProgress.total > 0;
 
   function onPublishAction(
     action: "photos" | "design" | "live" | "email" | "pin",
   ) {
+    setLayoutChecklistOpen(false);
     if (action === "design") {
       setTab("design");
       return;
@@ -439,6 +450,56 @@ export function DeliveryStep({
         </div>
       </header>
 
+      {/* Layout phone: compact Go live + checklist (full chrome stays on Photos / md+) — AURA-442 */}
+      {tab === "design" ? (
+        <div className="space-y-2 md:hidden">
+          {isDraft ? (
+            <Button
+              type="button"
+              tone="accent"
+              className="min-h-11 w-full"
+              pending={goingLive}
+              pendingLabel="Publishing…"
+              onClick={() => void goLive()}
+            >
+              Go live
+            </Button>
+          ) : null}
+          <div className="flex flex-col gap-2">
+            {showLayoutChecklistEntry ? (
+              <Button
+                type="button"
+                tone="neutral"
+                className="min-h-11 w-full"
+                onClick={() => setLayoutChecklistOpen(true)}
+              >
+                Checklist · {publishProgress.done}/{publishProgress.total}
+              </Button>
+            ) : null}
+            <ButtonLink
+              href={`/g/${gallery.publicToken}`}
+              tone={isDraft ? "neutral" : "accent"}
+              className="min-h-11 w-full justify-center"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Preview
+            </ButtonLink>
+          </div>
+          <Sheet
+            open={layoutChecklistOpen}
+            onClose={() => setLayoutChecklistOpen(false)}
+            title="Publish checklist"
+          >
+            <DeliveryPublishChecklist
+              bare
+              items={publishItems}
+              onAction={onPublishAction}
+            />
+          </Sheet>
+        </div>
+      ) : null}
+
       <div className={cn(tab === "design" && "max-md:hidden")}>
         <DeliveryPublishChecklist
           items={publishItems}
@@ -446,34 +507,17 @@ export function DeliveryStep({
         />
       </div>
 
-      <div
-        role="tablist"
+      <Tabs
         aria-label="Delivery views"
-        className="flex gap-1 border-b border-line"
-      >
-        {(
-          [
-            { id: "photos", label: "Photos" },
-            { id: "design", label: "Layout" },
-          ] as const
-        ).map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "-mb-px min-h-11 border-b-2 px-3 text-sm transition-colors",
-              tab === t.id
-                ? "border-ink text-ink"
-                : "border-transparent text-muted hover:text-ink",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+        tabs={[
+          { id: "photos", label: "Photos" },
+          { id: "design", label: "Layout" },
+        ]}
+        value={tab}
+        onChange={(id) => {
+          if (id === "photos" || id === "design") setTab(id);
+        }}
+      />
 
       {tab === "design" ? (
         <GalleryDesignPanel
@@ -672,7 +716,7 @@ export function DeliveryStep({
                   </Field>
                 ) : null}
               </div>
-              <div id="delivery-pin" className="space-y-4 scroll-mt-24">
+              <div id="delivery-pin" className="space-y-4 scroll-mt-[var(--admin-scroll-mt)]">
                 <Field>
                   <Label htmlFor="reset-pin">Download PIN</Label>
                   <div className="flex flex-col gap-2 sm:flex-row">

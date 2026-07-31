@@ -204,7 +204,7 @@ export function SettingsData() {
         </div>
       </Card>
 
-      <Card id="danger" className="min-w-0 scroll-mt-24 border-danger/40 p-5">
+      <Card id="danger" className="min-w-0 scroll-mt-[var(--admin-scroll-mt)] border-danger/40 p-5">
         <h2 className="font-display text-2xl">Danger zone</h2>
         <p className="mt-1 text-sm text-muted">
           Irreversible or disruptive actions. Export first if you need a copy.

@@ -121,7 +121,7 @@ Aura may swap the display name to the studio’s name at send time; the address 
 5. Check:
    - Studio inbox (Deliver to) received it.
    - **Reply** goes to the test client address.
-   - Admin bell / Dashboard → Messages shows the message (if Contact message notify is on).
+   - Admin bell notifies (if Contact message notify is on). Project-linked inbound opens the project Messages trail.
 
 If it fails with “Couldn’t send”, check server logs for `[notify] email failed` / missing key / unverified domain.
 

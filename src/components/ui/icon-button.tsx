@@ -7,6 +7,7 @@ export function IconButton({
   className,
   type = "button",
   label,
+  labelFrom = "always",
   active,
   tone = "default",
   children,
@@ -16,6 +17,11 @@ export function IconButton({
   children?: ReactNode;
   /** Icon + text label (≥44px). Omit for icon-only. */
   label?: string;
+  /**
+   * When `sm+`, show the text label from `sm` up; icon-only below
+   * (Admin Jump — AURA-443).
+   */
+  labelFrom?: "always" | "sm+";
   active?: boolean;
   /** Branded chrome on accent fills (AURA-245). */
   tone?: IconButtonTone;
@@ -30,6 +36,7 @@ export function IconButton({
         : "text-ink/65 hover:bg-line/40 hover:text-ink";
 
   if (label) {
+    const collapseLabel = labelFrom === "sm+";
     return (
       <button
         type={type}
@@ -38,6 +45,8 @@ export function IconButton({
         aria-pressed={active || undefined}
         className={cn(
           "inline-flex h-11 min-h-11 touch-target items-center gap-2 rounded-md px-2.5 text-[11px] font-medium uppercase tracking-[0.16em] transition-colors disabled:opacity-50",
+          collapseLabel &&
+            "max-sm:size-11 max-sm:justify-center max-sm:gap-0 max-sm:px-0",
           labeledTone,
           className,
         )}
@@ -46,7 +55,13 @@ export function IconButton({
         <span className="inline-flex shrink-0" aria-hidden>
           {children}
         </span>
-        <span className="max-w-[4.5rem] truncate sm:max-w-[7rem] md:max-w-none">
+        <span
+          title={label}
+          className={cn(
+            "max-w-[4.5rem] truncate sm:max-w-[7rem] md:max-w-none",
+            collapseLabel && "hidden sm:inline",
+          )}
+        >
           {label}
         </span>
       </button>

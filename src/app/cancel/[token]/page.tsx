@@ -9,12 +9,15 @@ import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureC
 import { PublicSuccess } from "@/components/public/PublicSuccess";
 import {
   Button,
+  EmptyState,
   Field,
   Input,
   Label,
   SegmentedControl,
   Textarea,
 } from "@/components/ui";
+import { publicStudioShellProps } from "@/lib/public-studio-shell";
+import type { StudioTheme } from "@/lib/types";
 
 type Mode = "reschedule" | "cancel";
 
@@ -29,6 +32,7 @@ function localInputValue(iso: string | null): string {
 export default function PublicCancelPage() {
   const { token } = useParams<{ token: string }>();
   const [studioName, setStudioName] = useState("");
+  const [studioTheme, setStudioTheme] = useState<StudioTheme | null>(null);
   const [name, setName] = useState("");
   const [startsAt, setStartsAt] = useState<string | null>(null);
   const [canCancel, setCanCancel] = useState(false);
@@ -50,7 +54,8 @@ export default function PublicCancelPage() {
         setError(data.error || "Not found");
         return;
       }
-      setStudioName(data.studioName || "");
+      setStudioName(data.studioName || data.studio?.name || "");
+      setStudioTheme(data.studio?.theme ?? null);
       setName(data.project?.name || "");
       setStartsAt(data.startsAt || null);
       const cancelOk = Boolean(data.canCancel);
@@ -64,6 +69,8 @@ export default function PublicCancelPage() {
       }
     })();
   }, [token]);
+
+  const shell = publicStudioShellProps(studioTheme);
 
   const modeOptions = useMemo(() => {
     const opts: { id: Mode; label: string }[] = [];
@@ -102,15 +109,31 @@ export default function PublicCancelPage() {
 
   if (loading) {
     return (
-      <PublicShell>
-        <p className="py-16 text-center text-muted">Loading…</p>
+      <PublicShell {...shell}>
+        <EmptyState
+          variant="loading"
+          title="Loading…"
+          className="py-16 text-center"
+        />
+      </PublicShell>
+    );
+  }
+
+  if (error && !studioName) {
+    return (
+      <PublicShell {...shell}>
+        <EmptyState
+          variant="error"
+          title={error}
+          className="items-center text-center"
+        />
       </PublicShell>
     );
   }
 
   if (done === "reschedule") {
     return (
-      <PublicShell>
+      <PublicShell {...shell}>
         <PublicSuccess title="Request sent">
           <p>{studioName} will confirm a new time.</p>
         </PublicSuccess>
@@ -120,7 +143,7 @@ export default function PublicCancelPage() {
 
   if (done === "cancel") {
     return (
-      <PublicShell>
+      <PublicShell {...shell}>
         <PublicSuccess title="Request canceled">
           <p>{studioName} has been notified.</p>
         </PublicSuccess>
@@ -131,8 +154,8 @@ export default function PublicCancelPage() {
   const showForm = canCancel || canRequestReschedule;
 
   return (
-    <PublicShell>
-      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(4.75rem+env(safe-area-inset-bottom))] desk:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
+    <PublicShell {...shell}>
+      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="mx-auto max-w-md">
           <InstallHint storageKey={`aura-install-dismiss-cancel-${token}`} />
         </div>

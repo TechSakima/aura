@@ -76,8 +76,29 @@ export function paymentsHref(): string {
   return "/admin/payments";
 }
 
+/**
+ * Notify deep-link for contact / inbound (AURA-419 / AURA-421).
+ * Project-scoped → project Messages trail; else New project (optional contact prefill).
+ */
+export function contactNotifyHref(opts?: {
+  projectId?: string | null;
+  sessionId?: string | null;
+  contactMessageId?: string | null;
+}): string {
+  const projectId = String(opts?.projectId || "").trim();
+  const sessionId = String(opts?.sessionId || "").trim();
+  const contactMessageId = String(opts?.contactMessageId || "").trim();
+  if (projectId && sessionId) return sessionMessagesHref(projectId, sessionId);
+  if (projectId) return projectMessagesHref(projectId);
+  if (contactMessageId) {
+    return `/admin/projects?new=1&contact=${encodeURIComponent(contactMessageId)}`;
+  }
+  return "/admin/projects?new=1";
+}
+
+/** @deprecated Prefer contactNotifyHref. */
 export function dashboardMessagesHref(): string {
-  return "/admin#messages";
+  return "/admin/projects?new=1";
 }
 
 /** Prefer session delivery when both ids known; else project workflow. */

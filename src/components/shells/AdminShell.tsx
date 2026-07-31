@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { InstallHint } from "@/components/pwa/InstallHint";
 import { AdminCommandPalette } from "@/components/shells/AdminCommandPalette";
+import { ChromeBottom } from "@/components/shells/ChromeBottom";
 import { NotificationBell } from "@/components/shells/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { rememberAdminRoute } from "@/lib/admin-last-route";
@@ -264,6 +265,7 @@ export function AdminShell({
 
   return (
     <div className="min-h-full bg-canvas text-ink">
+      <ChromeBottom kind="admin" />
       <Suspense fallback={null}>
         <RememberAdminRoute />
       </Suspense>

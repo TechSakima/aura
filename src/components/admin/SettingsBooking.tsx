@@ -17,6 +17,7 @@ import {
   DEFAULT_BOOKING_DEFAULTS,
   normalizeBookingDefaults,
 } from "@/lib/booking-defaults";
+import { adminPreviewHref } from "@/lib/admin-preview-paths";
 import { mutateJson } from "@/lib/client/mutation";
 import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
 
@@ -149,16 +150,17 @@ export function SettingsBooking() {
                   >
                     Copy link
                   </Button>
-                  <Button
-                    type="button"
+                  <ButtonLink
+                    href={adminPreviewHref(
+                      "book",
+                      slug,
+                      "/admin/settings/booking",
+                    )}
                     tone="ghost"
                     className="w-full sm:w-auto"
-                    onClick={() =>
-                      window.open(bookPath, "_blank", "noopener")
-                    }
                   >
                     Preview
-                  </Button>
+                  </ButtonLink>
                 </div>
               </div>
             ) : (

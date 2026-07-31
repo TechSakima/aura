@@ -16,6 +16,7 @@ export function GalleryCoachTips({
   enabled,
   hasDownloadPin,
   showContact,
+  onVisibilityChange,
   className,
 }: {
   token: string;
@@ -23,6 +24,8 @@ export function GalleryCoachTips({
   hasDownloadPin?: boolean;
   /** Mention Message in chrome (AURA-308). */
   showContact?: boolean;
+  /** Hide InstallHint while coach is up (AURA-432). */
+  onVisibilityChange?: (visible: boolean) => void;
   className?: string;
 }) {
   const [visible, setVisible] = useState(false);
@@ -37,11 +40,17 @@ export function GalleryCoachTips({
         setVisible(false);
         return;
       }
-      setVisible(true);
     } catch {
       setVisible(false);
+      return;
     }
+    setVisible(true);
   }, [enabled, token]);
+
+  useEffect(() => {
+    onVisibilityChange?.(visible);
+    return () => onVisibilityChange?.(false);
+  }, [visible, onVisibilityChange]);
 
   function dismiss() {
     try {
@@ -60,8 +69,9 @@ export function GalleryCoachTips({
       aria-label="How to use this gallery"
       className={cn(
         "pointer-events-none fixed inset-x-0 z-40 px-3",
-        "bottom-[calc(4.75rem+env(safe-area-inset-bottom)+0.5rem)]",
-        "md:bottom-[max(1rem,env(safe-area-inset-bottom))]",
+        /* Clear thumb bar until desk — same breakpoint as GalleryChrome (AURA-432). */
+        "bottom-[calc(var(--gallery-thumb-bar)+env(safe-area-inset-bottom)+0.5rem)]",
+        "desk:bottom-[max(1rem,env(safe-area-inset-bottom))]",
         className,
       )}
     >

@@ -57,6 +57,7 @@ export async function GET(
       name: studioDb.studio.name,
       logoUrl: await resolveBrowseMediaUrl(studioDb.studio.logoUrl),
       brandTagline: studioDb.studio.brandTagline,
+      theme: studioDb.studio.theme ?? null,
     },
   });
 }

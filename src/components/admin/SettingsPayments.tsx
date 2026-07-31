@@ -264,7 +264,7 @@ export function SettingsPayments() {
         </div>
       </Card>
 
-      <Card id="defaults" className="min-w-0 scroll-mt-24 p-5">
+      <Card id="defaults" className="min-w-0 scroll-mt-[var(--admin-scroll-mt)] p-5">
         <h2 className="font-display text-2xl">Deposit defaults</h2>
         <p className="mt-1 text-sm text-muted">
           Used when a project has no session-type deposit.

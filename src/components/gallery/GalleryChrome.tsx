@@ -239,5 +239,5 @@ export function galleryChromePadClass(
 ): string {
   if (expired && !showContact) return "";
   /* Thumb bar until desk — unified floating + sticky variants (AURA-286/378/410) */
-  return "pb-[calc(4.75rem+env(safe-area-inset-bottom))] desk:pb-0";
+  return "pb-[calc(var(--gallery-thumb-bar)+env(safe-area-inset-bottom))] desk:pb-0";
 }

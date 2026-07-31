@@ -4,6 +4,7 @@ export { Button, type ButtonProps } from "./button";
 export { ButtonLink } from "./button-link";
 export { Card } from "./card";
 export { Checkbox } from "./checkbox";
+export { ChoiceCard } from "./choice-card";
 export { Chip, type ChipTone } from "./chip";
 
 export { ConfirmProvider, useConfirm } from "./confirm";
@@ -35,6 +36,7 @@ export { SectionIntro } from "./section-intro";
 export { Select } from "./select";
 export { SegmentedControl, type SegmentedOption } from "./segmented-control";
 export { ScrollRail } from "./scroll-rail";
+export { Sheet } from "./sheet";
 export { Skeleton } from "./skeleton";
 export {
   PROJECT_STAGE_FILTER_OPTIONS,

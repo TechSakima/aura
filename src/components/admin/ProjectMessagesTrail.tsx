@@ -21,6 +21,8 @@ type MessageRow = {
   source: string;
   context?: string;
   preview: string;
+  /** Full body — list shows truncated preview (AURA-448). */
+  message?: string;
   createdAt: string;
   sessionId?: string;
 };
@@ -37,6 +39,7 @@ export function ProjectMessagesTrail({
   const [messages, setMessages] = useState<MessageRow[] | null>(null);
   const [error, setError] = useState("");
   const [replyTo, setReplyTo] = useState<MessageRow | null>(null);
+  const [viewing, setViewing] = useState<MessageRow | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -122,49 +125,117 @@ export function ProjectMessagesTrail({
   }
 
   return (
-    <section id="messages" className="scroll-mt-24 space-y-5">
-      <SectionIntro eyebrow="Inbox" title="Messages" />
+    <section id="messages" className="scroll-mt-[var(--admin-scroll-mt)] space-y-5">
+      <SectionIntro eyebrow="Project" title="Messages" />
       {messages == null ? (
         <EmptyState variant="inline" title="Loading messages…" />
       ) : error ? (
         <EmptyState variant="inline" title={error} />
       ) : messages.length === 0 ? (
-        <EmptyState variant="inline" title="No messages yet." />
+        <EmptyState variant="inline" title="No messages yet" />
       ) : (
         <List>
-          {messages.map((m) => (
-            <ListRow key={m.id}>
-              <div className="min-w-0">
-                <p className="font-medium">{m.name}</p>
-                <p className="mt-0.5 truncate text-sm text-muted">
-                  {m.source}
-                  {m.context ? ` · ${m.context}` : ""}
-                  {m.preview ? ` — ${m.preview}` : ""}
-                </p>
-                <p className="mt-1 text-xs text-muted">
-                  {formatWhen(m.createdAt)}
-                </p>
-              </div>
-              <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
-                <Button
-                  size="sm"
-                  tone="ghost"
-                  className="min-h-11"
-                  onClick={() => openSend(m)}
-                >
-                  Send
-                </Button>
-                <a
-                  className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
-                  href={`mailto:${m.email}`}
-                >
-                  Reply
-                </a>
-              </div>
-            </ListRow>
-          ))}
+          {messages.map((m) => {
+            const body = m.preview || m.message || "";
+            const summary = `${m.source}${m.context ? ` · ${m.context}` : ""}${body ? ` — ${body}` : ""}`;
+            return (
+              <ListRow key={m.id}>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{m.name}</p>
+                  <button
+                    type="button"
+                    className="mt-0.5 min-h-11 w-full truncate text-left text-sm text-muted underline-offset-2 hover:text-ink hover:underline"
+                    title={summary}
+                    onClick={() => setViewing(m)}
+                  >
+                    {summary}
+                  </button>
+                  <p className="mt-1 text-xs text-muted">
+                    {formatWhen(m.createdAt)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
+                  <Button
+                    size="sm"
+                    tone="ghost"
+                    className="min-h-11"
+                    onClick={() => openSend(m)}
+                  >
+                    Send
+                  </Button>
+                  <a
+                    className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
+                    href={`mailto:${m.email}`}
+                  >
+                    Reply
+                  </a>
+                </div>
+              </ListRow>
+            );
+          })}
         </List>
       )}
+
+      <Dialog
+        open={Boolean(viewing)}
+        onClose={() => setViewing(null)}
+        title={viewing?.name || "Message"}
+      >
+        {viewing ? (
+          <div className="space-y-4">
+            <p className="text-sm text-muted">{viewing.email}</p>
+            <dl className="space-y-3 text-sm">
+              <div>
+                <dt className="text-xs uppercase tracking-[0.14em] text-muted">
+                  Source
+                </dt>
+                <dd className="mt-1 text-ink">{viewing.source}</dd>
+              </div>
+              {viewing.context ? (
+                <div>
+                  <dt className="text-xs uppercase tracking-[0.14em] text-muted">
+                    Context
+                  </dt>
+                  <dd className="mt-1 whitespace-pre-wrap text-ink">
+                    {viewing.context}
+                  </dd>
+                </div>
+              ) : null}
+              <div>
+                <dt className="text-xs uppercase tracking-[0.14em] text-muted">
+                  Message
+                </dt>
+                <dd className="mt-1 whitespace-pre-wrap text-ink">
+                  {viewing.message || viewing.preview || "—"}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-xs text-muted">
+              {formatWhen(viewing.createdAt)}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                tone="accent"
+                className="min-h-11"
+                onClick={() => {
+                  const m = viewing;
+                  setViewing(null);
+                  openSend(m);
+                }}
+              >
+                Send
+              </Button>
+              <Button
+                tone="ghost"
+                className="min-h-11"
+                onClick={() => setViewing(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Dialog>
 
       <Dialog
         open={Boolean(replyTo)}

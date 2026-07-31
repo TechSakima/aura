@@ -173,7 +173,7 @@ export function GalleryGuestState({
       galleryMotion={normalized.motion}
       galleryDensity={normalized.density}
     >
-      <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col items-center justify-center px-4 py-16 text-center pt-[max(4rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <div className="gallery-pad-x mx-auto flex min-h-[100dvh] max-w-md flex-col items-center justify-center py-16 text-center pt-[max(4rem,var(--safe-inset-top))] pb-[max(2rem,var(--safe-inset-bottom))]">
         {studio?.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

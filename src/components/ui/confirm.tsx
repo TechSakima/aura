@@ -85,12 +85,13 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           <p className="text-sm text-muted whitespace-pre-wrap">
             {pending.opts.message}
           </p>
-          <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             {pending.mode === "confirm" ? (
               <>
                 <Button
                   type="button"
                   tone="ghost"
+                  className="min-h-11 w-full sm:w-auto"
                   onClick={() => close(false)}
                 >
                   {pending.opts.cancelLabel || "Cancel"}
@@ -98,13 +99,18 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 <Button
                   type="button"
                   tone={pending.opts.tone || "danger"}
+                  className="min-h-11 w-full sm:w-auto"
                   onClick={() => close(true)}
                 >
                   {pending.opts.confirmLabel || "Confirm"}
                 </Button>
               </>
             ) : (
-              <Button type="button" onClick={() => close(true)}>
+              <Button
+                type="button"
+                className="min-h-11 w-full sm:w-auto"
+                onClick={() => close(true)}
+              >
                 {pending.opts.okLabel || "OK"}
               </Button>
             )}

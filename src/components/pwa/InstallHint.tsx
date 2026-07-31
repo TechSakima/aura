@@ -47,9 +47,12 @@ function writeDismissed(key: string) {
 export function InstallHint({
   storageKey,
   className,
+  onPresenceChange,
 }: {
   storageKey: string;
   className?: string;
+  /** True while the hint card is painted (AURA-451 clearance). */
+  onPresenceChange?: (present: boolean) => void;
 }) {
   const standalone = useDisplayModeStandalone();
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(
@@ -109,8 +112,15 @@ export function InstallHint({
     }
   }
 
-  if (standalone || dismissed || !ready) return null;
-  if (!deferred && !ios) return null;
+  const present =
+    !standalone && !dismissed && ready && Boolean(deferred || ios);
+
+  useEffect(() => {
+    onPresenceChange?.(present);
+    return () => onPresenceChange?.(false);
+  }, [present, onPresenceChange]);
+
+  if (!present) return null;
 
   return (
     <div

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  ActionStack,
   Button,
   ButtonLink,
   Cluster,
@@ -296,54 +297,47 @@ export default function PaymentsPage() {
                       {linked ? ` · ${linked}` : ""}
                     </p>
                   </div>
-                  <Cluster gap="gap-2" className="w-full sm:w-auto sm:justify-end">
-                    {l.projectId ? (
-                      <ButtonLink
-                        href={`/admin/projects/${l.projectId}#workflow`}
-                        size="sm"
-                        tone="ghost"
-                        className="min-h-11"
-                      >
-                        Project
-                      </ButtonLink>
-                    ) : null}
-                    <Button
-                      type="button"
-                      size="sm"
-                      tone="neutral"
-                      className="min-h-11"
-                      onClick={() => void copyLink(l)}
-                    >
-                      Copy link
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      tone="ghost"
-                      className="min-h-11"
-                      onClick={() => openEmail(l)}
-                    >
-                      Email link
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      tone="ghost"
-                      className="min-h-11"
-                      onClick={() => openEdit(l)}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      tone="danger"
-                      className="min-h-11"
-                      onClick={() => void archiveLink(l)}
-                    >
-                      Archive
-                    </Button>
-                  </Cluster>
+                  <ActionStack
+                    primaryId="copy"
+                    menuIds={["archive"]}
+                    className="w-full sm:max-w-xs sm:shrink-0"
+                    actions={[
+                      ...(l.projectId
+                        ? [
+                            {
+                              id: "project",
+                              label: "Project",
+                              href: `/admin/projects/${l.projectId}#workflow`,
+                              tone: "ghost" as const,
+                            },
+                          ]
+                        : []),
+                      {
+                        id: "copy",
+                        label: "Copy link",
+                        tone: "neutral",
+                        onClick: () => void copyLink(l),
+                      },
+                      {
+                        id: "email",
+                        label: "Email link",
+                        tone: "ghost",
+                        onClick: () => openEmail(l),
+                      },
+                      {
+                        id: "edit",
+                        label: "Edit",
+                        tone: "ghost",
+                        onClick: () => openEdit(l),
+                      },
+                      {
+                        id: "archive",
+                        label: "Archive",
+                        tone: "danger",
+                        onClick: () => void archiveLink(l),
+                      },
+                    ]}
+                  />
                 </ListRow>
               );
             })}

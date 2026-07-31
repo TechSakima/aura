@@ -21,6 +21,10 @@ export async function GET(
   return NextResponse.json({
     paymentLink: hit.link,
     studioName: hit.studioName,
+    studio: {
+      name: hit.studioName,
+      theme: hit.theme ?? null,
+    },
     feePreview,
     checkoutReady: Boolean(
       getStripe() && hit.stripeAccountId && hit.stripeOnboardingComplete,

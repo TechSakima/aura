@@ -19,6 +19,7 @@ import {
 } from "@/components/ui";
 
 import { SessionsCalendar } from "@/components/admin/SessionsCalendar";
+import { adminPreviewHref } from "@/lib/admin-preview-paths";
 import type {
   BookingRequest,
   ProjectSession,
@@ -266,6 +267,7 @@ function BookingsPageInner() {
     <div className="space-y-8">
       <PageHeader
         title="Bookings"
+        description="Requests from your booking form. Confirm to start a project."
         actions={
           <>
             <ButtonLink
@@ -275,12 +277,14 @@ function BookingsPageInner() {
             >
               Booking settings
             </ButtonLink>
-            {bookUrl ? (
-              <a href={bookUrl} target="_blank" rel="noreferrer">
-                <Button tone="neutral" className="min-h-11">
-                  Open booking form
-                </Button>
-              </a>
+            {slug ? (
+              <ButtonLink
+                href={adminPreviewHref("book", slug, "/admin/bookings")}
+                tone="neutral"
+                className="min-h-11"
+              >
+                Open booking form
+              </ButtonLink>
             ) : null}
           </>
         }
@@ -296,8 +300,31 @@ function BookingsPageInner() {
             <EmptyState
               variant="inline"
               title="No requests yet"
-              description="Share your booking form when session types are ready."
+              description={
+                bookUrl
+                  ? "Share the booking form. New requests appear here to confirm."
+                  : "Set a homepage slug and session types, then share the booking form."
+              }
               className="border-y border-line py-4"
+              action={
+                slug ? (
+                  <ButtonLink
+                    href={adminPreviewHref("book", slug, "/admin/bookings")}
+                    tone="accent"
+                    className="min-h-11"
+                  >
+                    Open booking form
+                  </ButtonLink>
+                ) : (
+                  <ButtonLink
+                    href="/admin/settings/booking"
+                    tone="accent"
+                    className="min-h-11"
+                  >
+                    Booking settings
+                  </ButtonLink>
+                )
+              }
             />
           ) : (
             <>
@@ -404,6 +431,7 @@ function BookingsPageInner() {
                 <EmptyState
                   variant="inline"
                   title="No pending requests"
+                  description="Confirmed and declined requests stay in history below."
                   className="border-y border-line py-3"
                 />
               )}

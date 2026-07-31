@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
 import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
-import { InstallHint } from "@/components/pwa/InstallHint";
+import { InstallHintDock } from "@/components/pwa/InstallHintDock";
 import { PublicShell } from "@/components/shells/PublicShell";
 import { Button, Field, Input, Label, Select, Textarea } from "@/components/ui";
 import { mutateJson } from "@/lib/client/mutation";
@@ -230,12 +230,8 @@ export default function PublicBookPage() {
 
   return (
     <PublicShell style={themeStyle} fontPreset={fontPreset}>
-      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-        <div className="mx-auto max-w-md">
-          <InstallHint storageKey={installKey} />
-        </div>
-      </div>
-      <div className="mx-auto max-w-md">
+      <InstallHintDock storageKey={installKey} />
+      <div className="install-hint-pad mx-auto max-w-md">
         {studioName ? (
           <StudioMark name={studioName} tone="dark" className="mb-2" />
         ) : null}

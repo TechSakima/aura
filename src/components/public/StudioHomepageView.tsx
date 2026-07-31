@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { EnsureKitFonts } from "@/components/fonts/EnsureKitFonts";
 import { HomepageModuleList } from "@/components/public/homepage/HomepageModules";
-import { InstallHint } from "@/components/pwa/InstallHint";
+import { InstallHintDock } from "@/components/pwa/InstallHintDock";
 import { PublicShell } from "@/components/shells/PublicShell";
 import { cn } from "@/lib/cn";
 import type { HomepagePayload } from "@/lib/homepage-payload";
@@ -33,7 +33,7 @@ export function StudioHomepageView({
   }) as CSSProperties;
 
   const body = (
-    <div className="min-w-0 overflow-x-clip pb-16">
+    <div className="install-hint-pad min-w-0 overflow-x-clip">
       <HomepageModuleList data={data} preview={preview} />
     </div>
   );
@@ -42,6 +42,7 @@ export function StudioHomepageView({
     return (
       <div
         className={cn(
+          /* Bare builder path — inherit DeviceFramePreview size container (AURA-439). */
           "min-h-full min-w-0 overflow-x-clip bg-canvas text-ink",
           className,
         )}
@@ -66,13 +67,7 @@ export function StudioHomepageView({
       className={className}
     >
       {body}
-      {!preview ? (
-        <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-          <div className="mx-auto max-w-md">
-            <InstallHint storageKey={installKey} />
-          </div>
-        </div>
-      ) : null}
+      {!preview ? <InstallHintDock storageKey={installKey} /> : null}
     </PublicShell>
   );
 }

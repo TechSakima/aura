@@ -464,7 +464,7 @@ export default function ProjectDetailPage() {
         <SectionIntro title="New session" />
         <form
           onSubmit={createSession}
-          className="grid max-w-3xl gap-4 sm:grid-cols-3"
+          className="grid max-w-3xl gap-4 md:grid-cols-3"
         >
           <Field>
             <Label>Session label</Label>

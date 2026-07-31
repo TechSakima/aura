@@ -83,6 +83,37 @@
   --duration-emphasis: var(--duration-emphasis);
   --duration-crossfade: var(--duration-crossfade);
   --ease-out: var(--ease-out);
+
+  /*
+   * AURA-439 — align @sm/@md/@lg with viewport sm/md/lg so public surfaces
+   * can use container queries inside DeviceFramePreview (375 phone / 960 desktop).
+   */
+  --container-sm: 40rem;
+  --container-md: 48rem;
+  --container-lg: 64rem;
+  --container-xl: 80rem;
+  --container-2xl: 96rem;
+}
+
+/*
+ * AURA-422 — bottom chrome clearance for root Toast.
+ * Shells toggle html.chrome-bottom-* via <ChromeBottom />.
+ */
+html.chrome-bottom-admin {
+  --chrome-bottom: var(--admin-tab-bar);
+}
+@media (min-width: 768px) {
+  html.chrome-bottom-admin {
+    --chrome-bottom: 0px;
+  }
+}
+html.chrome-bottom-gallery {
+  --chrome-bottom: var(--gallery-thumb-bar);
+}
+@media (min-width: 1024px) and (min-height: 560px) {
+  html.chrome-bottom-gallery {
+    --chrome-bottom: 0px;
+  }
 }
 
 @layer base {
@@ -125,6 +156,24 @@
   }
 }
 
+/*
+ * Hero fill heights (AURA-450) — svh for mobile chrome; cqh overrides inside
+ * size containers (DeviceFramePreview). Indefinite cqh ≈ svh on live pages.
+ * @utility so variants like @sm:hero-fill-78 work.
+ */
+@utility hero-fill-70 {
+  min-height: 70svh;
+  min-height: 70cqh;
+}
+@utility hero-fill-78 {
+  min-height: 78svh;
+  min-height: 78cqh;
+}
+@utility hero-fill-42 {
+  min-height: 42svh;
+  min-height: 42cqh;
+}
+
 @layer utilities {
   .touch-target {
     min-height: var(--touch-min);
@@ -132,9 +181,31 @@
   }
 
   .shell-pad {
-    padding-left: max(var(--shell-gutter), env(safe-area-inset-left));
-    padding-right: max(var(--shell-gutter), env(safe-area-inset-right));
+    padding-left: max(var(--shell-gutter), var(--safe-inset-left));
+    padding-right: max(var(--shell-gutter), var(--safe-inset-right));
   }
+
+  /* Gallery density pad + safe-area (AURA-454). */
+  .gallery-pad-x {
+    padding-left: max(var(--gallery-pad-x, 1rem), var(--safe-inset-left));
+    padding-right: max(var(--gallery-pad-x, 1rem), var(--safe-inset-right));
+  }
+
+  /* Former sm:px-8 — keeps notch clearance at larger viewports. */
+  @media (min-width: 640px) {
+    .gallery-pad-x-md {
+      padding-left: max(2rem, var(--safe-inset-left));
+      padding-right: max(2rem, var(--safe-inset-right));
+    }
+  }
+
+  /* Clear fixed InstallHint above primary CTAs (AURA-451). */
+  .install-hint-pad {
+    padding-bottom: calc(
+      var(--install-hint-clearance, 0px) + var(--safe-inset-bottom) + 1.5rem
+    );
+  }
+
 
   /* App density helpers (AURA-287) */
   .density-stack {
@@ -152,12 +223,11 @@
 
   /* Sticky/fixed chrome helpers (AURA-281; requires viewport-fit=cover) */
   .safe-pt {
-    padding-top: env(safe-area-inset-top);
+    padding-top: var(--safe-inset-top);
   }
 
-
   .safe-pb {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: var(--safe-inset-bottom);
   }
 
   /* Hide in installed PWA — install hints, browser-only chrome (AURA-292 / 293) */

@@ -3,6 +3,10 @@
 import { cn } from "@/lib/cn";
 import type { GalleryThemePreset, StudioThemePreset } from "@/lib/themes";
 
+/** Cover preview scrim — token-based (AURA-458). */
+const COVER_SCRIM =
+  "linear-gradient(to top, var(--scrim), color-mix(in srgb, var(--scrim) 35%, transparent))";
+
 /** Theme picker swatch — studio presets and gallery themes (AURA-204). */
 export function ThemeSwatch({
   theme,
@@ -18,11 +22,12 @@ export function ThemeSwatch({
   const bg = "background" in theme ? theme.background : theme.bg;
   const sample =
     "sample" in theme
-      ? (coverPhotoUrl
-          ? `linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,.2)), center/cover url(${coverPhotoUrl})`
-          : bg)
+      ? coverPhotoUrl
+        ? `${COVER_SCRIM}, center/cover url(${coverPhotoUrl})`
+        : bg
       : bg;
   const showAa = !("sample" in theme);
+  const onCover = Boolean(coverPhotoUrl);
 
   return (
     <button
@@ -36,10 +41,13 @@ export function ThemeSwatch({
       )}
     >
       <span
-        className="mb-2 flex h-14 items-center justify-center"
+        className={cn(
+          "mb-2 flex h-14 items-center justify-center",
+          onCover && "text-on-media",
+        )}
         style={{
           background: sample,
-          color: coverPhotoUrl ? "#faf8f5" : theme.ink,
+          color: onCover ? undefined : theme.ink,
           borderBottom: `3px solid ${theme.accent}`,
         }}
       >
@@ -51,10 +59,7 @@ export function ThemeSwatch({
             <span className="size-3" style={{ background: theme.accent }} />
           </span>
         ) : (
-          <span
-            className={cn("fontClass" in theme && theme.fontClass)}
-            style={{ color: coverPhotoUrl ? "#faf8f5" : theme.ink }}
-          >
+          <span className={cn("fontClass" in theme && theme.fontClass)}>
             {"sample" in theme ? theme.sample : ""}
           </span>
         )}

@@ -170,7 +170,7 @@ export function SettingsWatermarks({
   }
 
   return (
-    <Card id="watermarks" className="scroll-mt-24 min-w-0 space-y-6 p-5">
+    <Card id="watermarks" className="scroll-mt-[var(--admin-scroll-mt)] min-w-0 space-y-6 p-5">
       <div>
         <h2 className="font-display text-2xl">Watermarks</h2>
         <p className="mt-1 text-sm text-muted">

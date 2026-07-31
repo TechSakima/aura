@@ -292,7 +292,7 @@ export function SettingsNotifications() {
         </form>
       </Card>
 
-      <Card id="contact" className="min-w-0 scroll-mt-24 p-5">
+      <Card id="contact" className="min-w-0 scroll-mt-[var(--admin-scroll-mt)] p-5">
         <h2 className="font-display text-2xl">Contact</h2>
         <p className="mt-1 text-sm text-muted">
           Where public contact messages go, and where the form appears.

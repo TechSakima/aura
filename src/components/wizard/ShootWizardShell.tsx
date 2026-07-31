@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { ShootPublicLinks } from "@/components/admin/ShootPublicLinks";
 import { Button, ButtonLink, Tabs } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -69,6 +69,16 @@ export function ShootWizardShell({
   const showFooter =
     !hideFooter && Boolean(onBack || onNext || (canSkip && onSkip));
 
+  /* Document scrollport — focus / scrollIntoView clear sticky footer + tabs (AURA-441). */
+  useEffect(() => {
+    if (!showFooter) return;
+    const root = document.documentElement;
+    root.style.scrollPaddingBottom = "var(--wizard-scroll-pad-bottom)";
+    return () => {
+      root.style.scrollPaddingBottom = "";
+    };
+  }, [showFooter]);
+
   return (
     <div className="space-y-6 sm:space-y-8">
       <div className="flex flex-col gap-4 border-b border-line pb-6 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:pb-8">
@@ -118,14 +128,22 @@ export function ShootWizardShell({
         }))}
       />
 
-      <div className="min-h-[12rem]">{children}</div>
+      <div
+        className={cn(
+          "min-h-[12rem]",
+          /* Clear sticky footer; AdminShell main already clears tab bar (AURA-441). */
+          showFooter && "pb-[var(--wizard-sticky-footer)]",
+        )}
+      >
+        {children}
+      </div>
 
       {showFooter ? (
         <div
           className={cn(
             "sticky z-30 flex flex-wrap items-center justify-between gap-3 border-t border-line bg-canvas/95 py-3 backdrop-blur",
             /* Clear AdminShell bottom tabs + home indicator on phone */
-            "bottom-[calc(3.5rem+env(safe-area-inset-bottom))] md:bottom-0",
+            "bottom-[calc(var(--admin-tab-bar)+env(safe-area-inset-bottom))] md:bottom-0",
           )}
         >
           <Button

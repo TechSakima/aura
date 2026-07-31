@@ -172,7 +172,7 @@ export function SessionTypesPanel() {
   const archivedTypes = types.filter((t) => t.active === false);
 
   return (
-    <div id="types" className="scroll-mt-24 space-y-10">
+    <div id="types" className="scroll-mt-[var(--admin-scroll-mt)] space-y-10">
       <Card className="max-w-lg p-5">
         <h2 className="mb-1 font-display text-2xl">New session type</h2>
         <p className="mb-4 text-sm text-muted">

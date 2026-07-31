@@ -10,6 +10,7 @@ import type { HomepageCollectionsLayout } from "@/lib/types";
 /**
  * Homepage collections — shared MediaGrid engine where applicable (AURA-246).
  * list + cinematic remain homepage-specific presentations.
+ * Layout uses container queries / cqw so DeviceFramePreview phone mode is honest (AURA-439).
  */
 export function HomepageCollections({
   layout,
@@ -20,7 +21,7 @@ export function HomepageCollections({
 }) {
   if (galleries.length === 0) {
     return (
-      <section className="shell-pad mx-auto max-w-[var(--public-max)] py-14 sm:py-16">
+      <section className="shell-pad mx-auto max-w-[var(--public-max)] py-14 @sm:py-16">
         <p className="text-center text-muted">No collections yet.</p>
       </section>
     );
@@ -28,7 +29,7 @@ export function HomepageCollections({
 
   if (layout === "list") {
     return (
-      <section className="shell-pad mx-auto max-w-[var(--public-max)] py-14 sm:py-16">
+      <section className="shell-pad mx-auto max-w-[var(--public-max)] py-14 @sm:py-16">
         <ul className="divide-y divide-line border-y border-line">
           {galleries.map((g) => (
             <li key={g.token}>
@@ -36,7 +37,7 @@ export function HomepageCollections({
                 href={`/g/${g.token}`}
                 className="flex min-h-11 min-w-0 items-center gap-4 py-4 no-underline"
               >
-                <div className="h-16 w-16 shrink-0 overflow-hidden bg-line sm:h-20 sm:w-20">
+                <div className="h-16 w-16 shrink-0 overflow-hidden bg-line @sm:h-20 @sm:w-20">
                   <HomepageCoverImage
                     gallery={g}
                     layout="list"
@@ -56,20 +57,25 @@ export function HomepageCollections({
 
   if (layout === "cinematic") {
     return (
-      <section className="py-14 sm:py-16">
+      <section className="py-14 @sm:py-16">
         <ScrollRail
           fadeFrom="canvas"
-          fadeWidthClass="w-12 sm:w-16"
+          fadeWidthClass="w-12 @sm:w-16"
           aria-label="Collections"
           contentClassName={cn(
-            "gap-3 snap-x snap-mandatory scroll-px-5 px-5 pb-3",
-            "sm:gap-4 sm:scroll-px-10 sm:px-10",
+            /* L/R safe-area — bare px-5 skipped notch in landscape (AURA-450). */
+            "gap-3 snap-x snap-mandatory pb-3",
+            "scroll-pl-[max(var(--shell-gutter),var(--safe-inset-left))] scroll-pr-[max(var(--shell-gutter),var(--safe-inset-right))]",
+            "pl-[max(var(--shell-gutter),var(--safe-inset-left))] pr-[max(var(--shell-gutter),var(--safe-inset-right))]",
+            "@sm:gap-4",
+            "@sm:scroll-pl-[max(2.5rem,var(--safe-inset-left))] @sm:scroll-pr-[max(2.5rem,var(--safe-inset-right))]",
+            "@sm:pl-[max(2.5rem,var(--safe-inset-left))] @sm:pr-[max(2.5rem,var(--safe-inset-right))]",
           )}
         >
           {galleries.map((g) => (
             <div
               key={g.token}
-              className="w-[min(78vw,22rem)] shrink-0 snap-start sm:w-[min(42vw,26rem)]"
+              className="w-[min(78cqw,22rem)] shrink-0 snap-start @sm:w-[min(42cqw,26rem)]"
             >
               <Link href={`/g/${g.token}`} className="block min-w-0 no-underline">
                 <div className="overflow-hidden bg-line">
@@ -101,7 +107,7 @@ export function HomepageCollections({
   return (
     <section
       className={cn(
-        "py-14 sm:py-16",
+        "py-14 @sm:py-16",
         mode === "diary"
           ? ""
           : "shell-pad mx-auto max-w-[var(--public-max)]",
@@ -113,10 +119,10 @@ export function HomepageCollections({
         getKey={(g) => g.token}
         className={
           mode === "diary"
-            ? "gap-10 sm:gap-14"
+            ? "gap-10 @sm:gap-14"
             : mode === "justified"
-              ? "gap-3 sm:gap-4"
-              : "gap-4 sm:gap-5"
+              ? "gap-3 @sm:gap-4"
+              : "gap-4 @sm:gap-5"
         }
         renderItem={(g, ctx) => (
           <Link
@@ -124,8 +130,8 @@ export function HomepageCollections({
             className={cn(
               "block no-underline",
               ctx.itemClassName,
-              mode === "masonry" && "mb-4 sm:mb-5",
-              mode === "justified" && "min-w-0 sm:min-w-[180px]",
+              mode === "masonry" && "mb-4 @sm:mb-5",
+              mode === "justified" && "min-w-0 @sm:min-w-[180px]",
             )}
             style={{ animationDelay: ctx.animationDelay }}
           >

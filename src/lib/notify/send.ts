@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { Resend } from "resend";
+import { contactNotifyHref } from "@/lib/admin-deep-links";
 import {
   bookingCanceledStudioSentence,
   bookingConfirmedSentence,
@@ -934,18 +935,21 @@ export async function emailContactToStudio(opts: {
     rows.push(`<p><strong>Context</strong> ${escapeHtml(msg.context)}</p>`);
   }
   let projectLabel = "";
+  const adminPath = contactNotifyHref({
+    projectId: msg.projectId,
+    sessionId: msg.sessionId,
+    contactMessageId: msg.id,
+  });
+  const adminHref = absoluteUrl(adminPath);
+  const ctaLabel = msg.projectId ? "Open project" : "New project";
   if (msg.projectId) {
     const project = await getProjectById(msg.projectId);
     projectLabel =
       project?.name?.trim() ||
       project?.email?.trim() ||
       "Project";
-    const projectPath = msg.sessionId
-      ? `/admin/projects/${msg.projectId}/sessions/${msg.sessionId}#messages`
-      : `/admin/projects/${msg.projectId}#messages`;
-    const projectHref = absoluteUrl(projectPath);
     rows.push(
-      `<p><strong>Project</strong> ${escapeHtml(projectLabel)} · <a href="${escapeHtml(projectHref)}">View</a></p>`,
+      `<p><strong>Project</strong> ${escapeHtml(projectLabel)}</p>`,
     );
   }
   rows.push(
@@ -962,6 +966,8 @@ export async function emailContactToStudio(opts: {
       : null,
     "",
     msg.message,
+    "",
+    `${ctaLabel}: ${adminHref}`,
   ].filter((line): line is string => line != null);
 
   return emailClient({
@@ -975,6 +981,8 @@ export async function emailContactToStudio(opts: {
       theme: opts.studio.theme,
       title: subject,
       bodyHtml: rows.join("\n"),
+      ctaLabel,
+      ctaHref: adminHref,
     }),
     text: textLines.join("\n"),
     idempotencyKey: `contact/${opts.studio.id}/${msg.id}`,

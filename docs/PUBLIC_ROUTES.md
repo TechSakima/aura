@@ -12,7 +12,8 @@ Client-facing paths — keep short and stable.
 | `/book/{slug}` | Booking | Public session request |
 | `/cancel/{token}` | Cancel | Public booking cancel |
 | `/h/{slug}` | Homepage | Studio public homepage |
-| `/s/{token}` | Sub-album | Shared album — nav + back to gallery; download inherits parent PIN |
+| `/g/{token}/s/{albumToken}` | Sub-album | Shared album under gallery PWA scope (AURA-434); download inherits parent PIN |
+| `/s/{token}` | Sub-album (legacy) | Redirects to `/g/{gallery}/s/{album}` |
 
 **Gallery PIN (AURA-106):** PIN gates **original downloads only**, not viewing. Media access model (signed R2 URLs) → [`CLOUDFLARE_R2.md`](./CLOUDFLARE_R2.md)#access-model-aura-106.
 

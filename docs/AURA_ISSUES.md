@@ -50,11 +50,13 @@ Work top → bottom. Within a wave, keep listed sequence.
 | **W13** | No-headache workflows + DoD     | **260**–**280** + residual through **369** done → **W14**                                                               | Prior foundations                                                         |
 | **W14** | Leftover polish                 | **384**/**386**/**387**/**200**/**370**/**055** done                                                                    | —                                                                         |
 | **W15** | Web/PWA audit residuals         | **complete** (through **418**) | W0–W14 done; full report [`WEB_PWA_AUDIT.md`](WEB_PWA_AUDIT.md)           |
+| **W16** | Contact vs booking IA           | **complete** (through **421**) | After W15; Bookings = intake; project Messages only after project exists |
+| **W17** | UI / responsive residuals       | **complete** (through **460**) | After W16; deep dive + second pass 2026-07-31 — canvas `ui-responsive-audit` |
 
 
-**Next to implement:** none in Canonical waves — **W0–W15** complete. Pick a new phase item or append backlog.
+**Next to implement:** first open checkbox after **W17** (none in wave order — backlog complete through **460**).
 
-**R2:** **W0–W15** complete.
+**R2:** **W0–W17** complete.
 
 **Dedup (do not double-implement):**
 
@@ -1031,6 +1033,166 @@ Do **not** reopen closed Phase 18 PWA IDs — these are residual gaps found agai
 
 - [x] **AURA-418** · P3 · PWA · `/q` + `/cancel` theme-color  
   Layouts + manifests via `publicFlowPwaChrome`; `questionnaire`/`cancel` pwa-icon keys; InstallHint; no SW.
+
+---
+
+## Phase 22 — Contact vs booking (intake clarity)
+
+**Problem:** Dashboard **Messages** feels like an inbox / next step after a client Message, but Phase 19 contact is email + notify only. Booking work starts in **Bookings**; project-scoped mail (AURA-371–374) applies after a project exists. Studios get stuck looking for “continue booking” on Messages.
+
+**Product goal:** Bookings = only path that starts work. Public Message stays for reach-out (not a CRM). Project Messages trail stays for locked-in correspondence. No in-app Inbox (roadmap forever-out).
+
+- [x] **AURA-419** · P1 · Product · Demote Dashboard Messages  
+  Removed Dashboard Messages list; `contactNotifyHref` → project `#messages` or `/admin`; dead-email issues → Settings; Project trail eyebrow **Project** (not Inbox).
+
+- [x] **AURA-420** · P2 · UX · Bookings as intake clarity  
+  Bookings header + empty states: form → confirm → project; project Messages empty clarifies email trail only.
+
+- [x] **AURA-421** · P3 · Product · Contact → start project (optional)  
+  Studio-level contact notify / email → New project (`?contact=` prefill); create links `contactMessageId`; project trail after save.
+
+---
+
+## Phase 23 — UI / responsive residuals (W17)
+
+**Problem:** W12 closed systemic 375/PWA gates, but a 2026-07-31 multi-agent pass (plus second pass) found overlay/token drift, admin/public gaps, dishonest builder Phone preview, PWA preview/scope honesty, and hero/`vh` residuals. No P0 layout ship-blockers; do not reopen closed W12 IDs.
+
+**Product goal:** Overlays clear chrome on phone/standalone; admin deep-links and calendar usable one-handed; public gallery coach/PWA honest; builder “375” matches real phone CSS; installed admin previews work.
+
+**Execution (wave order):** Systemic **422–426** → admin **427–431** + **444–448** → public/PWA **432–438** + **449–455** → builders **439–442** → dialogs/tokens **456–458** → polish **443** + **459–460**.
+
+### Systemic chrome & overlays
+
+- [x] **AURA-422** · P1 · Responsive · Bottom-chrome CSS vars + Toast surface offset  
+  `--gallery-thumb-bar` + `--chrome-bottom`; `ChromeBottom` html class for Toast; wizard/gallery use vars; drop phantom `4.75rem` on `/q` `/cancel` `/c`.
+
+- [x] **AURA-423** · P1 · UI · `Sheet` primitive  
+  `Sheet` portal + scrim + safe-area + focus trap/inert; bottom sheet (rounded top); consumers may gate to phone and keep desktop popover.
+
+- [x] **AURA-424** · P1 · UX · NotificationBell → Sheet  
+  Bell opens portaled `Sheet` (scrim, safe-area, focus trap); list scrolls in sheet body.
+
+- [x] **AURA-425** · P1 · UX · ActionStack More portal / flip  
+  More opens portaled `Sheet` (all breakpoints) — clears tab bar; closes after action.
+
+- [x] **AURA-426** · P2 · Responsive · Dialog horizontal safe-area  
+  Dialog root uses `max(1rem, env(safe-area-inset-*))` on all four sides.
+
+### Admin gaps
+
+- [x] **AURA-427** · P1 · PWA · Admin hash `scroll-mt` vs notch  
+  `--admin-scroll-mt` (= `--admin-sticky-top`); admin hash targets use `scroll-mt-[var(--admin-scroll-mt)]`.
+
+- [x] **AURA-428** · P1 · Responsive · Week calendar sessions tappable  
+  Phone week day headers → day view; list rows → session helper; month-grid chips stay decorative; desktop week chips link.
+
+- [x] **AURA-429** · P1 · UX · Payments row ActionStack  
+  Payment links: Copy primary; Project/Email/Edit secondary; Archive in More (`menuIds`).
+
+- [x] **AURA-430** · P2 · UI · Calendar view → SegmentedControl  
+  Day / Week / Month / 3 months via shared `SegmentedControl`.
+
+- [x] **AURA-431** · P2 · Responsive · Admin section Tabs on phone  
+  Default `Tabs` with 3+ items: Select jump below `md`, tablist from `md`.
+
+### Public / PWA
+
+- [x] **AURA-432** · P1 · Responsive · Gallery coach vs thumb bar  
+  Coach clears thumb bar until `desk:`; InstallHint hidden while coach visible.
+
+- [x] **AURA-433** · P1 · Responsive · AlbumView double top safe-area  
+  `stickyHeader={false}` drops notch `pt` (chrome already owns it).
+
+- [x] **AURA-434** · P1 · PWA · Sub-album `/s` under gallery scope  
+  Canonical `/g/{gallery}/s/{album}`; legacy `/s/{album}` redirects; links + PUBLIC_ROUTES updated.
+
+- [x] **AURA-435** · P2 · Responsive · Vertical hero padding vs `shell-pad`  
+  Vertical cover: `pl` = max(1.5rem/3rem, gutter, safe-area); `pr` keeps shell-pad; no competing `pl-6`.
+
+- [x] **AURA-436** · P2 · UX · Album / favorites action overflow  
+  AlbumView `actionItems` → ActionStack (primary + More Sheet on phone); favorites / peek / sub-album wired.
+
+- [x] **AURA-437** · P2 · UI · Quote post-accept + packages unified-ui  
+  `ChoiceCard` for packages; post-accept Sign/Pay → `ButtonLink`.
+
+- [x] **AURA-438** · P3 · PWA · InstallHint clearance on `/q` + `/cancel`  
+  Done with **422** — `1rem + safe-area` (no phantom gallery `4.75rem`). Broader InstallHint vs CTA → **451**.
+
+### Builders / wizards
+
+- [x] **AURA-439** · P1 · Responsive · DeviceFramePreview viewport honesty
+  Phone mode drives layout via `@container-size` + `@sm`/`cqw`/`cqh` (container breakpoints aligned to viewport); mock `--safe-inset-*` in phone frame; cinematic rails `cqw`.
+
+- [x] **AURA-440** · P2 · UX · WebsiteBuilder touch reorder  
+  Drag handle `lg+` only (handle is the drag source); Move up/down remain the phone path.
+
+- [x] **AURA-441** · P2 · Responsive · Wizard sticky footer scroll-padding  
+  `--wizard-sticky-footer` content spacer; html `scroll-padding-bottom` = footer + tab + safe-area (md: footer only).
+
+- [x] **AURA-442** · P2 · UX · Delivery Layout publish on phone  
+  Layout `max-md`: Go live + Checklist sheet + Preview; full ActionStack/checklist remain on Photos and `md+`.
+
+### Polish bundle
+
+- [x] **AURA-443** · P3 · Polish · Module nav copy + Jump + Messages empty  
+  GalleryDesignPanel modules → default Tabs (no Step N of M); Jump `labelFrom="sm+"`; Messages empty title-only.
+
+### Second pass — admin / PWA honesty (2026-07-31)
+
+- [x] **AURA-444** · P1 · PWA · Contract draft Preview same-tab  
+  Draft + saved template Preview → `router.push` `/admin/documents/contract-preview` (same-tab sessionStorage).
+
+- [x] **AURA-445** · P2 · PWA · Admin previews stay in `/admin` scope  
+  `/admin/preview/{c|q|p|g|book}/[id]` iframe shell; documents / booking / ShootPublicLinks / workflow contract Preview same-tab.
+
+- [x] **AURA-446** · P2 · UX · ShootPublicLinks Copy on phone  
+  Header density: “Copy link” Sheet below `md`; inline Copy from `md` up.
+
+- [x] **AURA-447** · P2 · Responsive · New session + Brand social stack to `md`  
+  New session + Brand social rows stack until `md` (`md:grid-cols-*`).
+
+- [x] **AURA-448** · P2 · UX · Message trail reveal truncated body  
+  Truncated summary is tappable (`title` + Dialog with full message).
+
+### Second pass — public / heroes / chrome
+
+- [x] **AURA-449** · P1 · UX · Lightbox footer density  
+  Primary Download/Favorite + Comments Sheet; drop max-h crush; short-vh rail `pr` safe-area.
+
+- [x] **AURA-450** · P1 · Responsive · Heroes use `dvh`/`svh` + homepage L/R safe-area  
+  GalleryHero → `svh`; homepage `hero-fill-*` (svh+cqh); modules/collections L/R via `shell-pad` / `--safe-inset-*`.
+
+- [x] **AURA-451** · P2 · PWA · InstallHint vs primary CTAs  
+  `InstallHintDock` + `--install-hint-clearance` / `.install-hint-pad` on `/book` `/pay` `/h` `/p` `/c`; sticky Sign rides above hint.
+
+- [x] **AURA-452** · P2 · UI · Studio theme vars on `/c` `/pay` `/q` `/cancel`
+  Bare `PublicShell` without `studioThemeCssVars` (contrast `/book` `/p` `/h`). Apply kit from flow payload.
+
+- [x] **AURA-453** · P2 · Responsive · Public long titles / contract body wrap  
+  `/p` packages, `/pay` title, `/c` title+body: `min-w-0 break-words` / overflow-wrap.
+
+- [x] **AURA-454** · P2 · Responsive · Gallery pad-x + safe-area  
+  `--gallery-pad-x` and diary/albums/PrintPartners/GuestState/coverless use bare rem/`px-4` — `max(pad, env(safe-area-inset-*))`.
+
+- [x] **AURA-455** · P2 · Responsive · Public `#photos` scroll-mt  
+  `scroll-mt-16` short of sticky GalleryChrome + notch (public cousin of **427**).
+
+### Second pass — dialogs / tokens / polish
+
+- [x] **AURA-456** · P2 · UX · Confirm actions phone-stack  
+  Match PinModal: `flex-col-reverse` + full-width below `sm` (not side-by-side wrap only).
+
+- [x] **AURA-457** · P2 · UX · Dialog + iOS keyboard  
+  `visualViewport` / resize so bottom-sheet Dialog + inputs (command palette, Pin, comments) stay reachable.
+
+- [x] **AURA-458** · P2 · UI · ThemeSwatch on-media tokens  
+  Replace `#faf8f5` / raw `rgba` scrims with on-media / scrim tokens.
+
+- [x] **AURA-459** · P3 · UX · Public `loading`/`error` coverage  
+  Add shells for `/p` `/c` `/pay` `/s` `/q` `/cancel` / peek; client soft errors → EmptyState.
+
+- [x] **AURA-460** · P3 · Polish · Delivery Tabs + print + focus rings + peek hint  
+  Delivery Photos/Layout → shared `Tabs`; `@media print` hide sticky Sign; Dialog/Masonry focus-ring clip; peek InstallHint; contact email `break-all`; Jump/palette `title` on truncate.
 
 ---
 
@@ -2151,9 +2313,52 @@ Do not narrate “Aura / Resend / Firebase” in UI copy — labels like “Mess
 | AURA-416     | 2026-07-31 | Public quote GET/POST via `toPublicProposal` allowlist (no full proposal doc)                           |
 | AURA-417     | 2026-07-31 | Dialog marks body siblings `inert`/`aria-hidden` while open (nested-safe)                               |
 | AURA-418     | 2026-07-31 | `/q` + `/cancel` theme-color + manifests/InstallHint (public-flow PWA, no SW)                            |
+| AURA-419     | 2026-07-31 | Demote Dashboard Messages; contactNotifyHref; project trail only                                         |
+| AURA-420     | 2026-07-31 | Bookings intake copy; project Messages empty clarifies email trail                                       |
+| AURA-421     | 2026-07-31 | Contact notify → New project prefill; link contact on create; email CTA                                  |
 | Audit        | 2026-07-31 | Comprehensive Web/PWA audit → `WEB_PWA_AUDIT.md`; open **388–418** as W15 / Phase 21                       |
+| Audit        | 2026-07-31 | UI/responsive deep dive → Phase 23 / W17 **422–443**; canvas `ui-responsive-audit`                         |
+| Audit        | 2026-07-31 | UI/responsive second pass → **444–460** (PWA preview, lightbox, heroes, InstallHint, theme vars)           |
+| AURA-422     | 2026-07-31 | Bottom-chrome vars + Toast `--chrome-bottom`; closed **438** phantom InstallHint offsets                   |
+| AURA-423     | 2026-07-31 | `Sheet` primitive (portal, scrim, safe-area, focus trap) for Bell / ActionStack                            |
+| AURA-424     | 2026-07-31 | NotificationBell → Sheet (no absolute dropdown under tab bar)                                              |
+| AURA-425     | 2026-07-31 | ActionStack More → Sheet (clears tab bar; closes after action)                                             |
+| AURA-426     | 2026-07-31 | Dialog L/R safe-area (`max(1rem, env(safe-area-inset-*))` all sides)                                       |
+| AURA-427     | 2026-07-31 | `--admin-scroll-mt` for hash targets under sticky header + notch                                           |
+| AURA-428     | 2026-07-31 | Week calendar phone: day headers + session links; month-grid chips stay decorative                         |
+| AURA-429     | 2026-07-31 | Payments link rows → ActionStack (Copy primary; Archive in More)                                           |
+| AURA-430     | 2026-07-31 | Calendar view toggle → SegmentedControl                                                                    |
+| AURA-431     | 2026-07-31 | Default Tabs 3+: phone Select jump (Documents / Bookings)                                                  |
+| AURA-432     | 2026-07-31 | Gallery coach `desk:` clearance; hide InstallHint while coach open                                         |
+| AURA-433     | 2026-07-31 | AlbumView under chrome: no double safe-area-inset-top                                                      |
+| AURA-434     | 2026-07-31 | Sub-albums at `/g/{gallery}/s/{album}`; legacy `/s` redirects                                               |
+| AURA-435     | 2026-07-31 | Vertical GalleryHero pad = max(inset, gutter, safe-area); no competing pl-6                                |
+| AURA-436     | 2026-07-31 | AlbumView actions → ActionStack (favorites / peek / sub-album)                                             |
+| AURA-437     | 2026-07-31 | Quote packages → ChoiceCard; post-accept CTAs → ButtonLink                                                 |
+| AURA-439     | 2026-07-31 | DeviceFramePreview: size container + mock safe-area; homepage/grid `@sm`/`cqw`/`cqh`                       |
+| AURA-440     | 2026-07-31 | WebsiteBuilder: drag handle lg+ only; Move up/down primary on phone                                       |
+| AURA-441     | 2026-07-31 | Wizard sticky footer: content spacer + document scroll-padding-bottom                                     |
+| AURA-442     | 2026-07-31 | Delivery Layout phone: compact Go live + Checklist Sheet + Preview                                        |
+| AURA-443     | 2026-07-31 | Design modules default Tabs; Jump icon-only below sm; Messages empty sparse                               |
+| AURA-444     | 2026-07-31 | Contract template Preview same-tab (sessionStorage works in installed admin)                               |
+| AURA-445     | 2026-07-31 | AdminSurfacePreview `/admin/preview/*`; wire docs/booking/public links/workflow                          |
+| AURA-446     | 2026-07-31 | ShootPublicLinks header: Copy link Sheet on phone                                                        |
+| AURA-447     | 2026-07-31 | New session + Brand social grids stack until md                                                          |
+| AURA-448     | 2026-07-31 | Project Messages: tap truncated summary → Dialog with full body                                          |
+| AURA-449     | 2026-07-31 | Lightbox: primary actions + Comments Sheet; short-vh rail safe-area-right                                |
+| AURA-450     | 2026-07-31 | Heroes svh/cqh (`hero-fill-*`); homepage rails respect L/R safe-area                                     |
+| AURA-451     | 2026-07-31 | InstallHintDock + clearance var; book/pay/h/p/c CTAs clear of hint                                       |
+| AURA-452     | 2026-07-31 | `publicStudioShellProps` + theme on contract/pay/q/cancel APIs → PublicShell                             |
+| AURA-453     | 2026-07-31 | `/p` packages+terms, `/pay` title, `/c` ContractPublicView: min-w-0 break-words                          |
+| AURA-454     | 2026-07-31 | `.gallery-pad-x` (+ `-md`); diary/albums/PrintPartners/GuestState/coverless                              |
+| AURA-455     | 2026-07-31 | `--gallery-scroll-mt` for `#photos` under sticky GalleryChrome + notch                                 |
+| AURA-456     | 2026-07-31 | ConfirmProvider actions: flex-col-reverse + full-width below sm (PinModal)                              |
+| AURA-457     | 2026-07-31 | `useVisualViewportFrame` on Dialog + Sheet; panel max-h vs keyboard                                    |
+| AURA-458     | 2026-07-31 | ThemeSwatch cover: `--scrim` gradient + `text-on-media` (no hex/rgba)                                   |
+| AURA-459     | 2026-07-31 | Public loading/error for p/c/pay/s/q/cancel/peek; client soft errors → EmptyState                       |
+| AURA-460     | 2026-07-31 | Delivery Tabs; print:hidden Sign; Dialog/Masonry focus rings; peek InstallHint; email/titles           |
 
 
 ---
 
-*Living document. Amend in place — do not start parallel lists. **Execution order** (waves) beats ID number. Performance, Responsive, and PWA bars apply to every fix. Media = Cloudflare R2 (Phase 0b / W1). Contact = Resend (Phase 19). Settings = Phase 20. Web/PWA audit residuals = Phase 21 / W15 — [`WEB_PWA_AUDIT.md`](WEB_PWA_AUDIT.md).*
+*Living document. Amend in place — do not start parallel lists. **Execution order** (waves) beats ID number. Performance, Responsive, and PWA bars apply to every fix. Media = Cloudflare R2 (Phase 0b / W1). Contact = Resend (Phase 19). Settings = Phase 20. Web/PWA audit residuals = Phase 21 / W15 — [`WEB_PWA_AUDIT.md`](WEB_PWA_AUDIT.md). Contact vs booking IA = Phase 22 / W16. UI/responsive residuals = Phase 23 / W17.*

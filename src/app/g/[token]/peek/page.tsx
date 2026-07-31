@@ -3,15 +3,13 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { AlbumNav, type AlbumNavItem } from "@/components/gallery/AlbumNav";
-import {
-  AlbumShareButton,
-  AlbumView,
-} from "@/components/gallery/AlbumView";
+import { AlbumView } from "@/components/gallery/AlbumView";
 import type { MasonryPhoto } from "@/components/gallery/MasonryGrid";
 import { GalleryContactDialog } from "@/components/gallery/GalleryContactDialog";
 import { PhotoLightbox } from "@/components/gallery/PhotoLightbox";
+import { InstallHintDock } from "@/components/pwa/InstallHintDock";
 import { PublicShell } from "@/components/shells/PublicShell";
-import { Button, EmptyState, useToast } from "@/components/ui";
+import { EmptyState, useToast } from "@/components/ui";
 import {
   resolveGalleryBrandCssVars,
   resolveGalleryFontPreset,
@@ -82,7 +80,7 @@ export default function PeekGalleryPage() {
       items.push({
         id: a.token,
         label: a.label,
-        href: `/s/${a.token}`,
+        href: `/g/${token}/s/${a.token}`,
       });
     }
     return items;
@@ -158,6 +156,7 @@ export default function PeekGalleryPage() {
       galleryMotion={design.motion}
       galleryDensity={design.density}
     >
+      <InstallHintDock storageKey={`aura-install-dismiss-g-peek-${token}`} />
       <AlbumView
         title="Sneak peek"
         subtitle={`${data.gallery.title}${
@@ -174,21 +173,25 @@ export default function PeekGalleryPage() {
         }}
         emptyMessage="No sneak peek photos yet."
         headerExtra={<AlbumNav items={navItems} />}
-        actions={
-          <>
-            <AlbumShareButton onShare={() => void shareNative()} />
-            {showGalleryContact ? (
-              <Button
-                size="sm"
-                tone="ghost"
-                className="min-h-11"
-                onClick={() => setContactOpen(true)}
-              >
-                Message
-              </Button>
-            ) : null}
-          </>
-        }
+        primaryActionId="share"
+        actionItems={[
+          {
+            id: "share",
+            label: "Share",
+            tone: "ghost",
+            onClick: () => void shareNative(),
+          },
+          ...(showGalleryContact
+            ? [
+                {
+                  id: "message",
+                  label: "Message",
+                  tone: "ghost" as const,
+                  onClick: () => setContactOpen(true),
+                },
+              ]
+            : []),
+        ]}
       />
 
       {lightboxIndex != null ? (

@@ -492,7 +492,7 @@ export function SettingsBrand() {
             {socialLinks.map((row, idx) => (
               <div
                 key={idx}
-                className="grid gap-2 sm:grid-cols-[1fr_1.4fr_auto]"
+                className="grid gap-2 md:grid-cols-[1fr_1.4fr_auto]"
               >
                 <Input
                   value={row.label}

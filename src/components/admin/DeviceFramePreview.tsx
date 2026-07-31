@@ -12,23 +12,34 @@ import { cn } from "@/lib/cn";
 
 const PHONE_WIDTH = 375;
 /** Secondary wide preview — not a full desktop layout editor. */
-const DESKTOP_WIDTH = 960;
+/** Wide enough for @lg (64rem) layouts inside the frame (AURA-439). */
+const DESKTOP_WIDTH = 1100;
+
+/** Mock notched-phone safe areas inside the frame (AURA-439). */
+const PHONE_SAFE_INSETS = {
+  "--safe-inset-top": "47px",
+  "--safe-inset-right": "0px",
+  "--safe-inset-bottom": "34px",
+  "--safe-inset-left": "0px",
+} as CSSProperties;
 
 export type DevicePreviewMode = "phone" | "desktop";
 
 function frameHeightPx(mode: DevicePreviewMode) {
   if (typeof window === "undefined") {
-    return mode === "phone" ? 560 : 640;
+    return mode === "phone" ? 667 : 640;
   }
   const vh = window.innerHeight;
   return mode === "phone"
-    ? Math.min(Math.round(vh * 0.7), 640)
+    ? Math.min(Math.round(vh * 0.7), 720)
     : Math.min(Math.round(vh * 0.75), 720);
 }
 
 /**
  * Forced logical-width device frame that scales down to fit the column
- * (AURA-285). Phone 375px is primary; desktop is a secondary toggle.
+ * (AURA-285 / AURA-439). Phone 375px is primary; desktop is a secondary toggle.
+ * Content root is a size container so `@sm` / `cqw` / `cqh` follow the frame,
+ * not the admin viewport.
  */
 export function DeviceFramePreview({
   children,
@@ -123,13 +134,18 @@ export function DeviceFramePreview({
             )}
             style={{
               ...frameStyle,
+              ...(mode === "phone" ? PHONE_SAFE_INSETS : null),
               width: logicalWidth,
               height: heightPx,
               transform: `scale(${scale})`,
               transformOrigin: "top left",
             }}
           >
-            <div className="h-full overflow-y-auto overscroll-contain">
+            {/*
+              Size container at logical frame bounds — `@sm` / cqw / cqh resolve
+              here, not against the admin window (AURA-439).
+            */}
+            <div className="@container-size/device h-full overflow-y-auto overscroll-contain">
               {children}
             </div>
           </div>

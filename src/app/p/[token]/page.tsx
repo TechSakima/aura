@@ -6,11 +6,14 @@ import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
 import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
-import { InstallHint } from "@/components/pwa/InstallHint";
+import { InstallHintDock } from "@/components/pwa/InstallHintDock";
 import { PublicShell } from "@/components/shells/PublicShell";
 import {
   Button,
+  ButtonLink,
   Checkbox,
+  ChoiceCard,
+  EmptyState,
   Field,
   Input,
   Label,
@@ -107,7 +110,11 @@ export default function PublicProposalPage() {
   if (error) {
     return (
       <PublicShell>
-        <p className="text-center text-danger">{error}</p>
+        <EmptyState
+          variant="error"
+          title={error}
+          className="items-center text-center"
+        />
       </PublicShell>
     );
   }
@@ -115,7 +122,11 @@ export default function PublicProposalPage() {
   if (!data) {
     return (
       <PublicShell>
-        <p className="text-muted">Loading quote…</p>
+        <EmptyState
+          variant="loading"
+          title="Loading quote…"
+          className="py-16 text-center"
+        />
       </PublicShell>
     );
   }
@@ -142,11 +153,7 @@ export default function PublicProposalPage() {
         </div>
       }
     >
-      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-        <div className="mx-auto max-w-md">
-          <InstallHint storageKey={`aura-install-dismiss-p-${token}`} />
-        </div>
-      </div>
+      <InstallHintDock storageKey={`aura-install-dismiss-p-${token}`} />
       <section className="relative min-w-0 overflow-x-clip bg-ink text-surface">
         <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink to-accent/35" />
         <div className="relative shell-pad mx-auto max-w-[var(--public-max)] pt-[max(3.5rem,env(safe-area-inset-top))] pb-14 sm:pb-20 sm:pt-[max(5rem,env(safe-area-inset-top))]">
@@ -169,7 +176,7 @@ export default function PublicProposalPage() {
         </div>
       </section>
 
-      <div className="shell-pad mx-auto max-w-[var(--public-max)] space-y-16 py-12 sm:py-16">
+      <div className="install-hint-pad shell-pad mx-auto max-w-[var(--public-max)] space-y-16 py-12 sm:py-16">
         {proposal.moodBoard.length > 0 ? (
           <section className="space-y-6">
             <SectionIntro eyebrow="Inspiration" title="Mood board" />
@@ -201,25 +208,20 @@ export default function PublicProposalPage() {
             {proposal.tiers.map((tier: PackageTier) => {
               const selected = selectedTierId === tier.id;
               return (
-                <button
+                <ChoiceCard
                   key={tier.id}
-                  type="button"
+                  selected={selected}
                   disabled={accepted || declined}
                   onClick={() => setSelectedTierId(tier.id)}
-                  className={cn(
-                    "group flex flex-col rounded-md border p-5 text-left transition-colors",
-                    selected
-                      ? "border-ink bg-ink text-surface"
-                      : "border-line bg-surface hover:border-ink/40",
-                    accepted && !selected && "opacity-50",
-                  )}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-display text-2xl">{tier.name}</h3>
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <h3 className="max-w-full min-w-0 break-words font-display text-2xl">
+                      {tier.name}
+                    </h3>
                     {tier.highlighted ? (
                       <span
                         className={cn(
-                          "text-[10px] uppercase tracking-wider",
+                          "shrink-0 text-[10px] uppercase tracking-wider",
                           selected ? "text-surface/70" : "text-accent",
                         )}
                       >
@@ -227,12 +229,12 @@ export default function PublicProposalPage() {
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-3 font-display text-4xl tracking-tight">
+                  <p className="mt-3 min-w-0 break-words font-display text-4xl tracking-tight">
                     ${tier.price.toLocaleString()}
                   </p>
                   <p
                     className={cn(
-                      "mt-3 flex-1 text-sm",
+                      "mt-3 min-w-0 flex-1 break-words text-sm",
                       selected ? "text-surface/75" : "text-muted",
                     )}
                   >
@@ -248,7 +250,7 @@ export default function PublicProposalPage() {
                       {selected ? "Selected" : "Select package"}
                     </span>
                   ) : null}
-                </button>
+                </ChoiceCard>
               );
             })}
           </div>
@@ -261,7 +263,7 @@ export default function PublicProposalPage() {
               {proposal.inclusions.map((item) => (
                 <li
                   key={item}
-                  className="border-b border-line pb-3 text-sm text-ink"
+                  className="min-w-0 break-words border-b border-line pb-3 text-sm text-ink"
                 >
                   {item}
                 </li>
@@ -273,7 +275,7 @@ export default function PublicProposalPage() {
         {proposal.terms ? (
           <section className="space-y-4">
             <SectionIntro eyebrow="Details" title="Terms" />
-            <p className="max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-muted">
+            <p className="max-w-3xl min-w-0 break-words whitespace-pre-wrap text-sm leading-relaxed text-muted">
               {proposal.terms}
             </p>
           </section>
@@ -309,24 +311,17 @@ export default function PublicProposalPage() {
             {(next?.contractHref || next?.depositHref) && (
               <div className="mt-6 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center">
                 {next.contractHref ? (
-                  <a
-                    href={next.contractHref}
-                    className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-5 text-sm font-medium text-accent-ink no-underline"
-                  >
+                  <ButtonLink href={next.contractHref} tone="accent">
                     Sign contract
-                  </a>
+                  </ButtonLink>
                 ) : null}
                 {next.depositHref ? (
-                  <a
+                  <ButtonLink
                     href={next.depositHref}
-                    className={
-                      next.contractHref
-                        ? "inline-flex min-h-11 items-center justify-center rounded-md border border-line bg-surface px-5 text-sm font-medium text-ink no-underline"
-                        : "inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-5 text-sm font-medium text-accent-ink no-underline"
-                    }
+                    tone={next.contractHref ? "ghost" : "accent"}
                   >
                     Pay deposit
-                  </a>
+                  </ButtonLink>
                 ) : null}
               </div>
             )}

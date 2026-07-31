@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ContractPublicView } from "@/components/public/ContractPublicView";
-import { InstallHint } from "@/components/pwa/InstallHint";
+import { InstallHintDock } from "@/components/pwa/InstallHintDock";
 import { PublicShell } from "@/components/shells/PublicShell";
+import { EmptyState } from "@/components/ui";
+import { publicStudioShellProps } from "@/lib/public-studio-shell";
+import type { StudioTheme } from "@/lib/types";
 
 export default function SignContractPage() {
   const params = useParams<{ token: string }>();
@@ -12,6 +15,7 @@ export default function SignContractPage() {
   const [body, setBody] = useState("");
   const [status, setStatus] = useState("");
   const [studioName, setStudioName] = useState("");
+  const [studioTheme, setStudioTheme] = useState<StudioTheme | null>(null);
   const [signerName, setSignerName] = useState("");
   const [signedAt, setSignedAt] = useState<string | undefined>();
   const [signedDate, setSignedDate] = useState<string | undefined>();
@@ -29,6 +33,7 @@ export default function SignContractPage() {
           setBody(d.contract.body);
           setStatus(d.contract.status);
           setStudioName(d.studio?.name || "");
+          setStudioTheme(d.studio?.theme ?? null);
           if (d.contract.signerName) setSignerName(d.contract.signerName);
           if (d.contract.signedAt) setSignedAt(d.contract.signedAt);
           if (d.contract.signedDate) setSignedDate(d.contract.signedDate);
@@ -42,32 +47,38 @@ export default function SignContractPage() {
       });
   }, [params.token]);
 
+  const shell = publicStudioShellProps(studioTheme);
+
   if (!ready) {
     return (
-      <PublicShell>
-        <p className="py-16 text-center text-muted">Loading…</p>
+      <PublicShell {...shell}>
+        <EmptyState
+          variant="loading"
+          title="Loading…"
+          className="py-16 text-center"
+        />
       </PublicShell>
     );
   }
 
   if (error && !title) {
     return (
-      <PublicShell>
-        <p className="py-16 text-center text-muted">{error}</p>
+      <PublicShell {...shell}>
+        <EmptyState
+          variant="error"
+          title={error}
+          className="items-center text-center"
+        />
       </PublicShell>
     );
   }
 
   return (
-    <PublicShell>
+    <PublicShell {...shell}>
       {!preview ? (
-        <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(4.75rem+env(safe-area-inset-bottom))] desk:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-          <div className="mx-auto max-w-md">
-            <InstallHint
-              storageKey={`aura-install-dismiss-c-${params.token}`}
-            />
-          </div>
-        </div>
+        <InstallHintDock
+          storageKey={`aura-install-dismiss-c-${params.token}`}
+        />
       ) : null}
       <ContractPublicView
         title={title}

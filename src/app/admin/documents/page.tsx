@@ -27,6 +27,7 @@ import type {
   QuestionnaireTemplate,
 } from "@/lib/types";
 import { defaultContractBody } from "@/lib/contracts/defaults";
+import { adminPreviewHref } from "@/lib/admin-preview-paths";
 import { CONTRACT_PREVIEW_STORAGE_KEY } from "@/lib/contracts/preview-storage";
 
 type DocTab = "contracts" | "questionnaires" | "templates";
@@ -350,14 +351,18 @@ function DocumentsPageInner() {
                       >
                         Project
                       </a>
-                      <a
-                        className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
-                        href={`/c/${c.token}`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <ButtonLink
+                        href={adminPreviewHref(
+                          "c",
+                          c.token,
+                          "/admin/documents",
+                        )}
+                        tone="ghost"
+                        size="sm"
+                        className="min-h-11"
                       >
                         Preview
-                      </a>
+                      </ButtonLink>
                     </div>
                   </li>
                 ))
@@ -456,14 +461,18 @@ function DocumentsPageInner() {
                               {open ? "Hide answers" : "View answers"}
                             </Button>
                           ) : null}
-                          <a
-                            className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
-                            href={`/q/${r.token}`}
-                            target="_blank"
-                            rel="noreferrer"
+                          <ButtonLink
+                            href={adminPreviewHref(
+                              "q",
+                              r.token,
+                              "/admin/documents?tab=questionnaires",
+                            )}
+                            tone="ghost"
+                            size="sm"
+                            className="min-h-11"
                           >
                             Preview
-                          </a>
+                          </ButtonLink>
                         </div>
                       </div>
                       {open && r.submittedAt ? (
@@ -578,6 +587,7 @@ function DocumentsPageInner() {
                   tone="ghost"
                   className="min-h-11"
                   onClick={() => {
+                    /* Same-tab — sessionStorage is not shared with _blank in installed PWA (AURA-444). */
                     sessionStorage.setItem(
                       CONTRACT_PREVIEW_STORAGE_KEY,
                       JSON.stringify({
@@ -585,11 +595,7 @@ function DocumentsPageInner() {
                         body: tmplBody,
                       }),
                     );
-                    window.open(
-                      "/admin/documents/contract-preview",
-                      "_blank",
-                      "noopener,noreferrer",
-                    );
+                    router.push("/admin/documents/contract-preview");
                   }}
                 >
                   Preview
@@ -630,10 +636,8 @@ function DocumentsPageInner() {
                         tone="ghost"
                         className="min-h-11 w-full sm:w-auto"
                         onClick={() =>
-                          window.open(
+                          router.push(
                             `/admin/documents/contract-preview?templateId=${encodeURIComponent(t.id)}`,
-                            "_blank",
-                            "noopener,noreferrer",
                           )
                         }
                       >

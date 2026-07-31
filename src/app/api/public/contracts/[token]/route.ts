@@ -49,7 +49,10 @@ export async function GET(
       signedDate: contract.signedDate,
       acknowledgedTerms: contract.acknowledgedTerms,
     },
-    studio: { name: studio?.name },
+    studio: {
+      name: studio?.name,
+      theme: studio?.theme ?? null,
+    },
     preview: access.preview,
   });
 }

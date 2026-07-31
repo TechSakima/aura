@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { cn } from "@/lib/cn";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -25,6 +26,8 @@ export function Tabs({
   variant?: "default" | "progress";
   "aria-label"?: string;
 }) {
+  const jumpId = useId();
+
   if (variant === "progress") {
     const idx = Math.max(
       0,
@@ -53,11 +56,11 @@ export function Tabs({
           </div>
           {jumpable.length > 1 ? (
             <div>
-              <Label htmlFor="wizard-step-jump" className="sr-only">
+              <Label htmlFor={jumpId} className="sr-only">
                 Jump to step
               </Label>
               <Select
-                id="wizard-step-jump"
+                id={jumpId}
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 aria-label={ariaLabel || "Jump to step"}
@@ -113,33 +116,64 @@ export function Tabs({
     );
   }
 
+  const jumpable = tabs.filter((t) => !t.disabled);
+  /** 3+ section tabs wrap into scavenger rows at 375 — Select below md (AURA-431). */
+  const mobileSelect = jumpable.length >= 3;
+
   return (
-    <div
-      className="flex flex-wrap gap-1 border-b border-line"
-      role="tablist"
-      aria-label={ariaLabel}
-    >
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          role="tab"
-          aria-selected={value === tab.id}
-          disabled={tab.disabled}
-          className={cn(
-            "min-h-11 px-3 text-sm font-medium transition-colors",
-            tab.disabled && "cursor-not-allowed opacity-40",
-            value === tab.id
-              ? "border-b-2 border-accent text-ink"
-              : "text-muted hover:text-ink",
-          )}
-          onClick={() => {
-            if (!tab.disabled) onChange(tab.id);
-          }}
-        >
-          {tab.label}
-        </button>
-      ))}
+    <div className="space-y-3">
+      {mobileSelect ? (
+        <div className="md:hidden">
+          <Label htmlFor={jumpId} className="sr-only">
+            {ariaLabel || "Section"}
+          </Label>
+          <Select
+            id={jumpId}
+            value={value}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (!tabs.find((t) => t.id === next)?.disabled) onChange(next);
+            }}
+            aria-label={ariaLabel || "Section"}
+          >
+            {jumpable.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "flex flex-wrap gap-1 border-b border-line",
+          mobileSelect && "hidden md:flex",
+        )}
+        role="tablist"
+        aria-label={ariaLabel}
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={value === tab.id}
+            disabled={tab.disabled}
+            className={cn(
+              "min-h-11 px-3 text-sm font-medium transition-colors",
+              tab.disabled && "cursor-not-allowed opacity-40",
+              value === tab.id
+                ? "border-b-2 border-accent text-ink"
+                : "text-muted hover:text-ink",
+            )}
+            onClick={() => {
+              if (!tab.disabled) onChange(tab.id);
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

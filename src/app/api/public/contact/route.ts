@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
+import { contactNotifyHref } from "@/lib/admin-deep-links";
 import { COL } from "@/lib/db/collections";
 import { appendStudioDoc, patchStudioDoc } from "@/lib/db/store";
 import {
@@ -132,7 +133,11 @@ export async function POST(req: Request) {
       type: "contact_message",
       title: `Message from ${data.name}`,
       body: `${sourceLabel} · ${data.email}${preview ? ` — ${preview}` : ""}`,
-      href: "/admin#messages",
+      href: contactNotifyHref({
+        projectId: message.projectId,
+        sessionId: message.sessionId,
+        contactMessageId: message.id,
+      }),
       emailStudio: false,
     });
   }

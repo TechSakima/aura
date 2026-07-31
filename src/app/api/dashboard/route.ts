@@ -5,13 +5,12 @@ import {
   sessionDeliveryHref,
   sessionShootDayHref,
 } from "@/lib/admin-deep-links";
-import { listRecentContactMessages, readStudioDb } from "@/lib/db/store";
+import { readStudioDb } from "@/lib/db/store";
 import {
   countDeadContactOutbox,
   drainEmailOutbox,
 } from "@/lib/email-outbox";
 import { buildFirstProjectGuide } from "@/lib/first-project-guide";
-import { contactSourceLabel } from "@/lib/public-contact-server";
 
 export async function GET() {
   const admin = await requireAdmin();
@@ -27,7 +26,6 @@ export async function GET() {
     photos: false,
     analytics: false,
   });
-  const recentContacts = await listRecentContactMessages(admin.studioId, 8);
   const now = Date.now();
   const soon = now + 7 * 24 * 60 * 60 * 1000;
   const tz = db.studio.timeZone || "America/Denver";
@@ -143,7 +141,7 @@ export async function GET() {
         deadEmailCount === 1
           ? "1 contact email couldn’t be delivered"
           : `${deadEmailCount} contact emails couldn’t be delivered`,
-      href: "/admin#messages",
+      href: "/admin/settings/notifications",
     });
   }
 
@@ -177,21 +175,5 @@ export async function GET() {
     awaitingProposals,
     expiringGalleries,
     archiveFlags: archiveFlagRows,
-    recentContacts: recentContacts.map((m) => ({
-      id: m.id,
-      name: m.name,
-      email: m.email,
-      source: contactSourceLabel(m.source),
-      context: m.context,
-      preview:
-        m.message.length > 100
-          ? `${m.message.slice(0, 97)}…`
-          : m.message,
-      createdAt: m.createdAt,
-      projectId: m.projectId,
-      projectHref: m.projectId
-        ? `/admin/projects/${m.projectId}#messages`
-        : undefined,
-    })),
   });
 }

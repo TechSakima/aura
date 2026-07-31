@@ -23,6 +23,7 @@ import {
   Chip,
   type ChipTone,
   Panel,
+  SegmentedControl,
   Select,
 } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -35,6 +36,13 @@ export type CalendarSession = ProjectSession & {
 };
 
 type ViewMode = "month" | "months" | "week" | "day";
+
+const VIEW_OPTIONS: { id: ViewMode; label: string }[] = [
+  { id: "day", label: "Day" },
+  { id: "week", label: "Week" },
+  { id: "month", label: "Month" },
+  { id: "months", label: "3 months" },
+];
 
 function sessionTimeLabel(iso?: string) {
   if (!iso) return "";
@@ -228,7 +236,7 @@ function MonthAgenda({
             <ul className="mt-2 space-y-2">
               {items.map((s) => (
                 <li key={s.id}>
-                  <EventChip s={s} />
+                  <SessionListLink s={s} />
                 </li>
               ))}
             </ul>
@@ -270,13 +278,42 @@ function sessionChipTone(status?: SessionStatus | string): ChipTone {
   return "accent";
 }
 
-/** Decorative only — day cell is the hit target (AURA-282). */
-function EventChip({ s }: { s: CalendarSession }) {
+function sessionHelperHref(s: CalendarSession) {
+  return `/admin/shoots/${s.id}/helper`;
+}
+
+/** Decorative in month grid (day cell is the hit target — AURA-282). */
+function EventChip({
+  s,
+  href,
+}: {
+  s: CalendarSession;
+  /** When set (week desktop), chip navigates; omit inside day buttons. */
+  href?: string;
+}) {
   const label = `${s.projectName || s.type} · ${sessionTimeLabel(s.startsAt)}`;
   return (
-    <Chip tone={sessionChipTone(s.status)} className="w-full pointer-events-none">
+    <Chip
+      tone={sessionChipTone(s.status)}
+      href={href}
+      className={cn("w-full", !href && "pointer-events-none")}
+    >
       {label}
     </Chip>
+  );
+}
+
+/** Phone list rows — tappable session day (AURA-428). */
+function SessionListLink({ s }: { s: CalendarSession }) {
+  const label = `${s.projectName || s.type} · ${sessionTimeLabel(s.startsAt)}`;
+  return (
+    <ButtonLink
+      href={sessionHelperHref(s)}
+      tone="ghost"
+      className="min-h-11 w-full justify-start border border-line bg-surface text-left"
+    >
+      <span className="truncate">{label}</span>
+    </ButtonLink>
   );
 }
 
@@ -403,22 +440,13 @@ export function SessionsCalendar({
             ))}
           </Select>
         </div>
-        <div className="grid grid-cols-2 gap-1 rounded-md border border-line p-1 sm:inline-flex sm:w-auto sm:grid-cols-none">
-          {(["day", "week", "month", "months"] as ViewMode[]).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setView(mode)}
-              className={cn(
-                "min-h-11 rounded-sm px-3 text-xs font-medium uppercase tracking-[0.14em]",
-                view === mode
-                  ? "bg-ink text-surface"
-                  : "text-muted hover:text-ink",
-              )}
-            >
-              {mode === "months" ? "3 months" : mode}
-            </button>
-          ))}
+        <div className="w-full sm:w-auto sm:max-w-md">
+          <SegmentedControl
+            ariaLabel="Calendar view"
+            options={VIEW_OPTIONS}
+            value={view}
+            onChange={setView}
+          />
         </div>
       </div>
 
@@ -470,17 +498,26 @@ export function SessionsCalendar({
             const items = sessionsOnDay(dated, day);
             return (
               <Panel key={day.toISOString()} className="p-3">
-                <p className="text-xs uppercase tracking-[0.14em] text-muted">
-                  {format(day, "EEE MMM d")}
-                  {isToday(day) ? " · Today" : ""}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => selectDay(day)}
+                  className="flex min-h-11 w-full items-center justify-between gap-2 text-left"
+                >
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted">
+                    {format(day, "EEE MMM d")}
+                    {isToday(day) ? " · Today" : ""}
+                  </p>
+                  {items.length > 0 ? (
+                    <span className="text-xs text-muted">{items.length}</span>
+                  ) : null}
+                </button>
                 {items.length === 0 ? (
                   <p className="mt-2 text-sm text-muted">No sessions</p>
                 ) : (
                   <ul className="mt-2 space-y-2">
                     {items.map((s) => (
                       <li key={s.id}>
-                        <EventChip s={s} />
+                        <SessionListLink s={s} />
                       </li>
                     ))}
                   </ul>
@@ -513,7 +550,11 @@ export function SessionsCalendar({
                 >
                   <div className="space-y-1">
                     {items.map((s) => (
-                      <EventChip key={s.id} s={s} />
+                      <EventChip
+                        key={s.id}
+                        s={s}
+                        href={sessionHelperHref(s)}
+                      />
                     ))}
                   </div>
                 </div>

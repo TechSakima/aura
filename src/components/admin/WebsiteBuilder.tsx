@@ -472,24 +472,29 @@ export function WebsiteBuilder() {
             {modules.map((mod, index) => (
               <li
                 key={mod.id}
-                draggable
-                onDragStart={() => setDragId(mod.id)}
-                onDragOver={(e) => e.preventDefault()}
+                onDragOver={(e) => {
+                  if (!dragId) return;
+                  e.preventDefault();
+                }}
                 onDrop={() => onDrop(mod.id)}
-                onDragEnd={() => setDragId(null)}
                 className={cn(
                   "rounded-md border border-line bg-surface p-3",
                   dragId === mod.id ? "opacity-60" : "",
                 )}
               >
                 <div className="flex items-start gap-2">
-                  <span
-                    className="mt-2 cursor-grab select-none text-muted active:cursor-grabbing"
-                    aria-hidden
+                  {/* Desktop-only HTML5 drag — phone uses Move up/down (AURA-440). */}
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={() => setDragId(mod.id)}
+                    onDragEnd={() => setDragId(null)}
+                    className="mt-2 hidden min-h-11 min-w-11 cursor-grab select-none items-center justify-center text-muted active:cursor-grabbing lg:inline-flex"
+                    aria-label={`Drag to reorder ${HOMEPAGE_MODULE_LABELS[mod.type]}`}
                     title="Drag to reorder"
                   >
                     ::
-                  </span>
+                  </button>
                   <div className="min-w-0 flex-1 space-y-3">
                     <div className="flex min-h-11 items-center justify-between gap-3">
                       <p className="text-sm font-medium text-ink">

@@ -226,11 +226,13 @@ export function PhotoLightbox({
         <div
           className={cn(
             "shrink-0 border-line bg-surface text-ink",
+            /* Primary actions only — comments live in Sheet (AURA-449). */
             "border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6",
-            "max-h-[min(40vh,16rem)] overflow-y-auto",
-            /* Landscape: side rail instead of a crushed bottom strip */
-            "short-vh:max-h-none short-vh:h-full short-vh:w-[min(18rem,42vw)] short-vh:shrink-0 short-vh:overflow-y-auto",
-            "short-vh:border-t-0 short-vh:border-l short-vh:pt-[max(0.75rem,env(safe-area-inset-top))] short-vh:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+            /* Landscape: side rail; pad notch on the trailing edge (AURA-449). */
+            "short-vh:h-full short-vh:w-[min(18rem,42vw)] short-vh:shrink-0 short-vh:overflow-y-auto",
+            "short-vh:border-t-0 short-vh:border-l short-vh:pl-4",
+            "short-vh:pt-[max(0.75rem,env(safe-area-inset-top))] short-vh:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+            "short-vh:pr-[max(1rem,env(safe-area-inset-right))]",
           )}
         >
           {fileCaption ? (

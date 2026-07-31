@@ -8,19 +8,22 @@ import { PublicShell } from "@/components/shells/PublicShell";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
 import {
   Button,
+  EmptyState,
   Field,
   Input,
   Label,
   Select,
   Textarea,
 } from "@/components/ui";
-import type { IntakeQuestion } from "@/lib/types";
+import { publicStudioShellProps } from "@/lib/public-studio-shell";
+import type { IntakeQuestion, StudioTheme } from "@/lib/types";
 
 export default function PublicQuestionnairePage() {
   const params = useParams<{ token: string }>();
   const [title, setTitle] = useState("");
   const [studioName, setStudioName] = useState("");
   const [studioLogoUrl, setStudioLogoUrl] = useState("");
+  const [studioTheme, setStudioTheme] = useState<StudioTheme | null>(null);
   const [questions, setQuestions] = useState<IntakeQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -39,6 +42,7 @@ export default function PublicQuestionnairePage() {
         setQuestions(data.questionnaire.questions || []);
         setStudioName(data.studio?.name || "");
         setStudioLogoUrl(data.studio?.logoUrl || "");
+        setStudioTheme(data.studio?.theme ?? null);
         if (data.questionnaire.submittedAt) {
           setSubmitted(true);
           setAnswers(data.questionnaire.answers || {});
@@ -46,6 +50,8 @@ export default function PublicQuestionnairePage() {
       })
       .catch(() => setError("Could not load"));
   }, [params.token]);
+
+  const shell = publicStudioShellProps(studioTheme);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -66,23 +72,31 @@ export default function PublicQuestionnairePage() {
 
   if (error && !title) {
     return (
-      <PublicShell>
-        <p className="py-20 text-center text-danger">{error}</p>
+      <PublicShell {...shell}>
+        <EmptyState
+          variant="error"
+          title={error}
+          className="items-center text-center"
+        />
       </PublicShell>
     );
   }
 
   if (!title) {
     return (
-      <PublicShell>
-        <p className="py-20 text-center text-muted">Loading…</p>
+      <PublicShell {...shell}>
+        <EmptyState
+          variant="loading"
+          title="Loading…"
+          className="py-20 text-center"
+        />
       </PublicShell>
     );
   }
 
   return (
-    <PublicShell>
-      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(4.75rem+env(safe-area-inset-bottom))] desk:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
+    <PublicShell {...shell}>
+      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="mx-auto max-w-md">
           <InstallHint storageKey={`aura-install-dismiss-q-${params.token}`} />
         </div>

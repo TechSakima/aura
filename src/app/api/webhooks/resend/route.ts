@@ -186,7 +186,11 @@ export async function POST(req: Request) {
       type: "contact_message",
       title: `Email from ${from.name}`,
       body: `${scope} · ${from.email}${preview ? ` — ${preview}` : ""}`,
-      href: inboundNotifyHref({ projectId, sessionId }),
+      href: inboundNotifyHref({
+        projectId,
+        sessionId,
+        contactMessageId: messageId,
+      }),
       emailStudio: false,
     });
   }

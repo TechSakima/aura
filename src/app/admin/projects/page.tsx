@@ -42,6 +42,7 @@ function ProjectsPageInner() {
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [projectType, setProjectType] = useState("Wedding");
+  const [contactMessageId, setContactMessageId] = useState("");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -87,12 +88,41 @@ function ProjectsPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQ, showArchived, stageFilter, workflowFilter]);
 
-  // Dashboard first-project CTA → open create form (AURA-260).
+  // New project deep-link (+ optional contact prefill) — AURA-260 / AURA-421.
   useEffect(() => {
     if (searchParams.get("new") !== "1") return;
+    const contactId = searchParams.get("contact")?.trim() || "";
     setAdding(true);
     setQ("");
+    setContactMessageId(contactId);
     router.replace("/admin/projects", { scroll: false });
+    if (!contactId) return;
+    void (async () => {
+      const res = await fetch(`/api/contact-messages/${contactId}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        name?: string;
+        email?: string;
+        phone?: string;
+        message?: string;
+        context?: string;
+        source?: string;
+        projectId?: string;
+      };
+      if (data.projectId) {
+        router.push(`/admin/projects/${data.projectId}#messages`);
+        return;
+      }
+      setName(String(data.name || "").trim());
+      setEmail(String(data.email || "").trim());
+      setPhone(String(data.phone || "").trim());
+      const bits = [
+        data.context?.trim(),
+        data.message?.trim(),
+        data.source ? `Via ${data.source}` : "",
+      ].filter(Boolean);
+      setNotes(bits.join("\n\n"));
+    })();
   }, [searchParams, router]);
 
   function resetForm() {
@@ -100,6 +130,7 @@ function ProjectsPageInner() {
     setEmail("");
     setPhone("");
     setNotes("");
+    setContactMessageId("");
   }
 
   async function onCreate(e: FormEvent) {
@@ -107,7 +138,14 @@ function ProjectsPageInner() {
     const res = await fetch("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, phone, notes, type: projectType }),
+      body: JSON.stringify({
+        name,
+        email,
+        phone,
+        notes,
+        type: projectType,
+        ...(contactMessageId ? { contactMessageId } : {}),
+      }),
     });
     if (!res.ok) {
       push("Could not save project", "danger");
@@ -121,7 +159,9 @@ function ProjectsPageInner() {
     setAdding(false);
     push("Project saved", "success");
     router.push(
-      `/admin/projects/${project.adminSlug || project.id}`,
+      contactMessageId
+        ? `/admin/projects/${project.adminSlug || project.id}#messages`
+        : `/admin/projects/${project.adminSlug || project.id}`,
     );
   }
 

@@ -33,7 +33,8 @@ export function PublicShell({
   return (
     <div
       className={cn(
-        "min-h-full min-w-0 overflow-x-clip bg-canvas text-ink",
+        /* Inline-size container — @sm / cqw; cqh falls back to viewport (AURA-439). */
+        "@container min-h-full min-w-0 overflow-x-clip bg-canvas text-ink",
         className,
       )}
       style={style}
@@ -44,13 +45,13 @@ export function PublicShell({
       {bare ? (
         children
       ) : (
-        <main className="shell-pad mx-auto w-full max-w-[var(--public-max)] animate-enter pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:pt-[max(3.5rem,env(safe-area-inset-top))] sm:pb-[max(3.5rem,env(safe-area-inset-bottom))]">
+        <main className="shell-pad mx-auto w-full max-w-[var(--public-max)] animate-enter pt-[max(2.5rem,var(--safe-inset-top))] pb-[max(2.5rem,var(--safe-inset-bottom))] @sm:pt-[max(3.5rem,var(--safe-inset-top))] @sm:pb-[max(3.5rem,var(--safe-inset-bottom))]">
           {children}
         </main>
       )}
       {footer ? (
         <footer className="border-t border-line">
-          <div className="shell-pad mx-auto max-w-[var(--public-max)] py-8 pb-[max(2rem,env(safe-area-inset-bottom))] text-sm text-muted">
+          <div className="shell-pad mx-auto max-w-[var(--public-max)] py-8 pb-[max(2rem,var(--safe-inset-bottom))] text-sm text-muted">
             {footer}
           </div>
         </footer>

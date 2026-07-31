@@ -79,16 +79,57 @@
   --shell-gutter: 1rem;
 
   /*
+   * Safe-area aliases (AURA-439) — DeviceFramePreview phone mode overrides these
+   * so preview chrome matches notched devices. Prefer var(--safe-inset-*) over
+   * raw env() in previewable public surfaces.
+   */
+  --safe-inset-top: env(safe-area-inset-top, 0px);
+  --safe-inset-right: env(safe-area-inset-right, 0px);
+  --safe-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-inset-left: env(safe-area-inset-left, 0px);
+
+  /*
    * Admin sticky offset (AURA-381 / AURA-096) — matches AdminShell header:
    * safe-area + py-2 + min-h-11 row (+ border). Use --admin-sticky-top for
    * panels that stick under the shell header.
    * --admin-tab-bar: mobile bottom tab content height (excl. safe-area).
-   * Sized for icon + text-xs label (AURA-141).
+   * --gallery-thumb-bar: gallery phone thumb chrome (excl. safe-area).
+   * --chrome-bottom: active bottom chrome for Toast (shells set via html class).
+   * Sized for icon + text-xs label (AURA-141 / AURA-422).
    */
   --admin-header-inner: 3.75rem;
   --admin-tab-bar: 3.5rem;
+  --gallery-thumb-bar: 4.75rem;
+  --chrome-bottom: 0px;
+  /*
+   * InstallHint dock (AURA-451) — card height excl. 1rem gap + safe-area.
+   * `--install-hint-clearance` set on <html> while hint is visible.
+   */
+  --install-hint-bar: 8.5rem;
+  --install-hint-clearance: 0px;
   --admin-sticky-top: calc(
     env(safe-area-inset-top, 0px) + var(--admin-header-inner) + 0.75rem
+  );
+  /* Hash / scrollIntoView targets under sticky admin header (AURA-427). */
+  --admin-scroll-mt: var(--admin-sticky-top);
+
+  /*
+   * Sticky GalleryChrome under notch (AURA-455) — py-2.5 + title/studio
+   * (+ optional logo). Public cousin of --admin-scroll-mt.
+   */
+  --gallery-chrome-inner: 5.5rem;
+  --gallery-scroll-mt: calc(
+    var(--safe-inset-top) + var(--gallery-chrome-inner)
+  );
+
+  /*
+   * Wizard sticky Back/Continue (AURA-441) — py-3 + min-h-11 + border.
+   * Phone scroll-padding also clears admin tab bar + safe-area.
+   */
+  --wizard-sticky-footer: calc(var(--touch-min) + 1.5rem + 1px);
+  --wizard-scroll-pad-bottom: calc(
+    var(--wizard-sticky-footer) + var(--admin-tab-bar) +
+      env(safe-area-inset-bottom, 0px)
   );
 
   /*
@@ -99,7 +140,8 @@
   --density-stack-gap: var(--space-3);
   --density-section-y: var(--space-8);
   --field-min-width: 10rem;
-  --text-display: clamp(1.75rem, 0.35rem + 5.2vw, 3rem);
+  /* cqw follows nearest size container (PublicShell / device frame) — AURA-439 */
+  --text-display: clamp(1.75rem, 0.35rem + 5.2cqw, 3rem);
 }
 
 @media (max-width: 639px) {
@@ -115,5 +157,7 @@
     --density-section-y: var(--space-10);
     /* AdminShell header: py-4 + min-h-11 */
     --admin-header-inner: 4.75rem;
+    /* No admin tab bar on md+ (AURA-441). */
+    --wizard-scroll-pad-bottom: var(--wizard-sticky-footer);
   }
 }

@@ -12,10 +12,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { differenceInCalendarDays, format } from "date-fns";
-import {
-  AlbumShareButton,
-  AlbumView,
-} from "@/components/gallery/AlbumView";
+import { AlbumView } from "@/components/gallery/AlbumView";
 import { AlbumTile, AlbumTileGrid } from "@/components/gallery/AlbumTile";
 import {
   GalleryChrome,
@@ -36,8 +33,10 @@ import {
   type GalleryGuestReason,
 } from "@/components/gallery/GalleryGuestState";
 import { GalleryPrintPartners } from "@/components/gallery/GalleryPrintPartners";
+import { LightboxPhotoFooter } from "@/components/gallery/LightboxPhotoFooter";
 import { OverlayChunkLoading } from "@/components/gallery/OverlayChunkLoading";
 import { InstallHint } from "@/components/pwa/InstallHint";
+import { ChromeBottom } from "@/components/shells/ChromeBottom";
 import { PublicShell } from "@/components/shells/PublicShell";
 import {
   Button,
@@ -172,6 +171,7 @@ export default function PublicGalleryPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
+  const [coachVisible, setCoachVisible] = useState(false);
 
   function applyFavoritesPayload(favJson: {
     favoritePhotoIds?: string[];
@@ -647,7 +647,7 @@ export default function PublicGalleryPage() {
         push(String(json.error || "Could not create share link"), "danger");
         return;
       }
-      const href = `/s/${json.subAlbum.token}`;
+      const href = `/g/${token}/s/${json.subAlbum.token}`;
       setSubUrl(href);
       setSubOpen(false);
       setSubSelected([]);
@@ -844,6 +844,7 @@ export default function PublicGalleryPage() {
         galleryMotion={design.motion}
         galleryDensity={design.density}
       >
+        {chromePad ? <ChromeBottom kind="gallery" /> : null}
         {viewAnnouncer}
         {chrome}
         <AlbumView
@@ -900,38 +901,47 @@ export default function PublicGalleryPage() {
                   </button>
                 )
           }
-          actions={
-            !expired ? (
-              <>
-                <AlbumShareButton onShare={() => void shareAlbum()} />
-                {view === "favorites" ? (
-                  <>
-                    {submitEnabled ? (
-                      <Button
-                        size="sm"
-                        tone="accent"
-                        pending={submittingSelects}
-                        pendingLabel="Submitting…"
-                        disabled={
-                          !favorites.length || Boolean(selectsSubmittedAt)
-                        }
-                        onClick={() => void submitSelects()}
-                      >
-                        {selectsSubmittedAt ? "Submitted" : "Submit selects"}
-                      </Button>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      tone="neutral"
-                      onClick={() => void startDownload("favorites")}
-                      disabled={!favorites.length}
-                    >
-                      Download favorites
-                    </Button>
-                  </>
-                ) : null}
-              </>
-            ) : null
+          primaryActionId={
+            view === "favorites" && submitEnabled ? "submit" : "share"
+          }
+          actionItems={
+            !expired
+              ? [
+                  {
+                    id: "share",
+                    label: "Share",
+                    tone: "ghost",
+                    onClick: () => void shareAlbum(),
+                  },
+                  ...(view === "favorites" && submitEnabled
+                    ? [
+                        {
+                          id: "submit",
+                          label: selectsSubmittedAt
+                            ? "Submitted"
+                            : "Submit selects",
+                          tone: "accent" as const,
+                          pending: submittingSelects,
+                          pendingLabel: "Submitting…",
+                          disabled:
+                            !favorites.length || Boolean(selectsSubmittedAt),
+                          onClick: () => void submitSelects(),
+                        },
+                      ]
+                    : []),
+                  ...(view === "favorites"
+                    ? [
+                        {
+                          id: "download",
+                          label: "Download favorites",
+                          tone: "neutral" as const,
+                          disabled: !favorites.length,
+                          onClick: () => void startDownload("favorites"),
+                        },
+                      ]
+                    : []),
+                ]
+              : undefined
           }
         />
         {!expired && design.coach.enabled ? (
@@ -940,6 +950,7 @@ export default function PublicGalleryPage() {
             enabled
             hasDownloadPin={gallery.hasDownloadPin}
             showContact={showGalleryContact}
+            onVisibilityChange={setCoachVisible}
           />
         ) : null}
         {galleryDialogs()}
@@ -956,20 +967,23 @@ export default function PublicGalleryPage() {
       galleryMotion={design.motion}
       galleryDensity={design.density}
     >
+      {chromePad ? <ChromeBottom kind="gallery" /> : null}
       {viewAnnouncer}
       {chrome}
 
-      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(4.75rem+env(safe-area-inset-bottom))] desk:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-        <div className="mx-auto max-w-md">
-          <InstallHint
-            storageKey={
-              token
-                ? `aura-install-dismiss-g-${token}`
-                : "aura-install-dismiss-g"
-            }
-          />
+      {!coachVisible ? (
+        <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(var(--gallery-thumb-bar)+env(safe-area-inset-bottom))] desk:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
+          <div className="mx-auto max-w-md">
+            <InstallHint
+              storageKey={
+                token
+                  ? `aura-install-dismiss-g-${token}`
+                  : "aura-install-dismiss-g"
+              }
+            />
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {coverStyle !== "none" ? (
         <GalleryHero
@@ -983,7 +997,7 @@ export default function PublicGalleryPage() {
           onViewGallery={expired ? undefined : scrollToPhotos}
         />
       ) : (
-        <div className="mx-auto max-w-[var(--public-max)] px-4 py-16 text-center sm:px-8">
+        <div className="gallery-pad-x gallery-pad-x-md mx-auto max-w-[var(--public-max)] py-16 text-center">
 
           <p className="text-[11px] uppercase tracking-[0.28em] text-muted">
             {dateLabel}
@@ -1003,7 +1017,10 @@ export default function PublicGalleryPage() {
         </div>
       )}
 
-      <main id="photos" className="mx-auto max-w-[var(--public-max)] scroll-mt-16 px-0 py-0 sm:px-0">
+      <main
+        id="photos"
+        className="mx-auto max-w-[var(--public-max)] scroll-mt-[var(--gallery-scroll-mt)] px-0 py-0 sm:px-0"
+      >
         {expired ? (
           <GalleryUnavailableInline
             reason={
@@ -1016,7 +1033,7 @@ export default function PublicGalleryPage() {
         ) : (
           <>
             {peekPhotos.length > 0 || subAlbums.length > 0 ? (
-              <div className="mx-auto max-w-[var(--public-max)] px-[var(--gallery-pad-x,1rem)] py-[var(--gallery-section-y,2rem)] sm:px-8">
+              <div className="gallery-pad-x gallery-pad-x-md mx-auto max-w-[var(--public-max)] py-[var(--gallery-section-y,2rem)]">
                 <p className="mb-4 text-[11px] uppercase tracking-[0.16em] text-muted">
                   Albums
                 </p>
@@ -1033,7 +1050,7 @@ export default function PublicGalleryPage() {
                   {subAlbums.map((album) => (
                     <AlbumTile
                       key={album.id}
-                      href={`/s/${album.token}`}
+                      href={`/g/${token}/s/${album.token}`}
                       label={album.label}
                       meta={`${album.count} photos`}
                       coverUrl={album.coverUrl}
@@ -1087,20 +1104,20 @@ export default function PublicGalleryPage() {
                 )}
               />
               {loadingMore ? (
-                <p className="px-4 py-6 text-center text-sm text-muted sm:px-8">
+                <p className="gallery-pad-x gallery-pad-x-md py-6 text-center text-sm text-muted">
                   Loading photos…
                 </p>
               ) : null}
             </div>
 
             {clientName ? (
-              <p className="mt-10 px-4 pb-6 text-center text-xs uppercase tracking-[0.18em] text-muted sm:px-8">
+              <p className="gallery-pad-x gallery-pad-x-md mt-10 pb-6 text-center text-xs uppercase tracking-[0.18em] text-muted">
                 For {clientName}
               </p>
             ) : null}
 
             {subUrl ? (
-              <div className="mt-6 px-4 pb-6 text-center text-sm sm:px-8">
+              <div className="gallery-pad-x gallery-pad-x-md mt-6 pb-6 text-center text-sm">
                 Photo share link ready:{" "}
                 <Link href={subUrl} className="text-accent">
                   Open link
@@ -1136,6 +1153,7 @@ export default function PublicGalleryPage() {
           enabled
           hasDownloadPin={gallery.hasDownloadPin}
           showContact={showGalleryContact}
+          onVisibilityChange={setCoachVisible}
         />
       ) : null}
       {galleryDialogs()}
@@ -1153,46 +1171,31 @@ export default function PublicGalleryPage() {
             onIndexChange={setLightboxIndex}
             onClose={() => setLightboxIndex(null)}
             footer={
-              selected && !expired ? (
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-2">
-                    {view !== "peek" ? (
-                      <>
-                        <Button
-                          size="sm"
-                          className="min-h-11"
-                          onClick={() =>
-                            void startDownload("single", selected.id)
-                          }
-                        >
-                          Download
-                        </Button>
-                        <Button
-                          size="sm"
-                          tone="ghost"
-                          className="min-h-11"
-                          onClick={() => void toggleFavorite(selected.id)}
-                        >
-                          {favorites.includes(selected.id)
-                            ? "Unfavorite"
-                            : "Favorite"}
-                        </Button>
-                      </>
-                    ) : null}
-                  </div>
-                  {gallery.commentsEnabled && view !== "peek" ? (
-                    <PhotoCommentPanel
-                      comments={photoComments}
-                      name={commentName}
-                      body={commentBody}
-                      company={commentCompany}
-                      onNameChange={setCommentName}
-                      onBodyChange={setCommentBody}
-                      onCompanyChange={setCommentCompany}
-                      onSubmit={() => void submitComment()}
-                    />
-                  ) : null}
-                </div>
+              selected && !expired && view !== "peek" ? (
+                <LightboxPhotoFooter
+                  photoId={selected.id}
+                  favorited={favorites.includes(selected.id)}
+                  commentsEnabled={gallery.commentsEnabled}
+                  commentCount={photoComments.length}
+                  onDownload={() =>
+                    void startDownload("single", selected.id)
+                  }
+                  onToggleFavorite={() => void toggleFavorite(selected.id)}
+                  commentsPanel={
+                    gallery.commentsEnabled ? (
+                      <PhotoCommentPanel
+                        comments={photoComments}
+                        name={commentName}
+                        body={commentBody}
+                        company={commentCompany}
+                        onNameChange={setCommentName}
+                        onBodyChange={setCommentBody}
+                        onCompanyChange={setCommentCompany}
+                        onSubmit={() => void submitComment()}
+                      />
+                    ) : null
+                  }
+                />
               ) : null
             }
           />

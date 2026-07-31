@@ -73,7 +73,7 @@ function HeroMark({
       {showName ? (
         <h1
           className={cn(
-            "max-w-full break-words font-display text-4xl font-semibold uppercase tracking-[0.14em] sm:text-5xl",
+            "max-w-full break-words font-display text-4xl font-semibold uppercase tracking-[0.14em] @sm:text-5xl",
             onMedia ? "text-on-media" : "text-ink",
           )}
         >
@@ -101,7 +101,7 @@ function HeroModule({
   if (variant === "fullBleed") {
     if (!cover) {
       return (
-        <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-[max(3.5rem,env(safe-area-inset-top))] text-center sm:pt-[max(5rem,env(safe-area-inset-top))]">
+        <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-[max(3.5rem,var(--safe-inset-top))] text-center @sm:pt-[max(5rem,var(--safe-inset-top))]">
           <HeroMark
             studio={studio}
             showLogo={showLogo}
@@ -113,7 +113,7 @@ function HeroModule({
       );
     }
     return (
-      <section className="relative w-full min-h-[70vh] overflow-hidden bg-scrim-strong text-on-media sm:min-h-[78vh]">
+      <section className="hero-fill-70 relative w-full overflow-hidden bg-scrim-strong text-on-media @sm:hero-fill-78">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={cover}
@@ -124,7 +124,7 @@ function HeroModule({
           className="absolute inset-0 bg-gradient-to-t from-scrim-strong via-scrim/50 to-scrim/20"
           aria-hidden
         />
-        <div className="relative z-10 flex min-h-[70vh] flex-col items-center justify-end px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-16 text-center sm:min-h-[78vh] sm:px-10 sm:pb-16">
+        <div className="hero-fill-70 relative z-10 flex flex-col items-center justify-end shell-pad pb-[max(2rem,var(--safe-inset-bottom))] pt-16 text-center @sm:hero-fill-78 @sm:pl-[max(2.5rem,var(--safe-inset-left))] @sm:pr-[max(2.5rem,var(--safe-inset-right))] @sm:pb-16">
           <HeroMark
             studio={studio}
             showLogo={showLogo}
@@ -140,8 +140,8 @@ function HeroModule({
 
   if (variant === "split") {
     return (
-      <section className="grid min-h-0 min-w-0 grid-cols-1 overflow-x-clip lg:min-h-[70vh] lg:grid-cols-2">
-        <div className="relative min-h-[42vh] min-w-0 overflow-hidden bg-scrim lg:min-h-0">
+      <section className="grid min-h-0 min-w-0 grid-cols-1 overflow-x-clip @lg:hero-fill-70 @lg:grid-cols-2">
+        <div className="hero-fill-42 relative min-w-0 overflow-hidden bg-scrim @lg:min-h-0">
           {cover ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -159,7 +159,7 @@ function HeroModule({
             />
           ) : null}
         </div>
-        <div className="flex min-w-0 flex-col justify-center gap-2 px-5 py-12 sm:px-10 sm:py-16 lg:px-14">
+        <div className="flex min-w-0 flex-col justify-center gap-2 shell-pad py-12 @sm:py-16 @sm:pl-[max(2.5rem,var(--safe-inset-left))] @sm:pr-[max(2.5rem,var(--safe-inset-right))] @lg:pl-[max(3.5rem,var(--safe-inset-left))] @lg:pr-[max(3.5rem,var(--safe-inset-right))]">
           <HeroMark
             studio={studio}
             showLogo={showLogo}
@@ -175,9 +175,9 @@ function HeroModule({
   if (variant === "type") {
     if (!showName && !showCta) return null;
     return (
-      <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-[max(4rem,env(safe-area-inset-top))] pb-4 text-center sm:pt-[max(6rem,env(safe-area-inset-top))]">
+      <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-[max(4rem,var(--safe-inset-top))] pb-4 text-center @sm:pt-[max(6rem,var(--safe-inset-top))]">
         {showName ? (
-          <h1 className="max-w-full break-words font-display text-5xl font-medium tracking-tight text-ink sm:text-6xl md:text-7xl">
+          <h1 className="max-w-full break-words font-display text-5xl font-medium tracking-tight text-ink @sm:text-6xl @md:text-7xl">
             {studio.name}
           </h1>
         ) : null}
@@ -190,7 +190,7 @@ function HeroModule({
   const logo = showLogo && studio.logoUrl;
   if (!logo && !showName && !showCta) return null;
   return (
-    <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-[max(3.5rem,env(safe-area-inset-top))] text-center sm:pt-[max(5rem,env(safe-area-inset-top))]">
+    <section className="shell-pad mx-auto max-w-[var(--public-max)] pt-[max(3.5rem,var(--safe-inset-top))] text-center @sm:pt-[max(5rem,var(--safe-inset-top))]">
       <HeroMark
         studio={studio}
         showLogo={showLogo}
@@ -296,7 +296,7 @@ function ContactModule({
             {email ? (
               <a
                 href={mailtoHref(email)}
-                className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
+                className="inline-flex min-h-11 max-w-full items-center break-all text-sm text-accent no-underline"
               >
                 {email}
               </a>
@@ -497,7 +497,7 @@ function FooterModule({
       : [];
   if (!showName && !social.length) return null;
   return (
-    <footer className="shell-pad mx-auto max-w-[var(--public-max)] border-t border-line py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] text-center">
+    <footer className="shell-pad mx-auto max-w-[var(--public-max)] border-t border-line py-10 pb-[max(2.5rem,var(--safe-inset-bottom))] text-center">
       {showName ? (
         <p className="font-sans text-xs uppercase tracking-[0.14em] text-muted">
           {studio.name}

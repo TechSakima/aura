@@ -105,6 +105,7 @@ export function AdminCommandPalette() {
     <>
       <IconButton
         label="Jump"
+        labelFrom="sm+"
         aria-label="Jump to project"
         aria-keyshortcuts="Meta+K Control+K"
         onClick={() => setOpen(true)}
@@ -176,11 +177,17 @@ export function AdminCommandPalette() {
                       )}
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm text-ink">
+                        <p
+                          className="truncate text-sm text-ink"
+                          title={item.label}
+                        >
                           {item.label}
                         </p>
                         {item.detail ? (
-                          <p className="truncate text-xs text-muted">
+                          <p
+                            className="truncate text-xs text-muted"
+                            title={item.detail}
+                          >
                             {item.detail}
                           </p>
                         ) : (

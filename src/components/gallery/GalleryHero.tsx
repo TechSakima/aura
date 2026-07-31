@@ -42,7 +42,12 @@ function titleClassFor(treatment: GalleryTitleTreatment): string {
 function frameClassFor(layout: GalleryHeroLayout): string {
   switch (layout) {
     case "vertical":
-      return "items-start justify-center pb-12 pl-6 sm:pl-12";
+      /* Extra start inset without overriding shell-pad / safe-area (AURA-435). */
+      return cn(
+        "items-start justify-center pb-12",
+        "pl-[max(1.5rem,var(--shell-gutter),var(--safe-inset-left))]",
+        "sm:pl-[max(3rem,var(--shell-gutter),var(--safe-inset-left))]",
+      );
     case "centered":
       return "items-center justify-center pb-12 text-center";
     case "minimal":
@@ -84,13 +89,14 @@ export function GalleryHero({
   const layout = effectiveCoverLayout(cover);
   const compact = cover.style === "third";
   const immersive = cover.style === "immersive";
+  /* svh — stable vs mobile browser chrome (AURA-450). */
   const minH = compact
-    ? "min-h-[42vh] sm:min-h-[48vh]"
+    ? "min-h-[42svh] sm:min-h-[48svh]"
     : immersive || layout === "cinematic"
-      ? "min-h-[85vh] sm:min-h-[100svh]"
+      ? "min-h-[85svh] sm:min-h-[100svh]"
       : layout === "minimal"
-        ? "min-h-[56vh] sm:min-h-[64vh]"
-        : "min-h-[72vh] sm:min-h-[85vh]";
+        ? "min-h-[56svh] sm:min-h-[64svh]"
+        : "min-h-[72svh] sm:min-h-[85svh]";
 
   const showDate = cover.showDate && Boolean(dateLabel);
   const showDays =
@@ -167,7 +173,11 @@ export function GalleryHero({
 
       <div
         className={cn(
-          "relative z-10 flex min-w-0 shell-pad pt-[env(safe-area-inset-top)]",
+          "relative z-10 flex min-w-0 pt-[var(--safe-inset-top)]",
+          /* Vertical sets its own start pad; keep shell-pad end + other layouts (AURA-435). */
+          layout === "vertical"
+            ? "pr-[max(var(--shell-gutter),var(--safe-inset-right))]"
+            : "shell-pad",
           minH,
           frameClassFor(layout),
           entered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",

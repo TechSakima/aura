@@ -332,7 +332,7 @@ function DevicePreview({
               className={cn(
                 "relative z-10 flex w-full max-w-[90%] flex-col gap-1 px-2",
                 layout === "split" &&
-                  "sm:flex-row sm:items-end sm:justify-between",
+                  "@sm:flex-row @sm:items-end @sm:justify-between",
                 (layout === "centered" || layout === "cinematic") &&
                   "items-center text-center",
                 layout === "minimal" && "items-start text-left",
@@ -572,7 +572,6 @@ export function GalleryDesignPanel({
         <div className="order-2 space-y-6 lg:order-1">
           <Tabs
             aria-label="Design modules"
-            variant="progress"
             tabs={[...MODULE_TABS]}
             value={moduleTab}
             onChange={(id) => setModuleTab(id as ModuleTab)}

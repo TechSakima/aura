@@ -64,7 +64,8 @@ function MasonryTile({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden bg-transparent",
+        /* Clip media scale, not tile focus rings (AURA-460). */
+        "group relative bg-transparent",
         itemClassName,
         mode === "diary" && "break-inside-avoid",
       )}
@@ -73,41 +74,43 @@ function MasonryTile({
       <button
         type="button"
         onClick={() => onPhotoClick?.(photo)}
-        className="block w-full min-h-11 text-left"
+        className="relative block w-full min-h-11 rounded-sm text-left"
       >
-        <GalleryThumb
-          src={photo.url}
-          thumbSrc={photo.thumbUrl}
-          alt={openAlt}
-          aspect={aspect}
-          width={photo.width}
-          height={photo.height}
-          gridMode={mode}
-          cssAspect={mode === "columns" || mode === "diary"}
-          className={cn(
-            "transition duration-emphasis ease-out group-hover:scale-[1.01]",
-            mode === "justified" ? "h-full" : "h-auto",
-            mode === "columns" && "aspect-[4/5]",
-            mode === "diary" && "aspect-[3/4] sm:aspect-[4/5]",
-          )}
-          onLoad={(e) => {
-            if (storedAspect || mode === "columns" || mode === "diary") return;
-            const img = e.currentTarget;
-            if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-              setNaturalAspect(img.naturalWidth / img.naturalHeight);
-            }
-          }}
-        />
-        {photo.kind === "video" || photo.videoUrl ? (
-          <span className="absolute bottom-2 left-2 bg-scrim px-2 py-0.5 text-[10px] uppercase tracking-wider text-on-media">
-            Video
-          </span>
-        ) : null}
-        {photo.kind === "video" ? (
-          <span className="absolute bottom-2 right-2 bg-scrim px-2 py-0.5 text-[10px] text-on-media-muted">
-            Download via single
-          </span>
-        ) : null}
+        <span className="relative block overflow-hidden">
+          <GalleryThumb
+            src={photo.url}
+            thumbSrc={photo.thumbUrl}
+            alt={openAlt}
+            aspect={aspect}
+            width={photo.width}
+            height={photo.height}
+            gridMode={mode}
+            cssAspect={mode === "columns" || mode === "diary"}
+            className={cn(
+              "transition duration-emphasis ease-out group-hover:scale-[1.01]",
+              mode === "justified" ? "h-full" : "h-auto",
+              mode === "columns" && "aspect-[4/5]",
+              mode === "diary" && "aspect-[3/4] sm:aspect-[4/5]",
+            )}
+            onLoad={(e) => {
+              if (storedAspect || mode === "columns" || mode === "diary") return;
+              const img = e.currentTarget;
+              if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                setNaturalAspect(img.naturalWidth / img.naturalHeight);
+              }
+            }}
+          />
+          {photo.kind === "video" || photo.videoUrl ? (
+            <span className="absolute bottom-2 left-2 bg-scrim px-2 py-0.5 text-[10px] uppercase tracking-wider text-on-media">
+              Video
+            </span>
+          ) : null}
+          {photo.kind === "video" ? (
+            <span className="absolute bottom-2 right-2 bg-scrim px-2 py-0.5 text-[10px] text-on-media-muted">
+              Download via single
+            </span>
+          ) : null}
+        </span>
       </button>
 
       {hoverActions ? (

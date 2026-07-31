@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
-import { useFocusTrap } from "@/lib/use-focus-trap";
 
 type Note = {
   id: string;
@@ -17,16 +17,20 @@ type Note = {
 };
 
 function actionLabel(href: string): string {
+  if (href.includes("/admin/projects") && href.includes("new=1")) {
+    return "New project";
+  }
+  if (href.includes("/admin/projects/") && href.includes("#messages")) {
+    return "Open project";
+  }
   if (href.includes("/admin/projects/")) return "Open project";
   if (href.includes("/admin/bookings")) return "Open Bookings";
-  if (href.includes("#messages")) return "Open messages";
+  if (href.includes("/admin/settings")) return "Open settings";
   return "View";
 }
 
 export function NotificationBell() {
   const panelId = useId();
-  const rootRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Note[]>([]);
   const [unread, setUnread] = useState(0);
@@ -46,25 +50,6 @@ export function NotificationBell() {
     const t = setInterval(() => void load(), 60_000);
     return () => clearInterval(t);
   }, []);
-
-  useFocusTrap(open, panelRef, { onEscape: close });
-
-  useEffect(() => {
-    if (!open) return;
-    function onPointer(e: MouseEvent | TouchEvent) {
-      const el = rootRef.current;
-      if (!el) return;
-      if (e.target instanceof Node && !el.contains(e.target)) {
-        close();
-      }
-    }
-    window.addEventListener("mousedown", onPointer);
-    window.addEventListener("touchstart", onPointer);
-    return () => {
-      window.removeEventListener("mousedown", onPointer);
-      window.removeEventListener("touchstart", onPointer);
-    };
-  }, [open, close]);
 
   async function markAll() {
     if (unread <= 0) return;
@@ -113,7 +98,7 @@ export function NotificationBell() {
       : "Notifications";
 
   return (
-    <div className="relative" ref={rootRef}>
+    <div className="relative">
       <IconButton
         className="relative"
         aria-label={unreadLabel}
@@ -147,115 +132,104 @@ export function NotificationBell() {
           </span>
         ) : null}
       </IconButton>
-      {open ? (
-        <div
-          ref={panelRef}
-          id={panelId}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Notifications"
-          tabIndex={-1}
-          className="absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-line bg-surface shadow-lg outline-none"
-        >
-          <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-ink">Notifications</p>
-              {unread > 0 ? (
-                <p className="text-xs text-muted">
-                  {unread} unread
-                </p>
-              ) : null}
-            </div>
-            {unread > 0 ? (
-              <Button
-                type="button"
-                tone="ghost"
-                size="sm"
-                className="min-h-11 shrink-0"
-                onClick={() => void markAll()}
-              >
-                Mark all read
-              </Button>
-            ) : null}
+
+      <Sheet
+        open={open}
+        onClose={close}
+        title="Notifications"
+        id={panelId}
+      >
+        {unread > 0 ? (
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-sm text-muted">{unread} unread</p>
+            <Button
+              type="button"
+              tone="ghost"
+              size="sm"
+              className="min-h-11 shrink-0"
+              onClick={() => void markAll()}
+            >
+              Mark all read
+            </Button>
           </div>
-          <ul className="max-h-80 overflow-y-auto">
-            {items.length === 0 ? (
-              <li className="px-3 py-4 text-sm text-muted">
-                No notifications yet.
-              </li>
-            ) : (
-              items.map((n) => {
-                const body = (
-                  <>
-                    <div className="flex items-start gap-2">
-                      {!n.read ? (
-                        <span
-                          className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent"
-                          aria-hidden
-                        />
-                      ) : (
-                        <span className="mt-1.5 h-2 w-2 shrink-0" aria-hidden />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className={cn(
-                            "font-medium",
-                            n.read ? "text-muted" : "text-ink",
-                          )}
-                        >
-                          {n.title}
-                        </p>
-                        <p className="mt-0.5 text-muted">{n.body}</p>
-                        {n.href ? (
-                          <p className="mt-2 text-xs font-medium text-accent">
-                            {actionLabel(n.href)}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </>
-                );
-                return (
-                  <li key={n.id}>
-                    {n.href ? (
-                      <Link
-                        href={n.href}
-                        className={cn(
-                          "block border-b border-line px-3 py-3 text-sm no-underline",
-                          n.read
-                            ? "bg-canvas"
-                            : "border-l-2 border-l-accent bg-surface-elevated",
-                        )}
-                        onClick={() => {
-                          close();
-                          if (!n.read) void markRead(n.id);
-                        }}
-                      >
-                        {body}
-                      </Link>
+        ) : null}
+        <ul className="-mx-5">
+          {items.length === 0 ? (
+            <li className="px-5 py-4 text-sm text-muted">
+              No notifications yet.
+            </li>
+          ) : (
+            items.map((n) => {
+              const body = (
+                <>
+                  <div className="flex items-start gap-2">
+                    {!n.read ? (
+                      <span
+                        className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent"
+                        aria-hidden
+                      />
                     ) : (
-                      <button
-                        type="button"
-                        className={cn(
-                          "w-full border-b border-line px-3 py-3 text-left text-sm",
-                          n.read
-                            ? "bg-canvas"
-                            : "border-l-2 border-l-accent bg-surface-elevated",
-                        )}
-                        onClick={() => {
-                          if (!n.read) void markRead(n.id);
-                        }}
-                      >
-                        {body}
-                      </button>
+                      <span className="mt-1.5 h-2 w-2 shrink-0" aria-hidden />
                     )}
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        </div>
-      ) : null}
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={cn(
+                          "font-medium",
+                          n.read ? "text-muted" : "text-ink",
+                        )}
+                      >
+                        {n.title}
+                      </p>
+                      <p className="mt-0.5 break-words text-muted">{n.body}</p>
+                      {n.href ? (
+                        <p className="mt-2 text-xs font-medium text-accent">
+                          {actionLabel(n.href)}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                </>
+              );
+              return (
+                <li key={n.id}>
+                  {n.href ? (
+                    <Link
+                      href={n.href}
+                      className={cn(
+                        "block border-b border-line px-5 py-3 text-sm no-underline last:border-b-0",
+                        n.read
+                          ? "bg-canvas"
+                          : "border-l-2 border-l-accent bg-surface-elevated",
+                      )}
+                      onClick={() => {
+                        close();
+                        if (!n.read) void markRead(n.id);
+                      }}
+                    >
+                      {body}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      className={cn(
+                        "w-full border-b border-line px-5 py-3 text-left text-sm last:border-b-0",
+                        n.read
+                          ? "bg-canvas"
+                          : "border-l-2 border-l-accent bg-surface-elevated",
+                      )}
+                      onClick={() => {
+                        if (!n.read) void markRead(n.id);
+                      }}
+                    >
+                      {body}
+                    </button>
+                  )}
+                </li>
+              );
+            })
+          )}
+        </ul>
+      </Sheet>
     </div>
   );
 }

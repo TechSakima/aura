@@ -17,6 +17,7 @@ import {
   unregisterInertDialogRoot,
 } from "@/lib/inert-background";
 import { useFocusTrap } from "@/lib/use-focus-trap";
+import { useVisualViewportFrame } from "@/lib/use-visual-viewport-frame";
 
 export function Dialog({
   open,
@@ -65,13 +66,16 @@ export function Dialog({
     initialFocusRef,
   });
 
+  useVisualViewportFrame(open && mounted, rootRef);
+
   if (!open || !mounted) return null;
 
   return createPortal(
     <div
       ref={rootRef}
       data-aura-dialog-root
-      className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:items-center"
+      /* top/left/w/h overridden by visualViewport (AURA-457). */
+      className="fixed top-0 left-0 z-50 flex h-full w-full items-end justify-center pt-[max(1rem,var(--safe-inset-top))] pr-[max(1rem,var(--safe-inset-right))] pb-[max(1rem,var(--safe-inset-bottom))] pl-[max(1rem,var(--safe-inset-left))] sm:items-center"
     >
       <button
         type="button"
@@ -87,7 +91,8 @@ export function Dialog({
         aria-labelledby={titleId}
         tabIndex={-1}
         className={cn(
-          "relative z-10 flex max-h-full w-full max-w-lg flex-col overflow-hidden animate-enter rounded-lg border border-line bg-surface shadow-lg outline-none",
+          /* No overflow-hidden — focus rings must not clip (AURA-460). */
+          "relative z-10 flex max-h-full w-full max-w-lg flex-col animate-enter rounded-lg border border-line bg-surface shadow-lg outline-none",
           className,
         )}
       >

@@ -44,21 +44,23 @@ export function homepageLayoutToMediaMode(
 export function mediaGridContainerClass(mode: MediaGridMode): string {
   switch (mode) {
     case "columns":
-      return "grid grid-cols-2 gap-[var(--gallery-grid-gap,0.125rem)] sm:grid-cols-3 lg:grid-cols-4";
+      /* @* breakpoints — DeviceFramePreview + PublicShell size containers (AURA-439). */
+      return "grid grid-cols-2 gap-[var(--gallery-grid-gap,0.125rem)] @sm:grid-cols-3 @lg:grid-cols-4";
     case "justified":
       return "flex min-w-0 flex-wrap gap-[var(--gallery-grid-gap,0.125rem)]";
     case "diary":
-      return "mx-auto flex w-full max-w-3xl flex-col gap-[var(--gallery-diary-gap,2rem)] px-[var(--gallery-pad-x,1rem)] sm:px-0";
+      /* Pad + safe-area; @sm keeps insets only so diary can go edge-to-edge (AURA-454). */
+      return "gallery-pad-x mx-auto flex w-full max-w-3xl flex-col gap-[var(--gallery-diary-gap,2rem)] @sm:pl-[var(--safe-inset-left)] @sm:pr-[var(--safe-inset-right)]";
     case "masonry":
     default:
-      return "columns-2 gap-[var(--gallery-grid-gap,0.125rem)] sm:columns-3 lg:columns-4 xl:columns-5 [column-fill:balance]";
+      return "columns-2 gap-[var(--gallery-grid-gap,0.125rem)] @sm:columns-3 @lg:columns-4 @xl:columns-5 [column-fill:balance]";
   }
 }
 
 export function mediaGridItemClass(mode: MediaGridMode): string {
   switch (mode) {
     case "justified":
-      return "h-40 min-w-0 grow basis-[min(140px,100%)] sm:h-52 sm:basis-[180px]";
+      return "h-40 min-w-0 grow basis-[min(140px,100%)] @sm:h-52 @sm:basis-[180px]";
     case "diary":
       return "w-full";
     case "columns":

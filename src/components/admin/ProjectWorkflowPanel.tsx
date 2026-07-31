@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ActionStack,
@@ -24,6 +25,7 @@ import type {
   Proposal,
   QuestionnaireResponse,
 } from "@/lib/types";
+import { adminPreviewHref } from "@/lib/admin-preview-paths";
 import { defaultContractBody } from "@/lib/contracts/defaults";
 import {
   isBalanceInvoiceTitle,
@@ -86,6 +88,7 @@ export function ProjectWorkflowPanel({
   onChanged?: () => void;
 }) {
   const { push } = useToast();
+  const router = useRouter();
   const { confirm } = useConfirm();
   const [questionnaires, setQuestionnaires] = useState<QuestionnaireResponse[]>(
     [],
@@ -684,14 +687,15 @@ export function ProjectWorkflowPanel({
         return;
       }
       const data = result.data;
-      const href =
-        typeof data.url === "string"
-          ? data.url
-          : data.contract?.token
-            ? `/c/${data.contract.token}`
-            : null;
-      if (href) {
-        window.open(href, "_blank", "noopener,noreferrer");
+      const token =
+        data.contract?.token ||
+        (typeof data.url === "string"
+          ? data.url.match(/\/c\/([^/?#]+)/)?.[1]
+          : null);
+      if (token) {
+        router.push(
+          adminPreviewHref("c", token, `/admin/projects/${project.id}`),
+        );
       }
       await refresh();
     } finally {
@@ -1026,7 +1030,7 @@ export function ProjectWorkflowPanel({
   }
 
   return (
-    <section id="workflow" className="space-y-5 scroll-mt-24">
+    <section id="workflow" className="space-y-5 scroll-mt-[var(--admin-scroll-mt)]">
       <div className="min-w-0">
         <h2 className="font-display text-2xl">Workflow</h2>
         <p className="mt-1 text-sm text-muted">

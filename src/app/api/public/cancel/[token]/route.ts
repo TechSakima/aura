@@ -97,6 +97,10 @@ export async function GET(
     canRequestReschedule: !canceled,
     blockReason: gate.ok ? null : gate.reason,
     studioName: db.studio.name,
+    studio: {
+      name: db.studio.name,
+      theme: db.studio.theme ?? null,
+    },
   });
 }
 

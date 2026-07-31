@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { ButtonLink } from "@/components/ui/button-link";
+import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
 
 export type ActionStackItem = {
@@ -71,49 +72,33 @@ function MoreMenu({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
-
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
 
   if (!items.length) return null;
 
   return (
-    <div ref={rootRef} className={cn("relative", className)}>
+    <div className={className}>
       <Button
         type="button"
         tone="ghost"
         className="min-h-11 w-full"
         aria-expanded={open}
         aria-controls={menuId}
+        aria-haspopup="dialog"
         onClick={() => setOpen((v) => !v)}
       >
         {label}
       </Button>
-      {open ? (
-        <div
-          id={menuId}
-          role="menu"
-          className="mt-2 flex flex-col gap-2 rounded-md border border-line bg-surface p-2 shadow-md"
-        >
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title={label}
+        id={menuId}
+      >
+        <div className="flex flex-col gap-2">
           {items.map((item) => (
             <div
               key={item.id}
-              role="none"
               onClick={() => {
                 window.setTimeout(() => setOpen(false), 0);
               }}
@@ -122,7 +107,7 @@ function MoreMenu({
             </div>
           ))}
         </div>
-      ) : null}
+      </Sheet>
     </div>
   );
 }
@@ -130,6 +115,7 @@ function MoreMenu({
 /**
  * Primary action + overflow “More” below `sm`; full stack from `sm` (AURA-088).
  * Pass `menuIds` to keep destructive actions behind More at every breakpoint (AURA-127).
+ * More opens a portaled Sheet so it clears the admin tab bar (AURA-425).
  */
 export function ActionStack({
   actions,

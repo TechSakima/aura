@@ -44,17 +44,6 @@ type Dash = {
     adminHref: string;
   }[];
   archiveFlags: { id: string; title: string; expiresAt: string; adminHref: string }[];
-  recentContacts: {
-    id: string;
-    name: string;
-    email: string;
-    source: string;
-    context?: string;
-    preview: string;
-    createdAt: string;
-    projectId?: string;
-    projectHref?: string;
-  }[];
   deliveryIssues?: {
     kind: "email" | "calendar" | "payments";
     title: string;
@@ -110,18 +99,6 @@ export default function AdminDashboard() {
     if (!last || last === "/admin" || last.startsWith("/admin?")) return;
     router.replace(last);
   }, [standalone, router]);
-
-  useEffect(() => {
-    if (!data) return;
-    if (typeof window === "undefined") return;
-    if (window.location.hash !== "#messages") return;
-    requestAnimationFrame(() => {
-      document.getElementById("messages")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
-  }, [data]);
 
   if (error && !data) {
     return (
@@ -218,44 +195,6 @@ export default function AdminDashboard() {
             value={value}
           />
         ))}
-      </section>
-
-      <section id="messages" className="scroll-mt-24 space-y-5">
-        <SectionIntro eyebrow="Inbox" title="Messages" />
-        {(data.recentContacts || []).length === 0 ? (
-          <EmptyState variant="inline" title="No messages yet." />
-        ) : (
-          <List>
-            {(data.recentContacts || []).map((m) => (
-              <ListRow key={m.id}>
-                <div className="min-w-0">
-                  <p className="font-medium">{m.name}</p>
-                  <p className="mt-0.5 truncate text-sm text-muted">
-                    {m.source}
-                    {m.context ? ` · ${m.context}` : ""}
-                    {m.preview ? ` — ${m.preview}` : ""}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
-                  {m.projectHref ? (
-                    <a
-                      className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
-                      href={m.projectHref}
-                    >
-                      Project
-                    </a>
-                  ) : null}
-                  <a
-                    className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
-                    href={`mailto:${m.email}`}
-                  >
-                    Reply
-                  </a>
-                </div>
-              </ListRow>
-            ))}
-          </List>
-        )}
       </section>
 
       <div className="grid gap-12 lg:grid-cols-2">
