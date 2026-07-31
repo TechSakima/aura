@@ -68,8 +68,9 @@ env:
     availability:
       - RUNTIME
   # Inbound receiving (docs/RESEND.md Tier 3) + outbox cron (Tier 2)
+  # Free Resend: one domain — receive on the same host used for sending (no inbound. subdomain).
   - variable: RESEND_INBOUND_DOMAIN
-    value: inbound.aura.stroburm.app
+    value: aura.stroburm.app
     availability:
       - RUNTIME
   - variable: RESEND_WEBHOOK_SECRET

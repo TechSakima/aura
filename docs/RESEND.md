@@ -42,7 +42,8 @@ CRON_SECRET=long-random-string
 
 # --- Tier 3: inbound receiving (optional product surface) ---
 RESEND_WEBHOOK_SECRET=whsec_xxxxxxxx
-RESEND_INBOUND_DOMAIN=inbound.aura.stroburm.app
+# Free Resend = one custom domain: receive on the same host as sending.
+RESEND_INBOUND_DOMAIN=aura.stroburm.app
 ```
 
 | Variable | Tier | Where it comes from |
@@ -52,7 +53,7 @@ RESEND_INBOUND_DOMAIN=inbound.aura.stroburm.app
 | `RESEND_FROM_EMAIL` | 1 | You choose; must be on a **verified sending** domain |
 | `CRON_SECRET` | 2 | You generate (password manager / `openssl rand -hex 32`) |
 | `RESEND_WEBHOOK_SECRET` | 3 | Resend → Webhooks → signing secret (`whsec_…`) |
-| `RESEND_INBOUND_DOMAIN` | 3 | Host that has Resend **receiving** MX (no `@`) |
+| `RESEND_INBOUND_DOMAIN` | 3 | Host that has Resend **receiving** MX (no `@`). Free plan: same as sending host. |
 
 Restart Next after changing env. Prod: set the same keys in Firebase App Hosting.
 
@@ -188,21 +189,24 @@ Lets people email Aura-managed addresses; Aura stores the message, forwards to t
 | `sess-{sessionId}@inbound…` | Studio + session (+ project when known) |
 
 Example: studio homepage slug `wildflower` →  
-`wildflower@inbound.aura.stroburm.app`
+`wildflower@aura.stroburm.app` (when inbound domain = sending domain)
 
 Catch-all local-parts — no per-address provisioning in Resend. Client transactional mail sets Reply-To to `p-{projectId}@…` when possible (**AURA-372**).
 
 **Send reply (AURA-374):** Project → Messages → **Send** posts a one-shot Resend email (From = studio display / platform address, Reply-To = project inbound). Not an Inbox — no threads UI.
 
-Use a **subdomain** for receiving (e.g. `inbound.aura.stroburm.app`) so you don’t replace MX on the main company domain.
+**Free Resend (one custom domain):** receive on the **same** host as sending (`aura.stroburm.app`). Do not add `inbound.…` as a second domain.  
+**Paid / extra domain slot:** optional `inbound.` subdomain so apex MX can stay on Google/Microsoft/SES.
 
 ### Step 1 — Enable receiving on a domain
 
-1. Resend → **[Domains](https://resend.com/domains)** → open the domain (or add `inbound.yourdomain.com`).
+1. Resend → **[Domains](https://resend.com/domains)** → open your verified sending domain (free: that one domain).
 2. Find **Receiving** / **Enable Receiving** and turn it **on**.
 3. Resend shows an **MX** record (host + value + priority).
-4. Add that MX in DNS for the inbound host.
+4. Add that MX in DNS for **that same host** (or only on a subdomain if you have a second domain slot).
 5. In Resend, confirm **I’ve added the record** and wait until receiving shows **Verified**.
+
+**Conflict:** only one MX set can win on a host. If `aura.stroburm.app` already points MX at AWS SES / Google / Microsoft, either point MX at Resend for receiving, or keep the other provider and skip custom-domain inbound (use Resend’s managed `*.resend.app` receiving address as `RESEND_INBOUND_DOMAIN` instead — uglier Reply-To, no custom DNS).
 
 Also note: API key must be allowed to call **receiving** APIs (same key as Tier 1 is usually fine if not over-restricted).
 
@@ -211,10 +215,10 @@ Also note: API key must be allowed to call **receiving** APIs (same key as Tier 
 Host only — no `@`, no path:
 
 ```bash
-RESEND_INBOUND_DOMAIN=inbound.aura.stroburm.app
+RESEND_INBOUND_DOMAIN=aura.stroburm.app
 ```
 
-Must match the host clients will type after `@`.
+Must match the host that has Resend receiving MX (and what clients see after `@` on Reply-To).
 
 ### Step 3 — Deploy a public webhook URL
 
@@ -251,7 +255,7 @@ If you lose it, create a new webhook or rotate from the dashboard and update env
 
 1. Confirm a studio has homepage slug `teststudio` (or use `s-<studioId>@…`).
 2. From any mailbox, send mail to:  
-   `teststudio@inbound.aura.stroburm.app`  
+   `teststudio@aura.stroburm.app`  
    (or your real `RESEND_INBOUND_DOMAIN`).
 3. Within a few seconds:
    - Resend Receiving shows the message.
