@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
+import { sessionFirstHref } from "@/lib/admin-deep-links";
 import { getSessionById } from "@/lib/db/store";
 
-/** Legacy shoot URL → project session workflow (AURA-063). */
+/** Legacy shoot URL → session-first → pretty project path (AURA-063 / AURA-370). */
 export default async function ShootRedirectPage({
   params,
 }: {
@@ -17,5 +18,5 @@ export default async function ShootRedirectPage({
   if (!session || session.studioId !== admin.studioId || !projectId) {
     redirect("/admin/projects");
   }
-  redirect(`/admin/projects/${projectId}/sessions/${id}`);
+  redirect(sessionFirstHref(session.adminSlug || id));
 }

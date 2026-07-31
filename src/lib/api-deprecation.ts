@@ -10,3 +10,18 @@ export function withApiDeprecation(
   res.headers.set("X-Aura-Canonical", successorPath);
   return res;
 }
+
+/** Hard cutover for removed aliases (AURA-384). */
+export function goneApiResponse(successorPath: string): NextResponse {
+  return withApiDeprecation(
+    NextResponse.json(
+      {
+        error: "Gone",
+        message: `Use ${successorPath}`,
+        successor: successorPath,
+      },
+      { status: 410 },
+    ),
+    successorPath,
+  );
+}

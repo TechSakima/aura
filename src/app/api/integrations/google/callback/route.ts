@@ -1,11 +1,27 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { isMissingCryptoSecretError } from "@/lib/crypto-secrets";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import {
+  clearGoogleOAuthStateCookieOptions,
+  GOOGLE_OAUTH_STATE_COOKIE,
+  verifyGoogleOAuthState,
+} from "@/lib/google-oauth-state";
 import {
   isSealedGoogleRefreshToken,
   sealGoogleRefreshToken,
 } from "@/lib/google-token-crypto";
 import { appOrigin } from "@/lib/notify/send";
+
+function clearOAuthState(res: NextResponse) {
+  res.cookies.set(
+    GOOGLE_OAUTH_STATE_COOKIE,
+    "",
+    clearGoogleOAuthStateCookieOptions(),
+  );
+  return res;
+}
 
 /** OAuth callback — stores this studio's Google Calendar refresh token. */
 export async function GET(req: Request) {
@@ -23,17 +39,33 @@ export async function GET(req: Request) {
 
   const code = reqUrl.searchParams.get("code");
   const err = reqUrl.searchParams.get("error");
-  if (err || !code) {
-    return NextResponse.redirect(
-      new URL(`${settingsPath}?gcal=error`, browserOrigin),
+  const state = reqUrl.searchParams.get("state");
+  const jar = await cookies();
+  const cookieValue = jar.get(GOOGLE_OAUTH_STATE_COOKIE)?.value;
+
+  if (
+    err ||
+    !code ||
+    !verifyGoogleOAuthState({
+      state,
+      cookieValue,
+      studioId: admin.studioId,
+    })
+  ) {
+    return clearOAuthState(
+      NextResponse.redirect(
+        new URL(`${settingsPath}?gcal=error`, browserOrigin),
+      ),
     );
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(
-      new URL(`${settingsPath}?gcal=error`, browserOrigin),
+    return clearOAuthState(
+      NextResponse.redirect(
+        new URL(`${settingsPath}?gcal=error`, browserOrigin),
+      ),
     );
   }
 
@@ -52,8 +84,10 @@ export async function GET(req: Request) {
   });
 
   if (!tokenRes.ok) {
-    return NextResponse.redirect(
-      new URL(`${settingsPath}?gcal=error`, browserOrigin),
+    return clearOAuthState(
+      NextResponse.redirect(
+        new URL(`${settingsPath}?gcal=error`, browserOrigin),
+      ),
     );
   }
 
@@ -63,18 +97,32 @@ export async function GET(req: Request) {
   };
 
   const existing = await readStudioDb(admin.studioId);
-  // New tokens from Google are plaintext — seal before persist (AURA-109).
+  // New tokens from Google are plaintext — seal before persist (AURA-109 / AURA-389).
   // Reuse existing store value as-is when Google omits refresh_token.
-  const refreshToken = tokens.refresh_token
-    ? sealGoogleRefreshToken(tokens.refresh_token)
-    : existing.studio.googleCalendarRefreshToken
-      ? isSealedGoogleRefreshToken(existing.studio.googleCalendarRefreshToken)
-        ? existing.studio.googleCalendarRefreshToken
-        : sealGoogleRefreshToken(existing.studio.googleCalendarRefreshToken)
-      : null;
+  let refreshToken: string | null;
+  try {
+    refreshToken = tokens.refresh_token
+      ? sealGoogleRefreshToken(tokens.refresh_token)
+      : existing.studio.googleCalendarRefreshToken
+        ? isSealedGoogleRefreshToken(existing.studio.googleCalendarRefreshToken)
+          ? existing.studio.googleCalendarRefreshToken
+          : sealGoogleRefreshToken(existing.studio.googleCalendarRefreshToken)
+        : null;
+  } catch (sealErr) {
+    if (isMissingCryptoSecretError(sealErr)) {
+      return clearOAuthState(
+        NextResponse.redirect(
+          new URL(`${settingsPath}?gcal=error`, browserOrigin),
+        ),
+      );
+    }
+    throw sealErr;
+  }
   if (!refreshToken) {
-    return NextResponse.redirect(
-      new URL(`${settingsPath}?gcal=error`, browserOrigin),
+    return clearOAuthState(
+      NextResponse.redirect(
+        new URL(`${settingsPath}?gcal=error`, browserOrigin),
+      ),
     );
   }
 
@@ -85,7 +133,9 @@ export async function GET(req: Request) {
     delete db.studio.googleCalendarLastSyncError;
   });
 
-  return NextResponse.redirect(
-    new URL(`${settingsPath}?gcal=connected`, browserOrigin),
+  return clearOAuthState(
+    NextResponse.redirect(
+      new URL(`${settingsPath}?gcal=connected`, browserOrigin),
+    ),
   );
 }

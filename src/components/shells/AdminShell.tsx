@@ -42,7 +42,7 @@ type NavItem = {
 const primaryNav: NavItem[] = [
   {
     href: "/admin",
-    label: "Dashboard",
+    label: "Home",
     match: (p) => p === "/admin",
     icon: "dashboard",
   },
@@ -393,7 +393,7 @@ export function AdminShell({
         </div>
       </div>
 
-      {/* Mobile bottom tabs — icons reclaim width; safe-area clears home indicator (AURA-096) */}
+      {/* Mobile bottom tabs — icon + text labels (AURA-096 / AURA-141) */}
       <nav
         aria-label="Primary"
         className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/95 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-md md:hidden"
@@ -407,7 +407,7 @@ export function AdminShell({
                 <Link
                   href={item.href}
                   className={cn(
-                    "relative flex min-h-11 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium no-underline",
+                    "relative flex min-h-11 flex-col items-center justify-center gap-0.5 px-0.5 text-xs font-medium leading-tight no-underline",
                     active ? "text-ink" : "text-muted",
                   )}
                 >
@@ -420,7 +420,7 @@ export function AdminShell({
                       />
                     ) : null}
                   </span>
-                  <span>{item.label}</span>
+                  <span className="max-w-full truncate">{item.label}</span>
                 </Link>
               </li>
             );
@@ -432,7 +432,7 @@ export function AdminShell({
               aria-expanded={menuOpen}
               aria-label={menuOpen ? "Close more menu" : "Open more menu"}
               className={cn(
-                "flex min-h-11 w-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium",
+                "flex min-h-11 w-full flex-col items-center justify-center gap-0.5 px-0.5 text-xs font-medium leading-tight",
                 moreActive || menuOpen ? "text-ink" : "text-muted",
               )}
             >

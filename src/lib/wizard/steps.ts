@@ -14,7 +14,7 @@ export const WIZARD_STEPS: {
   { id: "intake", label: "Intake", short: "1" },
   { id: "proposal", label: "Quote", short: "2" },
   { id: "prep", label: "Prep", short: "3" },
-  { id: "shoot-day", label: "Shoot day", short: "4" },
+  { id: "shoot-day", label: "Session day", short: "4" },
   { id: "delivery", label: "Delivery", short: "5" },
   { id: "wrap", label: "Wrap", short: "6" },
 ];

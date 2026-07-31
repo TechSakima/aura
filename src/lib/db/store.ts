@@ -54,6 +54,34 @@ import type {
 let writeQueue: Promise<void> = Promise.resolve();
 let multiTenantMigrated = false;
 
+/** Which heavy collections were loaded into an AuraDatabase (AURA-055). */
+export type StudioDbLoadOptions = {
+  /** Default true for reads; false for updateStudioDb mutations. */
+  photos?: boolean;
+  /** Default true for reads; false for updateStudioDb mutations. */
+  analytics?: boolean;
+};
+
+type StudioLoadMeta = {
+  photos: boolean;
+  analytics: boolean;
+};
+
+const studioLoadMeta = new WeakMap<object, StudioLoadMeta>();
+
+function setLoadMeta(data: AuraDatabase, meta: StudioLoadMeta) {
+  studioLoadMeta.set(data, meta);
+}
+
+function getLoadMeta(data: AuraDatabase): StudioLoadMeta {
+  return (
+    studioLoadMeta.get(data) || {
+      photos: true,
+      analytics: true,
+    }
+  );
+}
+
 function stripUndefined<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -305,6 +333,7 @@ export async function updateStudioDoc<T extends { id: string }>(
 }
 
 async function persistStudioDatabase(db: Firestore, raw: AuraDatabase) {
+  const meta = getLoadMeta(raw);
   const data = normalizeDb(raw);
   const studioId = data.studio.id;
   await db
@@ -327,7 +356,14 @@ async function persistStudioDatabase(db: Firestore, raw: AuraDatabase) {
   );
   await writeStudioCollection(db, COL.proposals, studioId, data.proposals);
   await writeStudioCollection(db, COL.galleries, studioId, data.galleries);
-  await writeStudioCollection(db, COL.photos, studioId, data.photos);
+  /*
+   * Heavy collections (AURA-055): skip when not loaded and empty.
+   * Upsert-only writes never delete missing docs — safe to omit full photo/analytics graphs.
+   * Mutators that push new analytics/photos still persist those rows (length > 0).
+   */
+  if (meta.photos || data.photos.length > 0) {
+    await writeStudioCollection(db, COL.photos, studioId, data.photos);
+  }
   await writeStudioCollection(db, COL.comments, studioId, data.comments);
   await writeStudioCollection(db, COL.subAlbums, studioId, data.subAlbums);
   await writeStudioCollection(
@@ -336,15 +372,17 @@ async function persistStudioDatabase(db: Firestore, raw: AuraDatabase) {
     studioId,
     data.watermarkPresets,
   );
-  await writeStudioCollection(
-    db,
-    COL.analyticsEvents,
-    studioId,
-    data.analyticsEvents.map((e) => ({
-      ...e,
-      studioId: e.studioId || studioId,
-    })),
-  );
+  if (meta.analytics || data.analyticsEvents.length > 0) {
+    await writeStudioCollection(
+      db,
+      COL.analyticsEvents,
+      studioId,
+      data.analyticsEvents.map((e) => ({
+        ...e,
+        studioId: e.studioId || studioId,
+      })),
+    );
+  }
   await writeStudioCollection(db, COL.ideaCards, studioId, data.ideaCards);
   await writeStudioCollection(
     db,
@@ -393,7 +431,11 @@ async function persistStudioDatabase(db: Firestore, raw: AuraDatabase) {
 async function loadStudioDatabase(
   db: Firestore,
   studioId: string,
+  opts?: StudioDbLoadOptions,
 ): Promise<AuraDatabase | null> {
+  const includePhotos = opts?.photos !== false;
+  const includeAnalytics = opts?.analytics !== false;
+
   const studioSnap = await db.collection(COL.studios).doc(studioId).get();
   if (!studioSnap.exists) return null;
   const studio = { id: studioSnap.id, ...studioSnap.data() } as Studio;
@@ -428,11 +470,15 @@ async function loadStudioDatabase(
     listByStudioId<PackageTemplate>(db, COL.packageTemplates, studioId),
     listByStudioId<Proposal>(db, COL.proposals, studioId),
     listByStudioId<Gallery>(db, COL.galleries, studioId),
-    listByStudioId<Photo>(db, COL.photos, studioId),
+    includePhotos
+      ? listByStudioId<Photo>(db, COL.photos, studioId)
+      : Promise.resolve([] as Photo[]),
     listByStudioId<Comment>(db, COL.comments, studioId),
     listByStudioId<SubAlbum>(db, COL.subAlbums, studioId),
     listByStudioId<WatermarkPreset>(db, COL.watermarkPresets, studioId),
-    listByStudioId<AnalyticsEvent>(db, COL.analyticsEvents, studioId),
+    includeAnalytics
+      ? listByStudioId<AnalyticsEvent>(db, COL.analyticsEvents, studioId)
+      : Promise.resolve([] as AnalyticsEvent[]),
     listByStudioId<IdeaCard>(db, COL.ideaCards, studioId),
     listByStudioId<ShotListTemplate>(db, COL.shotListTemplates, studioId),
     listByStudioId<ShootPlan>(db, COL.shootPlans, studioId),
@@ -469,7 +515,7 @@ async function loadStudioDatabase(
       : Promise.resolve([] as Shoot[]),
   ]);
 
-  return normalizeDb({
+  const data = normalizeDb({
     studio,
     projects,
     sessions: projectSessions,
@@ -497,6 +543,11 @@ async function loadStudioDatabase(
     sessionTypes,
     bookingRequests,
   });
+  setLoadMeta(data, {
+    photos: includePhotos,
+    analytics: includeAnalytics,
+  });
+  return data;
 }
 
 /** One-time: legacy studio/settings (+ unscoped docs) → studios/{id}. */
@@ -653,25 +704,42 @@ export async function ensureMigrated() {
   await migrateToMultiTenant(db);
 }
 
-export async function readStudioDb(studioId: string): Promise<AuraDatabase> {
+/**
+ * Full studio graph for reads. Pass `{ photos: false, analytics: false }` on
+ * hot paths that use scoped helpers instead (AURA-055).
+ */
+export async function readStudioDb(
+  studioId: string,
+  opts?: StudioDbLoadOptions,
+): Promise<AuraDatabase> {
   await ensureMigrated();
   const { db } = assertFirebaseReady();
-  const data = await loadStudioDatabase(db, studioId);
+  const data = await loadStudioDatabase(db, studioId, opts);
   if (!data) {
     throw new Error(`Studio not found: ${studioId}`);
   }
   return data;
 }
 
+/**
+ * Studio RMW. By default skips loading photos + analytics (AURA-055) —
+ * upsert-only persist will not wipe those collections. Opt in when the mutator
+ * must scan/update existing photo or analytics rows:
+ * `updateStudioDb(id, fn, { photos: true })`.
+ */
 export async function updateStudioDb<T>(
   studioId: string,
   mutator: (db: AuraDatabase) => T | Promise<T>,
+  opts?: StudioDbLoadOptions,
 ): Promise<T> {
   let result!: T;
   writeQueue = writeQueue.then(async () => {
     await ensureMigrated();
     const { db } = assertFirebaseReady();
-    const current = await loadStudioDatabase(db, studioId);
+    const current = await loadStudioDatabase(db, studioId, {
+      photos: opts?.photos === true,
+      analytics: opts?.analytics === true,
+    });
     if (!current) throw new Error(`Studio not found: ${studioId}`);
     result = await mutator(current);
     current.studio.id = studioId;
@@ -1121,6 +1189,21 @@ export async function findProposalByToken(
   return { id: d.id, ...d.data() } as Proposal;
 }
 
+export async function findQuestionnaireResponseByToken(
+  token: string,
+): Promise<QuestionnaireResponse | null> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const snap = await db
+    .collection(COL.questionnaireResponses)
+    .where("token", "==", token)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const d = snap.docs[0]!;
+  return { id: d.id, ...d.data() } as QuestionnaireResponse;
+}
+
 export async function findContractByToken(
   token: string,
 ): Promise<Contract | null> {
@@ -1166,6 +1249,52 @@ export async function listPhotosByGalleryId(
   );
   photos.sort((a, b) => a.sortOrder - b.sortOrder);
   return photos;
+}
+
+/**
+ * Server page of gallery photos (AURA-395).
+ * Firestore orderBy + offset/limit — does not materialize the full gallery.
+ * Total via aggregation count (AURA-396).
+ */
+export async function listPhotosByGalleryIdPage(
+  galleryId: string,
+  opts: { offset: number; limit: number },
+): Promise<{ photos: Photo[]; total: number }> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  const offset = Math.max(0, Math.floor(opts.offset) || 0);
+  const limit = Math.max(1, Math.floor(opts.limit) || 1);
+  const base = db.collection(COL.photos).where("galleryId", "==", galleryId);
+
+  const [total, pageSnap] = await Promise.all([
+    countPhotosByGalleryId(galleryId),
+    base.orderBy("sortOrder", "asc").offset(offset).limit(limit).get(),
+  ]);
+
+  const photos = pageSnap.docs.map(
+    (d) => ({ id: d.id, ...d.data() }) as Photo,
+  );
+  return { photos, total };
+}
+
+/**
+ * Photo count for one gallery (AURA-055 / AURA-396).
+ * Aggregation count — does not materialize photo docs.
+ */
+export async function countPhotosByGalleryId(
+  galleryId: string,
+  kind?: string,
+): Promise<number> {
+  await ensureMigrated();
+  const { db } = assertFirebaseReady();
+  let query = db
+    .collection(COL.photos)
+    .where("galleryId", "==", galleryId);
+  if (kind) {
+    query = query.where("kind", "==", kind);
+  }
+  const countSnap = await query.count().get();
+  return countSnap.data().count;
 }
 
 export async function listCommentsByGalleryId(

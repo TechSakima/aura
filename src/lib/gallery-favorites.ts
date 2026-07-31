@@ -121,6 +121,71 @@ export async function setVisitorFavorites(opts: {
   return doc;
 }
 
+/** Thrown for expected toggle failures (limit / already submitted). */
+export class FavoritesToggleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FavoritesToggleError";
+  }
+}
+
+/**
+ * Atomic heart toggle — Firestore txn so concurrent taps cannot drop ids (AURA-406).
+ */
+export async function toggleVisitorFavorite(opts: {
+  studioId: string;
+  galleryId: string;
+  visitorId: string;
+  photoId: string;
+  selectLimit?: number | null;
+}): Promise<{ doc: GalleryVisitorFavorites; toggledOn: boolean }> {
+  const { db } = assertFirebaseReady();
+  const id = favoritesDocId(opts.galleryId, opts.visitorId);
+  const ref = db.collection(COL.galleryFavorites).doc(id);
+  const photoId = String(opts.photoId);
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.exists
+      ? (snap.data() as GalleryVisitorFavorites)
+      : null;
+    if (data?.submittedAt) {
+      throw new FavoritesToggleError("Selects already submitted");
+    }
+    const current = Array.isArray(data?.photoIds)
+      ? data.photoIds.map(String)
+      : [];
+    const has = current.includes(photoId);
+    let next: string[];
+    let toggledOn: boolean;
+    if (has) {
+      next = current.filter((pid) => pid !== photoId);
+      toggledOn = false;
+    } else {
+      if (
+        opts.selectLimit != null &&
+        current.length >= opts.selectLimit
+      ) {
+        throw new FavoritesToggleError(
+          `Select limit reached (${opts.selectLimit})`,
+        );
+      }
+      next = [...current, photoId];
+      toggledOn = true;
+    }
+    const doc: GalleryVisitorFavorites = {
+      id,
+      studioId: opts.studioId,
+      galleryId: opts.galleryId,
+      visitorId: opts.visitorId,
+      photoIds: next,
+      updatedAt: new Date().toISOString(),
+    };
+    tx.set(ref, stripUndefined(doc));
+    return { doc, toggledOn };
+  });
+}
+
 export async function submitVisitorFavorites(opts: {
   studioId: string;
   galleryId: string;

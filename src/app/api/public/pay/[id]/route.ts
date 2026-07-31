@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { listStudiosWithPaymentLink } from "@/lib/db/payments";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 import {
   createPaymentLinkCheckout,
   getStripe,
@@ -32,6 +33,20 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> },
 ) {
   const { id } = await ctx.params;
+  const limited = await rateLimitShared(
+    `pay:${id}:${clientIp(req)}`,
+    5,
+    60_000,
+  );
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
   const body = await req.json();
   const hit = await listStudiosWithPaymentLink(id);
   if (!hit) return NextResponse.json({ error: "Not found" }, { status: 404 });

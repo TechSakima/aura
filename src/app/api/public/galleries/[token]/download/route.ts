@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   findGalleryByPublicToken,
-  readStudioDb,
+  getPhotosByIds,
+  listPhotosByGalleryId,
 } from "@/lib/db/store";
 import {
   downloadFilename,
@@ -18,6 +19,14 @@ import { assertPublicGalleryAccess } from "@/lib/public-access";
 import type { Photo } from "@/lib/types";
 
 const SIGNED_TTL_SEC = 60 * 15;
+
+function isDownloadableKind(kind: string): boolean {
+  return kind === "main" || kind === "peek" || kind === "video";
+}
+
+function bySortOrder(a: Photo, b: Photo): number {
+  return a.sortOrder - b.sortOrder;
+}
 
 /** Original-extension from stored filename or storage path (not hardcoded jpg). */
 function originalExtension(photo: Photo): string {
@@ -47,6 +56,59 @@ async function signedOriginal(photo: Photo): Promise<{
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve downloadable photos without loading the studio graph (AURA-397).
+ * Scoped to galleryId; id-based modes use getPhotosByIds.
+ */
+async function resolveDownloadPhotos(opts: {
+  galleryId: string;
+  mode: "all" | "single" | "favorites";
+  photoId?: string;
+  photoIds?: string[];
+  visitorCookie: string | null;
+}): Promise<Photo[]> {
+  const { galleryId, mode } = opts;
+
+  if (mode === "single" && opts.photoId) {
+    const [photo] = await getPhotosByIds([opts.photoId]);
+    if (
+      !photo ||
+      photo.galleryId !== galleryId ||
+      !isDownloadableKind(photo.kind)
+    ) {
+      return [];
+    }
+    return [photo];
+  }
+
+  if (mode === "favorites") {
+    const visitorId = parseVisitorIdFromCookieHeader(opts.visitorCookie);
+    const favIds = visitorId
+      ? await getVisitorFavorites(galleryId, visitorId)
+      : [];
+    if (!favIds.length) return [];
+    const photos = await getPhotosByIds(favIds);
+    return photos
+      .filter(
+        (p) => p.galleryId === galleryId && isDownloadableKind(p.kind),
+      )
+      .sort(bySortOrder);
+  }
+
+  if (opts.photoIds?.length) {
+    /* Album-scoped download — inherits parent gallery PIN (AURA-247) */
+    const photos = await getPhotosByIds(opts.photoIds);
+    return photos
+      .filter(
+        (p) => p.galleryId === galleryId && isDownloadableKind(p.kind),
+      )
+      .sort(bySortOrder);
+  }
+
+  const all = await listPhotosByGalleryId(galleryId);
+  return all.filter((p) => isDownloadableKind(p.kind));
 }
 
 export async function POST(
@@ -79,14 +141,10 @@ export async function POST(
       ? Math.floor(body.startIndex)
       : 0;
 
-  const galleryHit = await findGalleryByPublicToken(token);
-  if (!galleryHit?.studioId) {
+  const gallery = await findGalleryByPublicToken(token);
+  if (!gallery?.studioId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-
-  const db = await readStudioDb(galleryHit.studioId);
-  const gallery = db.galleries.find((g) => g.publicToken === token);
-  if (!gallery) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const access = await assertPublicGalleryAccess(gallery, { mutate: true });
   if (!access.ok) {
@@ -103,26 +161,18 @@ export async function POST(
     }
   }
 
-  let photos = db.photos.filter(
-    (p) =>
-      p.galleryId === gallery.id &&
-      (p.kind === "main" || p.kind === "peek" || p.kind === "video"),
-  );
-  if (mode === "single") {
-    photos = photos.filter((p) => p.id === body.photoId);
-  } else if (mode === "favorites") {
-    const visitorId = parseVisitorIdFromCookieHeader(req.headers.get("cookie"));
-    const favIds = visitorId
-      ? await getVisitorFavorites(gallery.id, visitorId)
-      : [];
-    photos = photos.filter((p) => favIds.includes(p.id));
-  } else if (Array.isArray(body.photoIds) && body.photoIds.length) {
-    /* Album-scoped download — inherits parent gallery PIN (AURA-247) */
-    const allowed = new Set(
-      body.photoIds.map((id: unknown) => String(id)).filter(Boolean),
-    );
-    photos = photos.filter((p) => allowed.has(p.id));
-  }
+  const photoIds = Array.isArray(body.photoIds)
+    ? body.photoIds.map((id: unknown) => String(id)).filter(Boolean)
+    : undefined;
+
+  const photos = await resolveDownloadPhotos({
+    galleryId: gallery.id,
+    mode,
+    photoId: body.photoId ? String(body.photoId) : undefined,
+    photoIds: mode === "all" && photoIds?.length ? photoIds : undefined,
+    visitorCookie: req.headers.get("cookie"),
+  });
+
   const excludedVideoIds =
     mode === "single"
       ? []

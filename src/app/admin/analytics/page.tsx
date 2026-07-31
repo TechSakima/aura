@@ -13,9 +13,21 @@ import {
   PageHeader,
   Panel,
   SectionIntro,
+  SegmentedControl,
   Select,
+  useToast,
 } from "@/components/ui";
 import { analyticsEventLabel } from "@/lib/analytics-labels";
+
+type RangeId = "7" | "14" | "30" | "90" | "all";
+
+const RANGE_OPTIONS: { id: RangeId; label: string }[] = [
+  { id: "7", label: "7d" },
+  { id: "14", label: "14d" },
+  { id: "30", label: "30d" },
+  { id: "90", label: "90d" },
+  { id: "all", label: "All" },
+];
 
 type Financials = {
   collectedNet: number;
@@ -55,6 +67,7 @@ type Analytics = {
     href?: string;
   }[];
   financials: Financials;
+  range?: { days: number | "all"; since: string | null };
 };
 
 type SessionOption = {
@@ -78,12 +91,69 @@ function sessionOptionLabel(
     .join(" · ");
 }
 
+function sortedDayEntries(byDay: Record<string, number>) {
+  return Object.entries(byDay).sort(([a], [b]) => b.localeCompare(a));
+}
+
+function csvEscape(value: string | number) {
+  const s = String(value);
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadAnalyticsCsv(data: Analytics, range: RangeId) {
+  const activity = sortedDayEntries(data.byDay);
+  const revenue = sortedDayEntries(data.financials?.byDay || {});
+  const days = new Set([
+    ...activity.map(([d]) => d),
+    ...revenue.map(([d]) => d),
+  ]);
+  const ordered = [...days].sort((a, b) => b.localeCompare(a));
+  const activityMap = Object.fromEntries(activity);
+  const revenueMap = Object.fromEntries(revenue);
+
+  const lines = [
+    ["day", "activity", "revenue_net"].join(","),
+    ...ordered.map((day) =>
+      [
+        csvEscape(day),
+        csvEscape(activityMap[day] || 0),
+        csvEscape(Number(revenueMap[day] || 0).toFixed(2)),
+      ].join(","),
+    ),
+    "",
+    ["metric", "value"].join(","),
+    ...Object.entries(data.totals).map(([key, value]) =>
+      [csvEscape(analyticsEventLabel(key)), csvEscape(value)].join(","),
+    ),
+    ["Collected (net)", csvEscape(data.financials.collectedNet.toFixed(2))].join(
+      ",",
+    ),
+    [
+      "Processing fees",
+      csvEscape(data.financials.processingFees.toFixed(2)),
+    ].join(","),
+  ];
+
+  const blob = new Blob([lines.join("\n")], {
+    type: "text/csv;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `aura-analytics-${range}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function AnalyticsPage() {
+  const { push } = useToast();
   const [data, setData] = useState<Analytics | null>(null);
   const [error, setError] = useState("");
   const [sessions, setSessions] = useState<SessionOption[]>([]);
   const [projectNames, setProjectNames] = useState<Record<string, string>>({});
   const [sessionId, setSessionId] = useState("");
+  const [range, setRange] = useState<RangeId>("30");
 
   useEffect(() => {
     void fetch("/api/sessions")
@@ -105,8 +175,11 @@ export default function AnalyticsPage() {
   async function loadAnalytics() {
     setError("");
     try {
-      const q = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
-      const r = await fetch(`/api/analytics${q}`);
+      const params = new URLSearchParams();
+      if (sessionId) params.set("sessionId", sessionId);
+      params.set("days", range);
+      const q = params.toString();
+      const r = await fetch(`/api/analytics?${q}`);
       const json = await r.json().catch(() => ({}));
       if (!r.ok) {
         setError(String(json.error || "Could not load analytics"));
@@ -123,7 +196,7 @@ export default function AnalyticsPage() {
   useEffect(() => {
     void loadAnalytics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, range]);
 
   if (error && !data) {
     return (
@@ -151,28 +224,55 @@ export default function AnalyticsPage() {
     recent: [],
   };
 
+  const activityDays = sortedDayEntries(data.byDay);
+  const revenueDays = sortedDayEntries(f.byDay);
+
   return (
     <div>
       <PageHeader
         eyebrow="Insights"
         title="Analytics"
-        description="Engagement and payments across your studio."
+        actions={
+          <Button
+            type="button"
+            tone="neutral"
+            className="min-h-11"
+            onClick={() => {
+              downloadAnalyticsCsv(data, range);
+              push("Export downloaded", "success");
+            }}
+          >
+            Export CSV
+          </Button>
+        }
       />
-      <Field className="mb-6 max-w-sm">
-        <Label htmlFor="session">Filter by session</Label>
-        <Select
-          id="session"
-          value={sessionId}
-          onChange={(e) => setSessionId(e.target.value)}
-        >
-          <option value="">All sessions</option>
-          {sessionOptions.map((s) => (
-            <option key={s.id} value={s.id}>
-              {sessionOptionLabel(s, projectNames[s.projectId])}
-            </option>
-          ))}
-        </Select>
-      </Field>
+
+      <div className="mb-6 space-y-4">
+        <Field>
+          <Label>Range</Label>
+          <SegmentedControl
+            ariaLabel="Date range"
+            options={RANGE_OPTIONS}
+            value={range}
+            onChange={setRange}
+          />
+        </Field>
+        <Field className="max-w-sm">
+          <Label htmlFor="session">Session</Label>
+          <Select
+            id="session"
+            value={sessionId}
+            onChange={(e) => setSessionId(e.target.value)}
+          >
+            <option value="">All sessions</option>
+            {sessionOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {sessionOptionLabel(s, projectNames[s.projectId])}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
 
       <section className="mb-10 space-y-5">
         <SectionIntro title="Financials" />
@@ -202,7 +302,7 @@ export default function AnalyticsPage() {
             <h3 className="mb-3 text-sm font-medium text-muted">
               Revenue by day
             </h3>
-            {Object.keys(f.byDay).length === 0 ? (
+            {revenueDays.length === 0 ? (
               <EmptyState
                 variant="inline"
                 title="No payments yet."
@@ -210,15 +310,12 @@ export default function AnalyticsPage() {
               />
             ) : (
               <List>
-                {Object.entries(f.byDay)
-                  .sort(([a], [b]) => b.localeCompare(a))
-                  .slice(0, 14)
-                  .map(([day, amount]) => (
-                    <ListRow key={day} className="text-sm">
-                      <span>{day}</span>
-                      <span>{money(amount)}</span>
-                    </ListRow>
-                  ))}
+                {revenueDays.map(([day, amount]) => (
+                  <ListRow key={day} className="text-sm">
+                    <span>{day}</span>
+                    <span>{money(amount)}</span>
+                  </ListRow>
+                ))}
               </List>
             )}
           </div>
@@ -285,7 +382,7 @@ export default function AnalyticsPage() {
       <div className="grid gap-8 lg:grid-cols-2">
         <section>
           <h2 className="mb-3 font-display text-2xl">Activity by day</h2>
-          {Object.keys(data.byDay).length === 0 ? (
+          {activityDays.length === 0 ? (
             <EmptyState
               variant="inline"
               title="No activity yet."
@@ -293,15 +390,12 @@ export default function AnalyticsPage() {
             />
           ) : (
             <List>
-              {Object.entries(data.byDay)
-                .sort(([a], [b]) => b.localeCompare(a))
-                .slice(0, 14)
-                .map(([day, count]) => (
-                  <ListRow key={day} className="text-sm">
-                    <span>{day}</span>
-                    <span>{count}</span>
-                  </ListRow>
-                ))}
+              {activityDays.map(([day, count]) => (
+                <ListRow key={day} className="text-sm">
+                  <span>{day}</span>
+                  <span>{count}</span>
+                </ListRow>
+              ))}
             </List>
           )}
         </section>

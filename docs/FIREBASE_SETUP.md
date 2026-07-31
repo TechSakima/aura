@@ -68,4 +68,5 @@ With the service account file in place and `npm run dev`:
 curl http://localhost:3000/api/status
 ```
 
-Expect `"firebaseAdmin": true` and `"dataBackend": "firestore"`.
+Expect `"firebaseAdmin": true` and `"dataBackend": "firestore"`.  
+In production, unauthenticated callers only see `{ ok, error }`; sign in as admin for the full diagnostics payload.

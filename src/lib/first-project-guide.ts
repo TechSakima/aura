@@ -64,7 +64,9 @@ export function buildFirstProjectGuide(input: {
     ? input.contracts.filter((c) => c.projectId === projectId)
     : [];
   const contractSigned = projectContracts.some((c) => c.status === "completed");
-  const contractSent = projectContracts.length > 0;
+  const contractSent = projectContracts.some(
+    (c) => c.status === "awaiting_signature" || c.status === "completed",
+  );
 
   const depositDone = projectId
     ? projectHasDepositPaid(

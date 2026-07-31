@@ -197,22 +197,26 @@ export async function POST(req: Request) {
   });
 
   const url = absoluteUrl(`/q/${response.token}`);
-
-  await emailQuestionnaireInvite({
-    studioId: admin.studioId,
-    to: project.email,
-    clientName: project.name,
-    title: response.title,
-    token: response.token,
-    projectId,
-  });
+  const to = String(project.email || "").trim();
+  let emailed = false;
+  if (to.includes("@")) {
+    await emailQuestionnaireInvite({
+      studioId: admin.studioId,
+      to,
+      clientName: project.name,
+      title: response.title,
+      token: response.token,
+      projectId,
+    });
+    emailed = true;
+  }
   await notifyStudio({
     studioId: admin.studioId,
     type: "questionnaire_sent",
-    title: "Questionnaire sent",
+    title: emailed ? "Questionnaire sent" : "Questionnaire ready",
     body: `${project.name} · ${response.title}`,
     href: `/admin/projects/${projectId}#workflow`,
   });
 
-  return NextResponse.json({ response, url });
+  return NextResponse.json({ response, url, emailed });
 }

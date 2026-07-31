@@ -3,6 +3,7 @@ import {
   ensureStudioBrandKit,
 } from "@/lib/brand-kit";
 import type {
+  FontPresetId,
   GalleryBrandSource,
   GalleryDesign,
   Studio,
@@ -33,6 +34,22 @@ export function publicStudioTheme(studio: Studio): StudioTheme {
  * `brandSource: "studio"` → studio brand kit colors/fonts.
  * Otherwise → gallery theme preset (optional legacy bg/accent overrides).
  */
+/** Active type pairing for gallery surfaces (AURA-398 kit font load). */
+export function resolveGalleryFontPreset(
+  design:
+    | Pick<GalleryDesign, "themeId" | "brandSource">
+    | null
+    | undefined,
+  studioTheme?: StudioTheme | null,
+): FontPresetId {
+  const source = asGalleryBrandSource(design?.brandSource);
+  if (source === "studio" && studioTheme) {
+    const preset = resolveStudioThemePreset(studioTheme);
+    return studioTheme.fontPreset ?? preset.fontPreset;
+  }
+  return resolveGalleryTheme(design?.themeId).fontPreset;
+}
+
 export function resolveGalleryBrandCssVars(
   design:
     | Pick<GalleryDesign, "themeId" | "brandSource" | "background" | "accent">

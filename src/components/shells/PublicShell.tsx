@@ -1,6 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
+import { EnsureKitFonts } from "@/components/fonts/EnsureKitFonts";
 import { cn } from "@/lib/cn";
 import type {
+  FontPresetId,
   GalleryDensityPreference,
   GalleryMotionPreference,
 } from "@/lib/types";
@@ -11,6 +13,7 @@ export function PublicShell({
   bare,
   className,
   style,
+  fontPreset,
   galleryMotion,
   galleryDensity,
 }: {
@@ -20,6 +23,8 @@ export function PublicShell({
   bare?: boolean;
   className?: string;
   style?: CSSProperties;
+  /** Loads kit faces beyond root Fraunces/Figtree when needed (AURA-398). */
+  fontPreset?: FontPresetId | string | null;
   /** Applies motion CSS tokens (AURA-252). */
   galleryMotion?: GalleryMotionPreference;
   /** Applies density spacing tokens (AURA-252). */
@@ -35,6 +40,7 @@ export function PublicShell({
       data-gallery-motion={galleryMotion || undefined}
       data-gallery-density={galleryDensity || undefined}
     >
+      <EnsureKitFonts preset={fontPreset} />
       {bare ? (
         children
       ) : (

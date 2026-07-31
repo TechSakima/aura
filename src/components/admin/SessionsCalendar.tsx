@@ -557,7 +557,7 @@ export function SessionsCalendar({
                       </Link>
                     ) : null}
                     <Link href={`/admin/shoots/${s.id}/helper`}>
-                      <Button size="sm">Shoot day</Button>
+                      <Button size="sm">Session day</Button>
                     </Link>
                   </div>
                 </li>

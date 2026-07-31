@@ -22,6 +22,10 @@ export const COL = {
   shoots: "shoots",
   projectSessions: "projectSessions",
   packageTemplates: "packageTemplates",
+  /**
+   * Quote documents (product/API noun). Collection id stays `proposals`
+   * — AURA-200 decided no Firestore rename (migration cost > benefit).
+   */
   proposals: "proposals",
   galleries: "galleries",
   photos: "photos",
@@ -64,6 +68,10 @@ export const COL = {
    * Durable email retry queue (AURA-313 / AURA-149) — not in TENANT_COLLECTIONS.
    */
   emailOutbox: "emailOutbox",
+  /**
+   * Gallery watermark reprocess queue (AURA-387) — not in TENANT_COLLECTIONS.
+   */
+  watermarkJobs: "watermarkJobs",
   /**
    * Hard-delete tombstones (AURA-099) — block upsert-only RMW from resurrecting
    * deleted tenant docs. Doc id = `${collection}__${docId}`.

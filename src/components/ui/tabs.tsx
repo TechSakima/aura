@@ -35,7 +35,8 @@ export function Tabs({
 
     return (
       <div className="space-y-4">
-        <div className="space-y-3 md:hidden">
+        {/* Step + jump until lg — avoids dense tab scavenger at 768 (AURA-410). */}
+        <div className="space-y-3 lg:hidden">
           <div>
             <p className="text-xs uppercase tracking-[0.16em] text-muted">
               Step {idx + 1} of {tabs.length}
@@ -72,7 +73,7 @@ export function Tabs({
           ) : null}
         </div>
 
-        <nav aria-label={ariaLabel} className="hidden md:block">
+        <nav aria-label={ariaLabel} className="hidden lg:block">
           <div
             className="flex flex-wrap gap-1 border-b border-line"
             role="tablist"

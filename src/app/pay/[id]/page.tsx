@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
 import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
@@ -34,7 +34,10 @@ export default function PublicPayPage() {
   const [canceled, setCanceled] = useState(false);
   const [checkoutReady, setCheckoutReady] = useState(true);
   const [pending, setPending] = useState(false);
+  /** Stays true after Checkout URL — no second session while navigating (AURA-150). */
+  const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState("");
+  const submitLock = useRef(false);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -63,33 +66,45 @@ export default function PublicPayPage() {
       .catch(() => setError("Could not load payment link"));
   }, [params.id]);
 
+  const busy = pending || redirecting;
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (pending || !checkoutReady) return;
+    if (busy || !checkoutReady || submitLock.current) return;
+    submitLock.current = true;
     setError("");
     setCanceled(false);
     setPending(true);
-    const res = await fetch(`/api/public/pay/${params.id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: Number(amount),
-        email,
-        name,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
+    try {
+      const res = await fetch(`/api/public/pay/${params.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: Number(amount),
+          email,
+          name,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPending(false);
+        submitLock.current = false;
+        setError(String(data.error || "Payment failed"));
+        return;
+      }
+      if (data.checkoutUrl) {
+        setRedirecting(true);
+        window.location.assign(data.checkoutUrl as string);
+        return;
+      }
       setPending(false);
-      setError(String(data.error || "Payment failed"));
-      return;
+      submitLock.current = false;
+      setError("Could not start checkout. Try again shortly.");
+    } catch {
+      setPending(false);
+      submitLock.current = false;
+      setError("Could not start checkout. Try again shortly.");
     }
-    if (data.checkoutUrl) {
-      window.location.href = data.checkoutUrl as string;
-      return;
-    }
-    setPending(false);
-    setError("Could not start checkout. Try again shortly.");
   }
 
   if (error && !link) {
@@ -176,7 +191,7 @@ export default function PublicPayPage() {
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                disabled={pending}
+                disabled={busy}
               />
             </Field>
             <Field>
@@ -187,11 +202,17 @@ export default function PublicPayPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={pending}
+                disabled={busy}
               />
             </Field>
             <Field>
-              <Label htmlFor="amount">Amount</Label>
+              <Label htmlFor="amount">
+                {link.mode === "customer_chooses" &&
+                link.minAmount != null &&
+                link.maxAmount != null
+                  ? `Amount ($${link.minAmount}–$${link.maxAmount})`
+                  : "Amount"}
+              </Label>
               <Input
                 id="amount"
                 type="number"
@@ -200,7 +221,7 @@ export default function PublicPayPage() {
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                disabled={link.mode === "fixed" || pending}
+                disabled={link.mode === "fixed" || busy}
                 required
               />
             </Field>
@@ -214,9 +235,11 @@ export default function PublicPayPage() {
             <Button
               type="submit"
               className="w-full min-h-11"
-              pending={pending}
-              pendingLabel="Starting checkout…"
-              disabled={pending}
+              pending={busy}
+              pendingLabel={
+                redirecting ? "Redirecting…" : "Starting checkout…"
+              }
+              disabled={busy}
             >
               {payLabel}
             </Button>

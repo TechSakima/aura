@@ -79,10 +79,14 @@ function coerceProject(raw: Record<string, unknown>, studioId: string): Project 
   const now = new Date().toISOString();
   const workflowStep = coerceWorkflowStep(raw.workflowStep);
   const cancelToken = raw.cancelToken ? String(raw.cancelToken) : undefined;
+  const adminSlug = raw.adminSlug
+    ? String(raw.adminSlug).trim().toLowerCase() || undefined
+    : undefined;
   return {
     id: String(raw.id || nanoid()),
     studioId: String(raw.studioId || studioId),
     name: String(raw.name || "Untitled project"),
+    adminSlug,
     email: String(raw.email || ""),
     phone: raw.phone ? String(raw.phone) : undefined,
     notes: raw.notes ? String(raw.notes) : undefined,
@@ -113,6 +117,12 @@ export function projectRoundTripPreserved(
   if (raw.cancelToken != null && out.cancelToken !== String(raw.cancelToken)) {
     return false;
   }
+  if (
+    raw.adminSlug != null &&
+    out.adminSlug !== String(raw.adminSlug).trim().toLowerCase()
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -133,11 +143,15 @@ function coerceSession(
     !Array.isArray(raw.intakeAnswers)
       ? (raw.intakeAnswers as Record<string, string>)
       : undefined;
+  const adminSlug = raw.adminSlug
+    ? String(raw.adminSlug).trim().toLowerCase() || undefined
+    : undefined;
   return {
     id: String(raw.id || nanoid()),
     studioId: String(raw.studioId || studioId),
     projectId,
     type: String(raw.type || "Session"),
+    adminSlug,
     startsAt,
     endsAt: raw.endsAt ? String(raw.endsAt) : undefined,
     status: (raw.status as ProjectSession["status"]) || "inquiry",
@@ -199,6 +213,12 @@ export function sessionRoundTripPreserved(
     if (JSON.stringify(out.intakeAnswers) !== JSON.stringify(raw.intakeAnswers)) {
       return false;
     }
+  }
+  if (
+    raw.adminSlug != null &&
+    out.adminSlug !== String(raw.adminSlug).trim().toLowerCase()
+  ) {
+    return false;
   }
   return true;
 }

@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { readStudioDb, updateStudioDb } from "@/lib/db/store";
+import { COL } from "@/lib/db/collections";
+import {
+  getGalleryById,
+  getPhotosByIds,
+  readStudioDb,
+  updateStudioDoc,
+} from "@/lib/db/store";
 import { formDataFile } from "@/lib/form-data";
 import { processUpload } from "@/lib/images/process";
+import type { Photo } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,17 +24,20 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { id } = await ctx.params;
-    const db = await readStudioDb(admin.studioId);
-    const photo = db.photos.find((p) => p.id === id);
-    if (!photo) {
+    const [photo] = await getPhotosByIds([id]);
+    if (!photo || photo.studioId !== admin.studioId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const gallery = db.galleries.find((g) => g.id === photo.galleryId);
+    const gallery = await getGalleryById(photo.galleryId);
+    const studioDb = await readStudioDb(admin.studioId, {
+      photos: false,
+      analytics: false,
+    });
     const presetId =
-      gallery?.watermarkPresetId || db.studio.defaultWatermarkPresetId;
+      gallery?.watermarkPresetId || studioDb.studio.defaultWatermarkPresetId;
     const watermark = gallery?.watermarkEnabled
-      ? db.watermarkPresets.find((w) => w.id === presetId) || null
+      ? studioDb.watermarkPresets.find((w) => w.id === presetId) || null
       : null;
 
     const form = await req.formData();
@@ -47,9 +57,8 @@ export async function POST(
       watermark,
     });
 
-    const updated = await updateStudioDb(admin.studioId, (d) => {
-      const p = d.photos.find((x) => x.id === id);
-      if (!p) return null;
+    const updated = await updateStudioDoc<Photo>(COL.photos, id, (p) => {
+      if (p.studioId !== admin.studioId) return null;
       Object.assign(p, processed, {
         version: p.version + 1,
         updatedAt: new Date().toISOString(),

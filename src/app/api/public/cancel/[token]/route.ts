@@ -7,10 +7,11 @@ import {
 } from "@/lib/db/store";
 import {
   emailStudioBookingCanceled,
+  emailStudioBookingRescheduleRequest,
   notifyStudio,
 } from "@/lib/notify/send";
 import { deleteGoogleCalendarEvent } from "@/lib/google-calendar";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 import type { CancelPolicy } from "@/lib/types";
 
 function canCancel(opts: {
@@ -36,20 +37,12 @@ function canCancel(opts: {
   return { ok: true };
 }
 
-export async function GET(
-  _req: Request,
-  ctx: { params: Promise<{ token: string }> },
-) {
-  const { token } = await ctx.params;
+async function loadCancelContext(token: string) {
   const studioId = await findStudioIdByProjectCancelToken(token);
-  if (!studioId) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!studioId) return null;
   const db = await readStudioDb(studioId);
   const project = db.projects.find((p) => p.cancelToken === token);
-  if (!project) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!project) return null;
   const booking = db.bookingRequests.find((b) => b.projectId === project.id);
   const session = booking?.sessionId
     ? db.sessions.find((s) => s.id === booking.sessionId)
@@ -62,20 +55,46 @@ export async function GET(
     contract?.cancelPolicy ||
     template?.cancelPolicy ||
     ({ untilPayment: true, daysBeforeSession: 7 } as CancelPolicy);
+  const startsAt = session?.startsAt || booking?.startsAt;
   const gate = canCancel({
     policy,
     paidAmount: project.paidAmount || 0,
-    startsAt: session?.startsAt || booking?.startsAt,
+    startsAt,
   });
+  const canceled =
+    project.stage === "canceled" || booking?.status === "canceled";
+  return {
+    studioId,
+    db,
+    project,
+    booking,
+    session,
+    startsAt,
+    gate,
+    canceled,
+  };
+}
+
+export async function GET(
+  _req: Request,
+  ctx: { params: Promise<{ token: string }> },
+) {
+  const { token } = await ctx.params;
+  const ctxData = await loadCancelContext(token);
+  if (!ctxData) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const { db, project, booking, startsAt, gate, canceled } = ctxData;
   return NextResponse.json({
     project: {
       name: project.name,
       stage: project.stage,
       type: project.type,
     },
-    startsAt: session?.startsAt || booking?.startsAt,
+    startsAt,
     status: booking?.status || project.stage,
-    canCancel: gate.ok && project.stage !== "canceled" && booking?.status !== "canceled",
+    canCancel: gate.ok && !canceled,
+    canRequestReschedule: !canceled,
     blockReason: gate.ok ? null : gate.reason,
     studioName: db.studio.name,
   });
@@ -86,7 +105,11 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const limited = rateLimit(`cancel:${token}:${clientIp(req)}`, 5, 60_000);
+  const limited = await rateLimitShared(
+    `cancel:${token}:${clientIp(req)}`,
+    5,
+    60_000,
+  );
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -98,42 +121,38 @@ export async function POST(
   }
 
   const body = await req.json().catch(() => ({}));
-  const reason = String(body.reason || "").trim();
-  if (!reason) {
-    return NextResponse.json({ error: "Reason required" }, { status: 400 });
+  const action =
+    body.action === "reschedule" ? ("reschedule" as const) : ("cancel" as const);
+  const note = String(
+    body.reason || body.note || "",
+  ).trim();
+  if (!note) {
+    return NextResponse.json(
+      { error: action === "reschedule" ? "Message required" : "Reason required" },
+      { status: 400 },
+    );
   }
 
-  const studioId = await findStudioIdByProjectCancelToken(token);
-  if (!studioId) {
+  const ctxData = await loadCancelContext(token);
+  if (!ctxData) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const db = await readStudioDb(studioId);
-  const project = db.projects.find((p) => p.cancelToken === token);
-  if (!project) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-  const booking = db.bookingRequests.find((b) => b.projectId === project.id);
-  const session = booking?.sessionId
-    ? db.sessions.find((s) => s.id === booking.sessionId)
-    : db.sessions.find((s) => s.projectId === project.id);
-  const contract = db.contracts.find((c) => c.projectId === project.id);
-  const template = contract?.templateId
-    ? db.contractTemplates.find((t) => t.id === contract.templateId)
-    : db.contractTemplates[0];
-  const policy =
-    contract?.cancelPolicy ||
-    template?.cancelPolicy ||
-    ({ untilPayment: true, daysBeforeSession: 7 } as CancelPolicy);
-  const gate = canCancel({
-    policy,
-    paidAmount: project.paidAmount || 0,
-    startsAt: session?.startsAt || booking?.startsAt,
-  });
-  if (!gate.ok) {
-    return NextResponse.json({ error: gate.reason }, { status: 403 });
-  }
-  if (project.stage === "canceled" || booking?.status === "canceled") {
-    return NextResponse.json({ ok: true, already: true });
+  const {
+    studioId,
+    db,
+    project,
+    booking,
+    session,
+    startsAt,
+    gate,
+    canceled,
+  } = ctxData;
+
+  if (canceled) {
+    return NextResponse.json(
+      { error: "This booking is already canceled." },
+      { status: 403 },
+    );
   }
 
   const sessionTypeName =
@@ -141,6 +160,67 @@ export async function POST(
       db.sessionTypes.find((t) => t.id === booking.sessionTypeId)?.name) ||
     project.type ||
     "Session";
+
+  if (action === "reschedule") {
+    let preferredStartsAt: string | undefined;
+    const rawPreferred = String(body.preferredStartsAt || "").trim();
+    if (rawPreferred) {
+      const ms = Date.parse(rawPreferred);
+      if (Number.isNaN(ms)) {
+        return NextResponse.json(
+          { error: "Preferred time is invalid." },
+          { status: 400 },
+        );
+      }
+      if (ms < Date.now() - 60_000) {
+        return NextResponse.json(
+          { error: "Preferred time must be in the future." },
+          { status: 400 },
+        );
+      }
+      preferredStartsAt = new Date(ms).toISOString();
+    }
+
+    const requestedAt = new Date().toISOString();
+    if (booking) {
+      await patchStudioDoc(COL.bookingRequests, booking.id, {
+        rescheduleRequestedAt: requestedAt,
+        rescheduleNote: note,
+        ...(preferredStartsAt
+          ? { reschedulePreferredStartsAt: preferredStartsAt }
+          : {}),
+      });
+    }
+
+    const projectHref = `/admin/projects/${project.id}`;
+    await emailStudioBookingRescheduleRequest({
+      studioId,
+      clientName: project.name,
+      sessionTypeName,
+      note,
+      preferredStartsAt,
+      currentStartsAt: startsAt,
+      projectHref,
+      projectId: project.id,
+      requestedAt,
+    });
+    await notifyStudio({
+      studioId,
+      type: "booking_reschedule_requested",
+      title: "Reschedule request",
+      body: preferredStartsAt
+        ? `${project.name}: ${new Date(preferredStartsAt).toLocaleString()}`
+        : `${project.name}: ${note.slice(0, 80)}`,
+      href: `${projectHref}#workflow`,
+      emailStudio: false,
+    });
+
+    return NextResponse.json({ ok: true, action: "reschedule" });
+  }
+
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.reason }, { status: 403 });
+  }
 
   const googleEventId = session?.googleEventId;
 
@@ -151,7 +231,7 @@ export async function POST(
   if (booking) {
     await patchStudioDoc(COL.bookingRequests, booking.id, {
       status: "canceled",
-      cancelReason: reason,
+      cancelReason: note,
     });
   }
   if (session) {
@@ -170,7 +250,7 @@ export async function POST(
     studioId,
     clientName: project.name,
     sessionTypeName,
-    reason,
+    reason: note,
     projectHref: `/admin/projects/${project.id}`,
     projectId: project.id,
   });
@@ -178,10 +258,10 @@ export async function POST(
     studioId,
     type: "booking_canceled",
     title: "Request canceled",
-    body: `${project.name}: ${reason}`,
+    body: `${project.name}: ${note}`,
     href: `/admin/projects/${project.id}#workflow`,
     emailStudio: false,
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, action: "cancel" });
 }

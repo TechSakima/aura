@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
+import { allocateSessionAdminSlug } from "@/lib/admin-slug";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import {
   defaultSessionEndsAt,
@@ -57,6 +58,12 @@ export async function POST(req: Request) {
     updatedAt: now,
   };
   await updateStudioDb(admin.studioId, (db) => {
+    session.adminSlug = allocateSessionAdminSlug(
+      db,
+      projectId,
+      session.type,
+      session.id,
+    );
     db.sessions.unshift(session);
   });
 

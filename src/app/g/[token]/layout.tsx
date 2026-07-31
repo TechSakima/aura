@@ -15,37 +15,41 @@ const DEFAULT_BG = "#f3efe6";
 
 const galleryPwaChrome = cache(async (token: string) => {
   const gallery = await findGalleryByPublicToken(token);
-  let title = "Aura Gallery";
-  let themeColor = DEFAULT_BG;
-  if (gallery) {
-    title = gallery.title?.trim() || title;
-    const design = normalizeGalleryDesign(gallery.design);
-    const studio = gallery.studioId
-      ? await getStudioDoc(gallery.studioId)
-      : null;
-    const colors = resolveGalleryBrandColors(
-      design,
-      studio ? publicStudioTheme(studio) : null,
-    );
-    themeColor = colors.themeColor;
+  if (!gallery) {
+    return { found: false as const, themeColor: DEFAULT_BG };
   }
+
+  const title = gallery.title?.trim() || "Gallery";
+  const design = normalizeGalleryDesign(gallery.design);
+  const studio = gallery.studioId
+    ? await getStudioDoc(gallery.studioId)
+    : null;
+  const colors = resolveGalleryBrandColors(
+    design,
+    studio ? publicStudioTheme(studio) : null,
+  );
   return {
+    found: true as const,
     title,
-    themeColor,
+    themeColor: colors.themeColor,
     short: galleryPwaShortName(title),
   };
 });
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
-  const { title, short, themeColor } = await galleryPwaChrome(token);
+  const chrome = await galleryPwaChrome(token);
+  if (!chrome.found) {
+    // No manifest link — unknown tokens must not look installable (AURA-402).
+    return { title: "Gallery" };
+  }
   return {
-    title,
+    title: chrome.title,
     manifest: `/g/${token}/manifest.webmanifest`,
     appleWebApp: {
       capable: true,
-      title: short,
-      statusBarStyle: appleStatusBarForBackground(themeColor),
+      title: chrome.short,
+      statusBarStyle: appleStatusBarForBackground(chrome.themeColor),
     },
   };
 }

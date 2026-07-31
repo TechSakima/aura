@@ -400,7 +400,7 @@ export function SettingsBrand() {
                 <p className="mb-2 text-xs uppercase tracking-[0.14em] text-muted">
                   Light
                 </p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                   {STUDIO_THEME_PRESETS.filter((p) => p.mode === "light").map(
                     (p) => (
                       <ThemeSwatch
@@ -417,7 +417,7 @@ export function SettingsBrand() {
                 <p className="mb-2 text-xs uppercase tracking-[0.14em] text-muted">
                   Dark
                 </p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                   {STUDIO_THEME_PRESETS.filter((p) => p.mode === "dark").map(
                     (p) => (
                       <ThemeSwatch

@@ -34,7 +34,10 @@ import {
   downloadCopy,
   emptyDownloadMessage,
 } from "@/lib/download-copy";
-import { resolveGalleryBrandCssVars } from "@/lib/gallery-brand";
+import {
+  resolveGalleryBrandCssVars,
+  resolveGalleryFontPreset,
+} from "@/lib/gallery-brand";
 import { normalizeGalleryDesign } from "@/lib/gallery-design";
 import type { GalleryDesign, StudioTheme } from "@/lib/types";
 
@@ -363,6 +366,7 @@ export default function SubAlbumPage() {
     design,
     data.studio.theme,
   ) as CSSProperties;
+  const fontPreset = resolveGalleryFontPreset(design, data.studio.theme);
 
   const albumPinCopy = downloadCopy("album", {
     count: data.photos.length,
@@ -381,6 +385,7 @@ export default function SubAlbumPage() {
     <PublicShell
       bare
       style={themeStyle}
+      fontPreset={fontPreset}
       galleryMotion={design.motion}
       galleryDensity={design.density}
     >

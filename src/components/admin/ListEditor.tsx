@@ -307,14 +307,23 @@ export function PricingListEditor({
               />
             </Field>
             <Field>
-              <Label htmlFor={`tier-price-${t.id}`}>Price</Label>
+              <Label htmlFor={`tier-price-${t.id}`}>Price ($)</Label>
               <Input
                 id={`tier-price-${t.id}`}
                 type="number"
-                value={Number.isFinite(t.price) ? t.price : 0}
+                min={0}
+                step="1"
+                placeholder="Required"
+                value={
+                  Number.isFinite(t.price) && t.price > 0 ? t.price : ""
+                }
                 onChange={(e) => {
+                  const raw = e.target.value;
                   const next = [...tiers];
-                  next[i] = { ...t, price: Number(e.target.value) || 0 };
+                  next[i] = {
+                    ...t,
+                    price: raw === "" ? 0 : Number(raw) || 0,
+                  };
                   onChange(next);
                 }}
               />
@@ -361,7 +370,7 @@ export function PricingListEditor({
               ...tiers,
               {
                 id: crypto.randomUUID(),
-                name: "",
+                name: "Standard",
                 price: 0,
                 description: "",
               },

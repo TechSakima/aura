@@ -9,6 +9,8 @@ import {
   findContractByToken,
   findGalleryByPublicToken,
   findProposalByToken,
+  findQuestionnaireResponseByToken,
+  findStudioIdByProjectCancelToken,
   getStudioDoc,
 } from "@/lib/db/store";
 import {
@@ -158,19 +160,28 @@ async function resolveStudioIcon(
   return { source, background: brand.backgroundColor };
 }
 
-/** Resolve studio/gallery mark bytes for `/api/pwa-icon` (AURA-289 / 299). */
+/** Resolve studio/gallery mark bytes for `/api/pwa-icon` (AURA-289 / 299 / 400). */
 export async function resolvePwaIconSource(opts: {
   token?: string;
   slug?: string;
+  /** Public studio id — admin install icons without session cookie (AURA-400). */
+  studio?: string;
   surface?: string;
   proposal?: string;
   contract?: string;
   pay?: string;
+  questionnaire?: string;
+  cancel?: string;
 }): Promise<PwaIconResolve> {
+  if (opts.studio) {
+    return resolveStudioIcon(await getStudioDoc(opts.studio));
+  }
+
+  // Legacy admin query: OS install often omits cookies — never 401 (AURA-400).
   if (opts.surface === "admin") {
     const admin = await requireAdmin();
     if (!admin) {
-      return { error: "Unauthorized", status: 401 };
+      return { source: null, background: "#1c1915" };
     }
     return resolveStudioIcon(admin.studio);
   }
@@ -191,6 +202,18 @@ export async function resolvePwaIconSource(opts: {
     const hit = await listStudiosWithPaymentLink(opts.pay);
     if (!hit) return { error: "Not found", status: 404 };
     return resolveStudioIcon(await getStudioDoc(hit.studioId));
+  }
+
+  if (opts.questionnaire) {
+    const hit = await findQuestionnaireResponseByToken(opts.questionnaire);
+    if (!hit?.studioId) return { error: "Not found", status: 404 };
+    return resolveStudioIcon(await getStudioDoc(hit.studioId));
+  }
+
+  if (opts.cancel) {
+    const studioId = await findStudioIdByProjectCancelToken(opts.cancel);
+    if (!studioId) return { error: "Not found", status: 404 };
+    return resolveStudioIcon(await getStudioDoc(studioId));
   }
 
   if (opts.token) {

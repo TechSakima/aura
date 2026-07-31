@@ -36,7 +36,11 @@ export { Select } from "./select";
 export { SegmentedControl, type SegmentedOption } from "./segmented-control";
 export { ScrollRail } from "./scroll-rail";
 export { Skeleton } from "./skeleton";
-export { StatusBadge } from "./status-badge";
+export {
+  PROJECT_STAGE_FILTER_OPTIONS,
+  StatusBadge,
+  projectStageLabel,
+} from "./status-badge";
 
 export { Cluster, Stack } from "./stack";
 export { Switch } from "./switch";

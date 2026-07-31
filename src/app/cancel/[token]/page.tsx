@@ -1,12 +1,30 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
+import { InstallHint } from "@/components/pwa/InstallHint";
 import { PublicShell } from "@/components/shells/PublicShell";
 import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
-import { Button, Field, Label, Textarea } from "@/components/ui";
+import {
+  Button,
+  Field,
+  Input,
+  Label,
+  SegmentedControl,
+  Textarea,
+} from "@/components/ui";
+
+type Mode = "reschedule" | "cancel";
+
+function localInputValue(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function PublicCancelPage() {
   const { token } = useParams<{ token: string }>();
@@ -14,9 +32,12 @@ export default function PublicCancelPage() {
   const [name, setName] = useState("");
   const [startsAt, setStartsAt] = useState<string | null>(null);
   const [canCancel, setCanCancel] = useState(false);
+  const [canRequestReschedule, setCanRequestReschedule] = useState(false);
   const [blockReason, setBlockReason] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("reschedule");
   const [reason, setReason] = useState("");
-  const [done, setDone] = useState(false);
+  const [preferredLocal, setPreferredLocal] = useState("");
+  const [done, setDone] = useState<"cancel" | "reschedule" | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -32,25 +53,51 @@ export default function PublicCancelPage() {
       setStudioName(data.studioName || "");
       setName(data.project?.name || "");
       setStartsAt(data.startsAt || null);
-      setCanCancel(Boolean(data.canCancel));
+      const cancelOk = Boolean(data.canCancel);
+      const rescheduleOk = Boolean(data.canRequestReschedule);
+      setCanCancel(cancelOk);
+      setCanRequestReschedule(rescheduleOk);
       setBlockReason(data.blockReason || null);
+      setMode(rescheduleOk ? "reschedule" : "cancel");
+      if (data.startsAt) {
+        setPreferredLocal(localInputValue(data.startsAt));
+      }
     })();
   }, [token]);
+
+  const modeOptions = useMemo(() => {
+    const opts: { id: Mode; label: string }[] = [];
+    if (canRequestReschedule) opts.push({ id: "reschedule", label: "Reschedule" });
+    if (canCancel) opts.push({ id: "cancel", label: "Cancel" });
+    return opts;
+  }, [canCancel, canRequestReschedule]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
+    const action = mode === "reschedule" ? "reschedule" : "cancel";
+    const payload: {
+      action: string;
+      reason: string;
+      preferredStartsAt?: string;
+    } = { action, reason };
+    if (action === "reschedule" && preferredLocal) {
+      const ms = Date.parse(preferredLocal);
+      if (!Number.isNaN(ms)) {
+        payload.preferredStartsAt = new Date(ms).toISOString();
+      }
+    }
     const res = await fetch(`/api/public/cancel/${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError(data.error || "Could not cancel");
+      setError(data.error || "Could not submit");
       return;
     }
-    setDone(true);
+    setDone(action);
   }
 
   if (loading) {
@@ -61,7 +108,17 @@ export default function PublicCancelPage() {
     );
   }
 
-  if (done) {
+  if (done === "reschedule") {
+    return (
+      <PublicShell>
+        <PublicSuccess title="Request sent">
+          <p>{studioName} will confirm a new time.</p>
+        </PublicSuccess>
+      </PublicShell>
+    );
+  }
+
+  if (done === "cancel") {
     return (
       <PublicShell>
         <PublicSuccess title="Request canceled">
@@ -71,13 +128,20 @@ export default function PublicCancelPage() {
     );
   }
 
+  const showForm = canCancel || canRequestReschedule;
+
   return (
     <PublicShell>
+      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(4.75rem+env(safe-area-inset-bottom))] desk:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-md">
+          <InstallHint storageKey={`aura-install-dismiss-cancel-${token}`} />
+        </div>
+      </div>
       <div className="mx-auto max-w-md py-12 sm:py-16">
         {studioName ? (
           <StudioMark name={studioName} tone="dark" className="mb-2" />
         ) : null}
-        <h1 className="font-display text-3xl">Cancel request</h1>
+        <h1 className="font-display text-3xl">Change or cancel</h1>
         <p className="mt-2 text-muted">
           {name}
           {startsAt
@@ -91,38 +155,83 @@ export default function PublicCancelPage() {
             : ""}
         </p>
 
-        {!canCancel ? (
+        {!showForm ? (
           <>
             <p className="mt-8 text-sm text-muted">
               {blockReason ||
                 error ||
-                "This request can no longer be canceled here."}
+                "This booking can no longer be changed here."}
             </p>
             {studioName ? (
               <PublicSoftFailureContact
                 studioName={studioName}
                 source="other"
                 cancelToken={token}
-                context={blockReason || name || "Cancel request"}
+                context={blockReason || name || "Change or cancel"}
               />
             ) : null}
           </>
         ) : (
           <form onSubmit={onSubmit} className="mt-8 space-y-4">
-            <Field>
-              <Label htmlFor="reason">Reason</Label>
-              <Textarea
-                id="reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                required
-                rows={4}
+            {modeOptions.length > 1 ? (
+              <SegmentedControl
+                ariaLabel="Change or cancel"
+                options={modeOptions}
+                value={mode}
+                onChange={setMode}
               />
-            </Field>
-            {error ? <p className="text-sm text-danger">{error}</p> : null}
-            <Button type="submit" tone="danger" className="min-h-11 w-full">
-              Cancel request
-            </Button>
+            ) : null}
+
+            {mode === "reschedule" && canRequestReschedule ? (
+              <>
+                {!canCancel && blockReason ? (
+                  <p className="text-sm text-muted">{blockReason}</p>
+                ) : null}
+                <Field>
+                  <Label htmlFor="preferred">Preferred time</Label>
+                  <Input
+                    id="preferred"
+                    type="datetime-local"
+                    value={preferredLocal}
+                    onChange={(e) => setPreferredLocal(e.target.value)}
+                    className="min-h-11"
+                  />
+                </Field>
+                <Field>
+                  <Label htmlFor="reason">Message</Label>
+                  <Textarea
+                    id="reason"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    required
+                    rows={4}
+                  />
+                </Field>
+                {error ? <p className="text-sm text-danger">{error}</p> : null}
+                <Button type="submit" tone="accent" className="min-h-11 w-full">
+                  Request new time
+                </Button>
+              </>
+            ) : null}
+
+            {mode === "cancel" && canCancel ? (
+              <>
+                <Field>
+                  <Label htmlFor="reason">Reason</Label>
+                  <Textarea
+                    id="reason"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    required
+                    rows={4}
+                  />
+                </Field>
+                {error ? <p className="text-sm text-danger">{error}</p> : null}
+                <Button type="submit" tone="danger" className="min-h-11 w-full">
+                  Cancel request
+                </Button>
+              </>
+            ) : null}
           </form>
         )}
       </div>

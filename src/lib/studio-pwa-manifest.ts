@@ -58,7 +58,7 @@ export function buildWebManifest(opts: {
   scope: string;
   backgroundColor: string;
   themeColor: string;
-  /** Query for `/api/pwa-icon` without size/purpose (e.g. `token=…` or `surface=admin`). */
+  /** Query for `/api/pwa-icon` without size/purpose (e.g. `token=…` or `studio=…`). */
   iconQuery?: string | null;
   /** Prefer existing installed window for same-scope links (AURA-296 admin). */
   preferExistingWindow?: boolean;

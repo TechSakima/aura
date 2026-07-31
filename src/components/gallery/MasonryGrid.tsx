@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { GalleryThumb } from "@/components/gallery/GalleryThumb";
 import { MediaGrid } from "@/components/media/MediaGrid";
 import { cn } from "@/lib/cn";
+import { galleryPhotoAlt } from "@/lib/gallery-photo-alt";
 import { isPlaceholderAspect } from "@/lib/images/dimensions";
 import {
   galleryGridToMediaMode,
@@ -15,6 +17,8 @@ export type MasonryPhoto = {
   url: string;
   thumbUrl?: string;
   aspect?: number;
+  width?: number;
+  height?: number;
   kind?: string;
   videoUrl?: string;
   /** Original upload name for lightbox caption (AURA-253). */
@@ -47,12 +51,15 @@ function MasonryTile({
     ? null
     : photo.aspect;
   const aspect = storedAspect ?? naturalAspect ?? undefined;
-  const name = photo.filename?.trim().split(/[/\\]/).pop();
   const isVideo = Boolean(photo.kind === "video" || photo.videoUrl);
-  const openLabel = [
-    isVideo ? "Open video" : "Open photo",
-    name || `${index + 1} of ${total}`,
-  ].join(", ");
+  const alt = galleryPhotoAlt({
+    filename: photo.filename,
+    index,
+    total,
+    kind: isVideo ? "video" : "photo",
+  });
+  // Accessible name from img alt (AURA-143) — avoid duplicate aria-label.
+  const openAlt = isVideo ? `Open video, ${alt}` : `Open photo, ${alt}`;
 
   return (
     <div
@@ -66,28 +73,25 @@ function MasonryTile({
       <button
         type="button"
         onClick={() => onPhotoClick?.(photo)}
-        aria-label={openLabel}
         className="block w-full min-h-11 text-left"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={photo.thumbUrl || photo.url}
-          alt=""
-          loading="lazy"
-          decoding="async"
+        <GalleryThumb
+          src={photo.url}
+          thumbSrc={photo.thumbUrl}
+          alt={openAlt}
+          aspect={aspect}
+          width={photo.width}
+          height={photo.height}
+          gridMode={mode}
+          cssAspect={mode === "columns" || mode === "diary"}
           className={cn(
-            "block w-full object-cover transition duration-emphasis ease-out group-hover:scale-[1.01]",
+            "transition duration-emphasis ease-out group-hover:scale-[1.01]",
             mode === "justified" ? "h-full" : "h-auto",
-            mode === "columns" ? "aspect-[4/5]" : "",
-            mode === "diary" ? "aspect-[3/4] sm:aspect-[4/5]" : "",
+            mode === "columns" && "aspect-[4/5]",
+            mode === "diary" && "aspect-[3/4] sm:aspect-[4/5]",
           )}
-          style={
-            aspect && mode === "masonry"
-              ? { aspectRatio: String(aspect) }
-              : undefined
-          }
           onLoad={(e) => {
-            if (storedAspect) return;
+            if (storedAspect || mode === "columns" || mode === "diary") return;
             const img = e.currentTarget;
             if (img.naturalWidth > 0 && img.naturalHeight > 0) {
               setNaturalAspect(img.naturalWidth / img.naturalHeight);

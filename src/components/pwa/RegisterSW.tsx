@@ -8,6 +8,39 @@ function askSkipWaiting(worker: ServiceWorker | null | undefined) {
   worker?.postMessage({ type: "SKIP_WAITING" });
 }
 
+/** Reload once when a new SW takes control after an update (AURA-393). */
+let controllerReloadWired = false;
+
+function armUpdateReload() {
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+}
+
+/**
+ * First install: wait for control, then arm for future updates (no reload).
+ * Already controlled: arm immediately so the next controllerchange reloads.
+ */
+function wireControllerReload() {
+  if (controllerReloadWired) return;
+  controllerReloadWired = true;
+  if (navigator.serviceWorker.controller) {
+    armUpdateReload();
+    return;
+  }
+  const onFirstControl = () => {
+    navigator.serviceWorker.removeEventListener(
+      "controllerchange",
+      onFirstControl,
+    );
+    armUpdateReload();
+  };
+  navigator.serviceWorker.addEventListener("controllerchange", onFirstControl);
+}
+
 function wireUpdate(reg: ServiceWorkerRegistration) {
   void reg.update();
   if (reg.waiting) askSkipWaiting(reg.waiting);
@@ -66,6 +99,7 @@ export function RegisterSW() {
           return;
         }
 
+        wireControllerReload();
         const reg = await navigator.serviceWorker.register("/sw.js", {
           scope: surface.scope,
           updateViaCache: "none",

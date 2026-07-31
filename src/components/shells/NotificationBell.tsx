@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/cn";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 
 type Note = {
   id: string;
@@ -25,9 +26,12 @@ function actionLabel(href: string): string {
 export function NotificationBell() {
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Note[]>([]);
   const [unread, setUnread] = useState(0);
+
+  const close = useCallback(() => setOpen(false), []);
 
   async function load() {
     const res = await fetch("/api/notifications");
@@ -43,52 +47,64 @@ export function NotificationBell() {
     return () => clearInterval(t);
   }, []);
 
+  useFocusTrap(open, panelRef, { onEscape: close });
+
   useEffect(() => {
     if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
     function onPointer(e: MouseEvent | TouchEvent) {
       const el = rootRef.current;
       if (!el) return;
       if (e.target instanceof Node && !el.contains(e.target)) {
-        setOpen(false);
+        close();
       }
     }
-    window.addEventListener("keydown", onKey);
     window.addEventListener("mousedown", onPointer);
     window.addEventListener("touchstart", onPointer);
     return () => {
-      window.removeEventListener("keydown", onKey);
       window.removeEventListener("mousedown", onPointer);
       window.removeEventListener("touchstart", onPointer);
     };
-  }, [open]);
+  }, [open, close]);
 
   async function markAll() {
     if (unread <= 0) return;
+    const prevItems = items;
+    const prevUnread = unread;
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
     setUnread(0);
-    await fetch("/api/notifications", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ markAllRead: true }),
-    });
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+      if (!res.ok) throw new Error("mark-all failed");
+    } catch {
+      setItems(prevItems);
+      setUnread(prevUnread);
+    }
   }
 
   async function markRead(id: string) {
-    setItems((prev) => {
-      const cur = prev.find((n) => n.id === id);
-      if (cur && !cur.read) {
-        setUnread((u) => Math.max(0, u - 1));
-      }
-      return prev.map((n) => (n.id === id ? { ...n, read: true } : n));
-    });
-    await fetch("/api/notifications", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
+    const target = items.find((n) => n.id === id);
+    if (!target || target.read) return;
+    setItems((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
+    setUnread((u) => Math.max(0, u - 1));
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error("mark-read failed");
+    } catch {
+      setItems((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: false } : n)),
+      );
+      setUnread((u) => u + 1);
+    }
   }
 
   const unreadLabel =
@@ -103,7 +119,7 @@ export function NotificationBell() {
         aria-label={unreadLabel}
         aria-expanded={open}
         aria-controls={panelId}
-        aria-haspopup="true"
+        aria-haspopup="dialog"
         active={open || unread > 0}
         onClick={() => {
           setOpen((v) => !v);
@@ -133,10 +149,13 @@ export function NotificationBell() {
       </IconButton>
       {open ? (
         <div
+          ref={panelRef}
           id={panelId}
           role="dialog"
+          aria-modal="true"
           aria-label="Notifications"
-          className="absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-line bg-surface shadow-lg"
+          tabIndex={-1}
+          className="absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-line bg-surface shadow-lg outline-none"
         >
           <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
             <div className="min-w-0">
@@ -208,7 +227,7 @@ export function NotificationBell() {
                             : "border-l-2 border-l-accent bg-surface-elevated",
                         )}
                         onClick={() => {
-                          setOpen(false);
+                          close();
                           if (!n.read) void markRead(n.id);
                         }}
                       >

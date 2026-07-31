@@ -3,11 +3,12 @@ import { findGalleryByPublicToken } from "@/lib/db/store";
 import { linkedSessionId, recordEvent } from "@/lib/analytics";
 import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 import {
+  FavoritesToggleError,
   getVisitorFavoritesDoc,
   newVisitorId,
   parseVisitorIdFromCookieHeader,
-  setVisitorFavorites,
   submitVisitorFavorites,
+  toggleVisitorFavorite,
   visitorCookieHeader,
 } from "@/lib/gallery-favorites";
 import { normalizeGalleryDesign } from "@/lib/gallery-design";
@@ -174,43 +175,25 @@ export async function POST(
     return NextResponse.json({ error: "photoId required" }, { status: 400 });
   }
 
-  const currentDoc = await getVisitorFavoritesDoc(gallery.id, visitorId);
-  if (currentDoc?.submittedAt) {
+  let doc;
+  let toggledOn: boolean;
+  try {
+    ({ doc, toggledOn } = await toggleVisitorFavorite({
+      studioId: gallery.studioId,
+      galleryId: gallery.id,
+      visitorId,
+      photoId,
+      selectLimit: gallery.selectLimit,
+    }));
+  } catch (e) {
+    if (e instanceof FavoritesToggleError) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
     return NextResponse.json(
-      { error: "Selects already submitted" },
-      { status: 400 },
+      { error: "Could not update favorites" },
+      { status: 500 },
     );
   }
-
-  const current = currentDoc?.photoIds || [];
-  const has = current.includes(photoId);
-  let next: string[];
-  let toggledOn = false;
-  if (has) {
-    next = current.filter((id) => id !== photoId);
-    toggledOn = false;
-  } else {
-    if (
-      gallery.selectLimit != null &&
-      current.length >= gallery.selectLimit
-    ) {
-      return NextResponse.json(
-        {
-          error: `Select limit reached (${gallery.selectLimit})`,
-        },
-        { status: 400 },
-      );
-    }
-    next = [...current, photoId];
-    toggledOn = true;
-  }
-
-  const doc = await setVisitorFavorites({
-    studioId: gallery.studioId,
-    galleryId: gallery.id,
-    visitorId,
-    photoIds: next,
-  });
 
   await recordEvent({
     type: "favorite_toggle",

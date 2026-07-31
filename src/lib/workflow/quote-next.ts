@@ -25,8 +25,7 @@ export function resolveQuoteAcceptNext(
   const unsigned = db.contracts.find(
     (c) =>
       c.projectId === projectId &&
-      c.status !== "completed" &&
-      c.status !== "canceled" &&
+      c.status === "awaiting_signature" &&
       Boolean(c.token),
   );
   const depositLink = db.paymentLinks.find(

@@ -3,10 +3,8 @@ import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { formDataFile } from "@/lib/form-data";
 import { saveWatermarkAsset } from "@/lib/images/process";
-import {
-  galleriesUsingWatermarkPreset,
-  reprocessGalleryWatermarks,
-} from "@/lib/images/rewatermark";
+import { galleriesUsingWatermarkPreset } from "@/lib/images/rewatermark";
+import { enqueueWatermarkReprocessMany } from "@/lib/jobs/watermark-reprocess";
 import { deleteStorageObject } from "@/lib/storage/upload";
 import type { WatermarkMode, WatermarkPosition } from "@/lib/types";
 import { clampWatermarkScale } from "@/lib/watermark-scale";
@@ -76,7 +74,7 @@ export async function PATCH(
   }
 
   const oldPath = existing.imagePath;
-  const result = await updateStudioDb(admin.studioId, async (d) => {
+  const result = await updateStudioDb(admin.studioId, (d) => {
     const p = d.watermarkPresets.find((x) => x.id === id);
     if (!p) return null;
     p.name = name;
@@ -86,14 +84,8 @@ export async function PATCH(
     p.opacity = opacity;
     p.scale = scale;
     if (replaceImage && nextImagePath) p.imagePath = nextImagePath;
-
     const galleryIds = galleriesUsingWatermarkPreset(d, id);
-    let photosUpdated = 0;
-    for (const galleryId of galleryIds) {
-      const { updated } = await reprocessGalleryWatermarks(d, galleryId);
-      photosUpdated += updated;
-    }
-    return { preset: p, photosUpdated, galleries: galleryIds.length };
+    return { preset: p, galleryIds };
   });
 
   if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -102,7 +94,16 @@ export async function PATCH(
     await deleteStorageObject(oldPath).catch(() => undefined);
   }
 
-  return NextResponse.json(result);
+  const { queued } = await enqueueWatermarkReprocessMany({
+    studioId: admin.studioId,
+    galleryIds: result.galleryIds,
+  });
+
+  return NextResponse.json({
+    preset: result.preset,
+    galleries: queued,
+    watermarksQueued: queued,
+  });
 }
 
 export async function DELETE(

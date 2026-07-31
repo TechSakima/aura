@@ -1,40 +1,71 @@
 /**
- * Canonical admin deep links (AURA-263 / AURA-063).
+ * Canonical admin deep links (AURA-263 / AURA-063 / AURA-370).
  * Prefer these over bare `/admin/projects/{id}` so notifications land on the right step.
  * Full map (canonical + legacy aliases): `docs/ADMIN_ROUTES.md`.
+ *
+ * Path segments accept opaque ids or `adminSlug` — both resolve.
+ * Prefer `adminPathSegment(entity)` when the entity is loaded.
  */
 
-export function projectWorkflowHref(projectId: string): string {
-  return `/admin/projects/${projectId}#workflow`;
+import { adminPathSegment } from "@/lib/admin-slug";
+
+export function projectHref(projectRef: string): string {
+  return `/admin/projects/${projectRef}`;
 }
 
-export function projectMessagesHref(projectId: string): string {
-  return `/admin/projects/${projectId}#messages`;
+export function projectWorkflowHref(projectRef: string): string {
+  return `/admin/projects/${projectRef}#workflow`;
+}
+
+export function projectMessagesHref(projectRef: string): string {
+  return `/admin/projects/${projectRef}#messages`;
+}
+
+export function sessionHref(projectRef: string, sessionRef: string): string {
+  return `/admin/projects/${projectRef}/sessions/${sessionRef}`;
+}
+
+/** Short session-first entry (AURA-370) — redirects to project/session path. */
+export function sessionFirstHref(sessionRef: string): string {
+  return `/admin/sessions/${sessionRef}`;
 }
 
 export function sessionMessagesHref(
-  projectId: string,
-  sessionId: string,
+  projectRef: string,
+  sessionRef: string,
 ): string {
-  return `/admin/projects/${projectId}/sessions/${sessionId}#messages`;
+  return `/admin/projects/${projectRef}/sessions/${sessionRef}#messages`;
 }
 
 export function sessionDeliveryHref(
-  projectId: string,
-  sessionId: string,
+  projectRef: string,
+  sessionRef: string,
 ): string {
-  return `/admin/projects/${projectId}/sessions/${sessionId}?step=delivery`;
+  return `/admin/projects/${projectRef}/sessions/${sessionRef}?step=delivery`;
 }
 
 export function sessionShootDayHref(
-  projectId: string,
-  sessionId: string,
+  projectRef: string,
+  sessionRef: string,
 ): string {
-  return `/admin/projects/${projectId}/sessions/${sessionId}?step=shoot-day`;
+  return `/admin/projects/${projectRef}/sessions/${sessionRef}?step=shoot-day`;
 }
 
-export function sessionPrepHref(projectId: string, sessionId: string): string {
-  return `/admin/projects/${projectId}/sessions/${sessionId}?step=prep`;
+export function sessionPrepHref(projectRef: string, sessionRef: string): string {
+  return `/admin/projects/${projectRef}/sessions/${sessionRef}?step=prep`;
+}
+
+/** Pretty project/session href when entities (or ids) are known. */
+export function sessionToolsHref(opts: {
+  project: { id: string; adminSlug?: string };
+  session: { id: string; adminSlug?: string };
+  step?: "prep" | "shoot-day" | "delivery" | "wrap";
+}): string {
+  const base = sessionHref(
+    adminPathSegment(opts.project),
+    adminPathSegment(opts.session),
+  );
+  return opts.step ? `${base}?step=${opts.step}` : base;
 }
 
 export function bookingsHref(): string {
@@ -53,11 +84,13 @@ export function dashboardMessagesHref(): string {
 export function projectOrSessionDeliveryHref(opts: {
   projectId?: string | null;
   sessionId?: string | null;
+  projectSlug?: string | null;
+  sessionSlug?: string | null;
   fallback?: string;
 }): string {
-  const projectId = opts.projectId?.trim();
-  const sessionId = opts.sessionId?.trim();
-  if (projectId && sessionId) return sessionDeliveryHref(projectId, sessionId);
-  if (projectId) return projectWorkflowHref(projectId);
+  const projectRef = (opts.projectSlug || opts.projectId || "").trim();
+  const sessionRef = (opts.sessionSlug || opts.sessionId || "").trim();
+  if (projectRef && sessionRef) return sessionDeliveryHref(projectRef, sessionRef);
+  if (projectRef) return projectWorkflowHref(projectRef);
   return opts.fallback || paymentsHref();
 }

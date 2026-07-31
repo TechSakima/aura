@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
+import { InstallHint } from "@/components/pwa/InstallHint";
 import { PublicShell } from "@/components/shells/PublicShell";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
 import {
@@ -81,6 +82,11 @@ export default function PublicQuestionnairePage() {
 
   return (
     <PublicShell>
+      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(4.75rem+env(safe-area-inset-bottom))] desk:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-md">
+          <InstallHint storageKey={`aura-install-dismiss-q-${params.token}`} />
+        </div>
+      </div>
       <div className="mx-auto max-w-lg">
         <StudioMark
           logoUrl={studioLogoUrl || undefined}

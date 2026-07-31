@@ -1,21 +1,15 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
+import { googleTokenSealSecret } from "@/lib/crypto-secrets";
 
 /**
- * AES-256-GCM seal for Google Calendar refresh tokens at rest (AURA-109).
+ * AES-256-GCM seal for Google Calendar refresh tokens at rest (AURA-109 / AURA-389).
  * Format: `enc:v1:{iv}.{ciphertext}.{tag}` (base64url). Legacy plaintext still opens.
  */
 
 export const GOOGLE_TOKEN_SEAL_PREFIX = "enc:v1:";
 
 function secretKey(): Buffer {
-  const raw =
-    process.env.GOOGLE_TOKEN_SECRET?.trim() ||
-    process.env.AURA_SESSION_SECRET?.trim() ||
-    process.env.HOMEPAGE_UNLOCK_SECRET?.trim() ||
-    process.env.GOOGLE_CLIENT_SECRET?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    "aura-google-token";
-  return createHash("sha256").update(raw).digest();
+  return createHash("sha256").update(googleTokenSealSecret()).digest();
 }
 
 export function isSealedGoogleRefreshToken(value: string | null | undefined): boolean {

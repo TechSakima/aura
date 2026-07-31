@@ -1,8 +1,13 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
 
-/* AURA-286 — enough width + height that thumb/sticky chrome can retire */
+/* AURA-286 — layout room (hero split / vertical type); not chrome retirement */
 @custom-variant roomy (@media (min-width: 768px) and (min-height: 560px));
+/*
+ * AURA-410 — retire thumb/sticky bottom chrome only when truly desktop-wide.
+ * Tablets + split-screen stay thumb-zone (avoids abrupt bottom↔top flip at 768).
+ */
+@custom-variant desk (@media (min-width: 1024px) and (min-height: 560px));
 /* Short viewport (typical landscape phone) — keep CTAs reachable */
 @custom-variant short-vh (@media (max-height: 560px));
 /* Installed PWA (AURA-292); iOS also sets html[data-standalone] via StandaloneChrome */

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import {
+  adminMutationOriginAllowed,
+  shouldCheckAdminMutationOrigin,
+} from "@/lib/admin-origin";
 import { safeAdminNext } from "@/lib/safe-admin-next";
 import {
   clearSessionCookieOptions,
@@ -8,12 +12,23 @@ import {
 } from "@/lib/session-cookie";
 
 /**
- * Admin gate (AURA-104):
+ * Admin gate (AURA-104) + admin API origin allowlist (AURA-415).
  * - Middleware verifies signed cookie + expiry (Edge-safe HMAC). No Firestore.
  * - Layout `requireAdmin` is authoritative for session row + studio.
  */
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Cookie-auth mutating APIs — Origin/Referer allowlist (AURA-415).
+  if (shouldCheckAdminMutationOrigin(req.method, pathname)) {
+    if (!adminMutationOriginAllowed(req)) {
+      return NextResponse.json(
+        { error: "Forbidden origin" },
+        { status: 403 },
+      );
+    }
+  }
+
   if (!pathname.startsWith("/admin")) return NextResponse.next();
 
   const requestHeaders = new Headers(req.headers);
@@ -48,5 +63,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/:path*"],
 };

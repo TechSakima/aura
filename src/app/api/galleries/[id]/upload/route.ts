@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { requireAdmin } from "@/lib/auth";
-import { appendStudioPhotos, readStudioDb } from "@/lib/db/store";
+import {
+  appendStudioPhotos,
+  countPhotosByGalleryId,
+  getGalleryById,
+  readStudioDb,
+} from "@/lib/db/store";
 import { formDataFiles } from "@/lib/form-data";
 import type { Photo } from "@/lib/types";
 
@@ -19,11 +24,14 @@ export async function POST(
     }
 
     const { id } = await ctx.params;
-    const db = await readStudioDb(admin.studioId);
-    const gallery = db.galleries.find((g) => g.id === id);
-    if (!gallery) {
+    const gallery = await getGalleryById(id);
+    if (!gallery || gallery.studioId !== admin.studioId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    const db = await readStudioDb(admin.studioId, {
+      photos: false,
+      analytics: false,
+    });
 
     const form = await req.formData();
     const kindRaw = String(form.get("kind") || "main");
@@ -44,9 +52,7 @@ export async function POST(
     const { uploadBuffer } = await import("@/lib/storage/upload");
 
     const created: Photo[] = [];
-    let sortBase = db.photos.filter(
-      (p) => p.galleryId === id && p.kind === kind,
-    ).length;
+    let sortBase = await countPhotosByGalleryId(id, kind);
 
     for (const file of files) {
       const buffer = Buffer.from(await file.arrayBuffer());

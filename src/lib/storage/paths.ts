@@ -6,7 +6,10 @@ export function storageObjectPath(studioId: string, ...parts: string[]): string 
     .join("/");
 }
 
-/** App-relative media proxy URL (works for R2 + Firebase during cutover). */
+/**
+ * Stable app-relative proxy path for storage (AURA-386).
+ * Not loadable alone — APIs mint HMAC via `mintMediaProxyUrl` / `resolveBrowseMediaUrl`.
+ */
 export function mediaProxyUrl(objectPath: string): string {
   return `/api/media/${objectPath.split("/").map(encodeURIComponent).join("/")}`;
 }

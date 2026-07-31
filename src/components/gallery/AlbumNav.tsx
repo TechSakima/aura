@@ -24,7 +24,7 @@ export function AlbumNav({
   return (
     <nav aria-label={label} className="border-b border-line bg-canvas">
       <div className="shell-pad mx-auto max-w-[var(--public-max)] py-2">
-        <p className="mb-1 hidden text-[10px] uppercase tracking-[0.16em] text-muted sm:block">
+        <p className="mb-1 hidden text-xs uppercase tracking-[0.14em] text-muted sm:block">
           {label}
         </p>
         <ScrollRail

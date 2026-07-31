@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { runMaintenanceJobs } from "@/lib/jobs/maintenance";
 
 /**
- * Scheduled maintenance (AURA-112 / AURA-313 / AURA-110 / AURA-117).
+ * Scheduled maintenance (AURA-112 / AURA-313 / AURA-110 / AURA-117 / AURA-387).
  * - Drain email outbox
  * - Purge expired auth sessions
  * - Expire past-due live galleries (patch, not RMW)
  * - Compact analyticsEvents (age retention + per-studio soft cap)
+ * - Drain watermark reprocess jobs (photo patches only)
  *
  * Auth: Authorization: Bearer $CRON_SECRET
  * URL kept as `/api/cron/email-outbox` for existing schedulers.

@@ -8,6 +8,7 @@ import {
 } from "@/lib/admin-deep-links";
 import { linkedSessionId } from "@/lib/linked-session";
 import { readStudioDb } from "@/lib/db/store";
+import { resolveBrowseMediaUrl } from "@/lib/media-url-server";
 import type { AnalyticsEvent, AuraDatabase } from "@/lib/types";
 
 function sum(nums: number[]) {
@@ -70,6 +71,20 @@ function photoDeliveryHref(
   return deliveryHref(gallery.projectId, linkedSessionId(gallery));
 }
 
+function parseDaysRange(raw: string | null): number | null {
+  if (!raw || raw === "all") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 30;
+  return Math.min(Math.floor(n), 366);
+}
+
+function sinceIso(days: number): string {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - (days - 1));
+  return d.toISOString();
+}
+
 export async function GET(req: Request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -78,6 +93,8 @@ export async function GET(req: Request) {
     url.searchParams.get("sessionId") || url.searchParams.get("shootId") || undefined;
   const projectIdParam = url.searchParams.get("projectId") || undefined;
   const galleryId = url.searchParams.get("galleryId") || undefined;
+  const days = parseDaysRange(url.searchParams.get("days"));
+  const since = days != null ? sinceIso(days) : null;
 
   const db = await readStudioDb(admin.studioId);
   let events = db.analyticsEvents;
@@ -99,6 +116,9 @@ export async function GET(req: Request) {
     events = events.filter((e) => e.projectId === projectIdFilter);
   }
   if (galleryId) events = events.filter((e) => e.galleryId === galleryId);
+  if (since) {
+    events = events.filter((e) => e.at >= since);
+  }
 
   const counts: Record<string, number> = {};
   const photoViews: Record<string, number> = {};
@@ -109,18 +129,21 @@ export async function GET(req: Request) {
     }
   }
 
-  const topPhotos = Object.entries(photoViews)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([photoId, count]) => {
-      const photo = db.photos.find((p) => p.id === photoId);
-      return {
-        photoId,
-        count,
-        thumbUrl: photo?.thumbUrl,
-        href: photoDeliveryHref(db, photoId),
-      };
-    });
+  const topPhotos = await Promise.all(
+    Object.entries(photoViews)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(async ([photoId, count]) => {
+        const photo = db.photos.find((p) => p.id === photoId);
+        const thumbUrl = await resolveBrowseMediaUrl(photo?.thumbUrl);
+        return {
+          photoId,
+          count,
+          thumbUrl,
+          href: photoDeliveryHref(db, photoId),
+        };
+      }),
+  );
 
   const byDay: Record<string, number> = {};
   for (const e of events) {
@@ -136,6 +159,9 @@ export async function GET(req: Request) {
   } else if (sessionId) {
     txs = [];
     invoices = [];
+  }
+  if (since) {
+    txs = txs.filter((t) => t.createdAt >= since);
   }
 
   const revenueByDay: Record<string, number> = {};
@@ -178,6 +204,7 @@ export async function GET(req: Request) {
   };
 
   return NextResponse.json({
+    range: { days: days ?? "all", since },
     totals: counts,
     topPhotos,
     byDay,

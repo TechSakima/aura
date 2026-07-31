@@ -18,14 +18,17 @@ export async function GET(
 ) {
   const { token } = await ctx.params;
   const gallery = await findGalleryByPublicToken(token);
+  // Unknown token must not emit an installable “Aura Gallery” shell (AURA-402).
+  if (!gallery) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
-  let title = "Aura Gallery";
+  let title = gallery.title?.trim() || "Gallery";
   let backgroundColor = "#f3efe6";
   let themeColor = "#f3efe6";
-  let hasIconSource = false;
+  let hasIconSource = Boolean(gallery.coverPhotoUrl);
 
-  if (gallery?.studioId) {
-    title = gallery.title?.trim() || title;
+  if (gallery.studioId) {
     const design = normalizeGalleryDesign(gallery.design);
     const studio = await getStudioDoc(gallery.studioId);
     const studioTheme = studio ? publicStudioTheme(studio) : null;

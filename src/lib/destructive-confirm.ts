@@ -24,7 +24,7 @@ export function confirmRefreshPlan(): DestructiveConfirmCopy {
   return {
     title: "Refresh plan?",
     message:
-      "Replaces the current shot list from the template. Checked-off shoot-day progress is lost.",
+      "Replaces the current shot list from the template. Checked-off session-day progress is lost.",
     confirmLabel: "Refresh plan",
     tone: "danger",
   };

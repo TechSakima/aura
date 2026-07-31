@@ -41,6 +41,12 @@ export async function PATCH(req: Request) {
   const db0 = await readStudioDb(admin.studioId);
   const req0 = db0.bookingRequests.find((r) => r.id === id);
   if (!req0) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (req0.status !== "pending") {
+    return NextResponse.json(
+      { error: "Request already handled", status: req0.status },
+      { status: 409 },
+    );
+  }
 
   const st0 = db0.sessionTypes.find((t) => t.id === req0.sessionTypeId);
   const session0 = req0.sessionId

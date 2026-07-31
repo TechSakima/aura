@@ -4,6 +4,7 @@ import {
   listGalleriesForStudio,
   listSessionTypesForStudio,
 } from "@/lib/db/store";
+import { isMissingCryptoSecretError } from "@/lib/crypto-secrets";
 import {
   createHomepageUnlockToken,
   homepageUnlockCookieHeader,
@@ -111,9 +112,19 @@ export async function POST(
   }
 
   const siteSlug = studio.homepage.slug || slug;
-  const token = createHomepageUnlockToken(siteSlug, passwordHash);
-  const payload = await homepageJson(studio);
-  const res = NextResponse.json(payload);
-  res.headers.append("Set-Cookie", homepageUnlockCookieHeader(token));
-  return res;
+  try {
+    const token = createHomepageUnlockToken(siteSlug, passwordHash);
+    const payload = await homepageJson(studio);
+    const res = NextResponse.json(payload);
+    res.headers.append("Set-Cookie", homepageUnlockCookieHeader(token));
+    return res;
+  } catch (err) {
+    if (isMissingCryptoSecretError(err)) {
+      return NextResponse.json(
+        { error: "Unlock unavailable. Try again later." },
+        { status: 503 },
+      );
+    }
+    throw err;
+  }
 }

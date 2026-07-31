@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -65,8 +65,8 @@ type SessionShootDayProps = {
 };
 
 /**
- * Shared shoot-day checklist (AURA-068).
- * Wake lock, optimistic saves, mark complete, and filter prefs for page + wizard.
+ * Shared shoot-day checklist (AURA-068 / AURA-404).
+ * Wake lock, optimistic saves (functional rollbacks), mark complete, filter prefs.
  */
 export function SessionShootDay({
   sessionId,
@@ -89,6 +89,8 @@ export function SessionShootDay({
   const [mustOnly, setMustOnly] = useState(false);
   const [preview, setPreview] = useState<ShotItem | null>(null);
   const [loading, setLoading] = useState(!embedded);
+  /** Last server-confirmed day notes — for field-scoped rollback (AURA-404). */
+  const confirmedNotesRef = useRef<string | undefined>(planProp?.dayNotes);
 
   const projectId =
     projectIdProp || shoot?.projectId || shoot?.clientId || undefined;
@@ -100,6 +102,7 @@ export function SessionShootDay({
   useEffect(() => {
     if (embedded) {
       setPlan(planProp ?? null);
+      confirmedNotesRef.current = planProp?.dayNotes;
       if (templatesProp) setTemplates(templatesProp);
     }
   }, [embedded, planProp, templatesProp]);
@@ -123,6 +126,7 @@ export function SessionShootDay({
     }
     const data = await res.json();
     setPlan(data.plan);
+    confirmedNotesRef.current = data.plan?.dayNotes;
     setShoot(data.shoot || null);
     setTemplates(data.templates || []);
     setTemplateId((prev) => prev || data.templates?.[0]?.id || "");
@@ -186,14 +190,30 @@ export function SessionShootDay({
 
   async function toggle(itemId: string, doneNext: boolean) {
     if (!plan) return;
-    const previous = plan;
-    const optimistic = {
-      ...plan,
-      items: plan.items.map((i) =>
-        i.id === itemId ? { ...i, done: doneNext } : i,
-      ),
+    // Roll back only this item — never replace the whole plan (AURA-404).
+    const previousDone = Boolean(
+      plan.items.find((i) => i.id === itemId)?.done,
+    );
+    setPlan((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: prev.items.map((i) =>
+          i.id === itemId ? { ...i, done: doneNext } : i,
+        ),
+      };
+    });
+    const rollbackItem = () => {
+      setPlan((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          items: prev.items.map((i) =>
+            i.id === itemId ? { ...i, done: previousDone } : i,
+          ),
+        };
+      });
     };
-    setPlan(optimistic);
     try {
       const res = await fetch(`/api/sessions/${sessionId}/plan`, {
         method: "PATCH",
@@ -201,7 +221,7 @@ export function SessionShootDay({
         body: JSON.stringify({ itemId, done: doneNext }),
       });
       if (!res.ok) {
-        setPlan(previous);
+        rollbackItem();
         push("Could not save — reload to sync", "danger");
         if (onChanged) await onChanged();
         else await load();
@@ -209,15 +229,22 @@ export function SessionShootDay({
       }
       if (onChanged) await onChanged();
     } catch {
-      setPlan(previous);
+      rollbackItem();
       push(mutationOfflineMessage("save"), "danger");
     }
   }
 
   async function saveNotes(dayNotes: string) {
     if (!plan) return;
-    const previous = plan.dayNotes;
-    setPlan({ ...plan, dayNotes });
+    const previousNotes = confirmedNotesRef.current;
+    const rollbackNotes = () => {
+      setPlan((prev) => {
+        if (!prev) return prev;
+        // Skip if the user kept typing after this save started.
+        if (prev.dayNotes !== dayNotes) return prev;
+        return { ...prev, dayNotes: previousNotes };
+      });
+    };
     try {
       const res = await fetch(`/api/sessions/${sessionId}/plan`, {
         method: "PATCH",
@@ -225,13 +252,14 @@ export function SessionShootDay({
         body: JSON.stringify({ dayNotes }),
       });
       if (!res.ok) {
-        setPlan({ ...plan, dayNotes: previous });
+        rollbackNotes();
         push(mutationOfflineMessage("save notes"), "danger");
         return;
       }
+      confirmedNotesRef.current = dayNotes;
       if (onChanged) await onChanged();
     } catch {
-      setPlan({ ...plan, dayNotes: previous });
+      rollbackNotes();
       push(mutationOfflineMessage("save notes"), "danger");
     }
   }
@@ -256,16 +284,12 @@ export function SessionShootDay({
   }
 
   if (loading) {
-    return <EmptyState variant="loading" title="Loading shoot day…" />;
+    return <EmptyState variant="loading" title="Loading…" />;
   }
 
   const empty = (
     <Card className="space-y-4 p-5">
-      <p className="text-muted">
-        {embedded
-          ? "No plan yet. Attach a shot list in Prep, or continue to Delivery if you're shooting freestyle."
-          : "No plan for this session yet."}
-      </p>
+      <p className="text-muted">No plan yet.</p>
       {!embedded && templates.length > 0 ? (
         <>
           <Field>
@@ -281,7 +305,7 @@ export function SessionShootDay({
               ))}
             </Select>
           </Field>
-          <Button onClick={() => void createPlan()}>Start shoot plan</Button>
+          <Button onClick={() => void createPlan()}>Start plan</Button>
         </>
       ) : null}
       {embedded ? (
@@ -342,7 +366,10 @@ export function SessionShootDay({
         <Textarea
           id={`notes-${sessionId}`}
           value={plan.dayNotes || ""}
-          onChange={(e) => setPlan({ ...plan, dayNotes: e.target.value })}
+          onChange={(e) => {
+            const dayNotes = e.target.value;
+            setPlan((prev) => (prev ? { ...prev, dayNotes } : prev));
+          }}
           onBlur={(e) => void saveNotes(e.target.value)}
           placeholder="Weather, timeline shifts, parking…"
         />
@@ -396,10 +423,8 @@ export function SessionShootDay({
 
       {mustLeft === 0 && total > 0 ? (
         <Card className="mt-8 p-5">
-          <h2 className="font-display text-2xl">All must-haves covered</h2>
-          <p className="mt-2 text-muted">
-            Review nice-to-haves or wrap the session.
-          </p>
+          <h2 className="font-display text-2xl">Must-haves done</h2>
+          <p className="mt-2 text-muted">Review the rest or wrap.</p>
           <Button className="mt-4 min-h-11" onClick={() => void markComplete()}>
             Mark plan complete
           </Button>
@@ -422,10 +447,10 @@ export function SessionShootDay({
   return (
     <div className={embedded ? "space-y-5" : "pb-16"}>
       {embedded ? (
-        <h2 className="font-display text-2xl">Shoot day</h2>
+        <h2 className="font-display text-2xl">Session day</h2>
       ) : (
         <PageHeader
-          title="Shoot day"
+          title="Session day"
           actions={
             <ButtonLink href={exitHref} tone="ghost" size="sm" className="min-h-11">
               Exit
@@ -455,9 +480,6 @@ export function SessionShootDay({
                 className="mt-4 w-full rounded-md"
               />
             ) : null}
-            <Button className="mt-4 w-full" onClick={() => setPreview(null)}>
-              Close
-            </Button>
           </>
         ) : null}
       </Dialog>

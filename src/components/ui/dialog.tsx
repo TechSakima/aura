@@ -1,9 +1,21 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { IconButton } from "@/components/ui/icon-button";
+import {
+  registerInertDialogRoot,
+  unregisterInertDialogRoot,
+} from "@/lib/inert-background";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 
 export function Dialog({
@@ -23,6 +35,7 @@ export function Dialog({
   initialFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const [mounted, setMounted] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
@@ -39,6 +52,14 @@ export function Dialog({
     };
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (!open || !mounted) return;
+    const root = rootRef.current;
+    if (!root) return;
+    registerInertDialogRoot(root);
+    return () => unregisterInertDialogRoot(root);
+  }, [open, mounted]);
+
   useFocusTrap(open && mounted, panelRef, {
     onEscape: onClose,
     initialFocusRef,
@@ -47,7 +68,11 @@ export function Dialog({
   if (!open || !mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:items-center">
+    <div
+      ref={rootRef}
+      data-aura-dialog-root
+      className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:items-center"
+    >
       <button
         type="button"
         aria-label="Close dialog"

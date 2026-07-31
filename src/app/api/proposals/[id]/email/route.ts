@@ -3,6 +3,11 @@ import { requireAdmin } from "@/lib/auth";
 import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { readIdempotencyKey, withIdempotency } from "@/lib/idempotency";
 import { emailQuoteShared } from "@/lib/notify/send";
+import {
+  hasProjectEmail,
+  PROJECT_EMAIL_REQUIRED,
+  projectEmail,
+} from "@/lib/project-contact";
 
 /** Email the public quote link to the project contact. */
 export async function POST(
@@ -30,16 +35,16 @@ export async function POST(
       const project =
         db.projects.find((p) => p.id === proposal.projectId) ||
         (session ? db.projects.find((p) => p.id === session.projectId) : null);
-      if (!project?.email) {
+      if (!project || !hasProjectEmail(project)) {
         return NextResponse.json(
-          { error: "Project email required" },
+          { error: PROJECT_EMAIL_REQUIRED },
           { status: 400 },
         );
       }
 
       const result = await emailQuoteShared({
         studioId: admin.studioId,
-        to: project.email,
+        to: projectEmail(project),
         clientName: project.name,
         quoteTitle: proposal.title,
         token: proposal.token,

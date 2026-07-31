@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { GalleryThumb } from "@/components/gallery/GalleryThumb";
 import { cn } from "@/lib/cn";
 
 export function AlbumTile({
@@ -30,11 +31,16 @@ export function AlbumTile({
         )}
       >
         {coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <GalleryThumb
             src={coverUrl}
             alt=""
-            className="h-full w-full object-cover transition-transform duration-emphasis group-hover:scale-[1.03]"
+            cssAspect
+            sizes={
+              featured
+                ? "(min-width: 640px) 100vw, 100vw"
+                : "(min-width: 640px) 50vw, 100vw"
+            }
+            className="h-full w-full transition-transform duration-emphasis group-hover:scale-[1.03]"
           />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-scrim via-scrim-strong to-accent/40" />

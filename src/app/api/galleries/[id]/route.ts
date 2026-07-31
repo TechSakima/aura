@@ -8,7 +8,11 @@ import {
 } from "@/lib/db/store";
 import { markGalleryLive } from "@/lib/gallery-live";
 import { applyGalleryDesignPatch } from "@/lib/gallery-design";
-import { reprocessGalleryWatermarks } from "@/lib/images/rewatermark";
+import { enqueueWatermarkReprocess } from "@/lib/jobs/watermark-reprocess";
+import {
+  resolveBrowseMediaUrl,
+  resolvePhotoBrowseFields,
+} from "@/lib/media-url-server";
 import { notifyStudio } from "@/lib/notify/send";
 import { hashPin, PinValidationError } from "@/lib/pin";
 import type { Gallery } from "@/lib/types";
@@ -25,9 +29,16 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   const { downloadPinHash: _, ...gallery } = bundle.gallery;
+  const [coverPhotoUrl, photos] = await Promise.all([
+    resolveBrowseMediaUrl(gallery.coverPhotoUrl),
+    Promise.all(bundle.photos.map((p) => resolvePhotoBrowseFields(p))),
+  ]);
   return NextResponse.json({
-    gallery,
-    photos: bundle.photos,
+    gallery: {
+      ...gallery,
+      ...(coverPhotoUrl !== undefined ? { coverPhotoUrl } : {}),
+    },
+    photos,
     shoot: bundle.shoot,
     client: bundle.client,
     watermarkPresets: bundle.watermarkPresets,
@@ -77,15 +88,34 @@ async function applyGalleryDocPatch(
   if (body.pin) {
     g.downloadPinHash = await hashPin(String(body.pin));
   }
+  if (body.watermarkEnabled != null) {
+    g.watermarkEnabled = Boolean(body.watermarkEnabled);
+  }
+  if (body.watermarkPresetId != null) {
+    g.watermarkPresetId = (body.watermarkPresetId as string) || undefined;
+  }
   g.updatedAt = new Date().toISOString();
 }
 
 function needsFullStudioRmw(body: Record<string, unknown>): boolean {
-  return (
-    Boolean(body.goLive) ||
-    body.watermarkEnabled != null ||
-    body.watermarkPresetId != null
-  );
+  return Boolean(body.goLive);
+}
+
+function watermarkFieldsChanged(
+  before: Gallery,
+  after: Gallery,
+  body: Record<string, unknown>,
+): boolean {
+  if (body.watermarkEnabled != null && before.watermarkEnabled !== after.watermarkEnabled) {
+    return true;
+  }
+  if (
+    body.watermarkPresetId != null &&
+    (before.watermarkPresetId || undefined) !== (after.watermarkPresetId || undefined)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export async function PATCH(
@@ -98,13 +128,15 @@ export async function PATCH(
   const body = (await req.json()) as Record<string, unknown>;
 
   try {
-    /* Design / cover / settings: O(gallery) write — never full studio RMW (AURA-243). */
+    /* Design / cover / watermark settings: O(gallery) write (AURA-243 / AURA-387). */
     if (!needsFullStudioRmw(body)) {
+      let before: Gallery | null = null;
       const gallery = await updateStudioDoc<Gallery>(
         COL.galleries,
         id,
         async (g) => {
           if (g.studioId !== admin.studioId) return null;
+          before = { ...g };
           await applyGalleryDocPatch(g, body);
           return g;
         },
@@ -112,33 +144,28 @@ export async function PATCH(
       if (!gallery || gallery.studioId !== admin.studioId) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
+      let watermarksQueued = false;
+      if (before && watermarkFieldsChanged(before, gallery, body)) {
+        await enqueueWatermarkReprocess({
+          studioId: admin.studioId,
+          galleryId: id,
+        });
+        watermarksQueued = true;
+      }
       const { downloadPinHash: _, ...safe } = gallery;
       return NextResponse.json({
         gallery: safe,
         watermarksReprocessed: false,
+        watermarksQueued,
       });
     }
 
-    let watermarkChanged = false;
     const gallery = await updateStudioDb(admin.studioId, async (db) => {
       const g = db.galleries.find((x) => x.id === id);
       if (!g) return null;
       await applyGalleryDocPatch(g, body);
-      if (body.watermarkEnabled != null) {
-        const next = Boolean(body.watermarkEnabled);
-        if (next !== g.watermarkEnabled) watermarkChanged = true;
-        g.watermarkEnabled = next;
-      }
-      if (body.watermarkPresetId != null) {
-        const next = (body.watermarkPresetId as string) || undefined;
-        if (next !== g.watermarkPresetId) watermarkChanged = true;
-        g.watermarkPresetId = next;
-      }
       if (body.goLive) {
         return markGalleryLive(db, id);
-      }
-      if (watermarkChanged) {
-        await reprocessGalleryWatermarks(db, id);
       }
       g.updatedAt = new Date().toISOString();
       return g;
@@ -204,7 +231,8 @@ export async function PATCH(
     const { downloadPinHash: _, ...safe } = gallery;
     return NextResponse.json({
       gallery: safe,
-      watermarksReprocessed: watermarkChanged,
+      watermarksReprocessed: false,
+      watermarksQueued: false,
     });
   } catch (e) {
     if (e instanceof PinValidationError) {

@@ -11,13 +11,14 @@ import { ShootDayStep } from "@/components/wizard/steps/ShootDayStep";
 import { WrapStep } from "@/components/wizard/steps/WrapStep";
 import { EmptyState, useToast } from "@/components/ui";
 
+import { adminPathSegment } from "@/lib/admin-slug";
 import type { WizardStepId } from "@/lib/types";
 import { SESSION_TOOL_STEPS } from "@/lib/wizard/steps";
 
 const TOOL_IDS = new Set(SESSION_TOOL_STEPS.map((s) => s.id));
 
 function WizardInner() {
-  const { id: projectId, sessionId } = useParams<{
+  const { id: projectRef, sessionId: sessionRef } = useParams<{
     id: string;
     sessionId: string;
   }>();
@@ -30,9 +31,14 @@ function WizardInner() {
     requested && TOOL_IDS.has(requested as WizardStepId) ? requested : "prep";
 
   const { data, loading, error, step, setStep, reload } = useShootWizard(
-    sessionId,
+    sessionRef,
     safeRequested,
   );
+
+  const projectId = data?.project?.id || projectRef;
+  const sessionId = data?.session?.id || sessionRef;
+  const projectSeg = adminPathSegment(data?.project) || projectRef;
+  const sessionSeg = adminPathSegment(data?.session) || sessionRef;
 
   useEffect(() => {
     if (step !== "delivery") setHideWizardFooter(false);
@@ -40,9 +46,28 @@ function WizardInner() {
 
   useEffect(() => {
     if (requested === "intake" || requested === "proposal") {
-      router.replace(`/admin/projects/${projectId}`);
+      router.replace(`/admin/projects/${projectSeg}`);
     }
-  }, [requested, projectId, router]);
+  }, [requested, projectSeg, router]);
+
+  /* Canonicalize opaque ids → adminSlug when available (AURA-370). */
+  useEffect(() => {
+    if (!data?.project || !data?.session) return;
+    const pretty = `/admin/projects/${projectSeg}/sessions/${sessionSeg}`;
+    const current = `/admin/projects/${projectRef}/sessions/${sessionRef}`;
+    if (pretty === current) return;
+    const qs = safeRequested ? `?step=${safeRequested}` : "";
+    router.replace(`${pretty}${qs}`, { scroll: false });
+  }, [
+    data?.project,
+    data?.session,
+    projectSeg,
+    sessionSeg,
+    projectRef,
+    sessionRef,
+    safeRequested,
+    router,
+  ]);
 
   useEffect(() => {
     if (!loading && data && !TOOL_IDS.has(step)) {
@@ -78,12 +103,12 @@ function WizardInner() {
 
   function selectStep(id: WizardStepId) {
     if (!TOOL_IDS.has(id)) {
-      router.replace(`/admin/projects/${projectId}`);
+      router.replace(`/admin/projects/${projectSeg}`);
       return;
     }
     setStep(id);
     router.replace(
-      `/admin/projects/${projectId}/sessions/${sessionId}?step=${id}`,
+      `/admin/projects/${projectSeg}/sessions/${sessionSeg}?step=${id}`,
       { scroll: false },
     );
   }
@@ -91,7 +116,7 @@ function WizardInner() {
   async function onNext() {
     if (!data) return;
     if (step === "wrap") {
-      router.push(`/admin/projects/${projectId}`);
+      router.push(`/admin/projects/${projectSeg}`);
       return;
     }
     if (step === "prep" && !data.plan && !data.session?.wizardSkippedPrep) {

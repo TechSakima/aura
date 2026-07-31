@@ -5,6 +5,7 @@ import {
   parseAdminListPage,
   slicePage,
 } from "@/lib/admin-list-page";
+import { allocateProjectAdminSlug } from "@/lib/admin-slug";
 import {
   listProjectsForStudio,
   listSessionsForStudio,
@@ -35,11 +36,22 @@ export async function GET(req: Request) {
 
   const { offset, limit } = parseAdminListPage(url);
   const q = (url.searchParams.get("q") || "").trim().toLowerCase();
-  const includeArchived = url.searchParams.get("includeArchived") === "1";
+  const stageFilter = (url.searchParams.get("stage") || "").trim();
+  const workflowFilter = (url.searchParams.get("workflowStep") || "").trim();
+  const includeArchived =
+    url.searchParams.get("includeArchived") === "1" ||
+    stageFilter === "archived";
   const withSessions = url.searchParams.get("sessions") === "1";
 
   let filtered = projects.filter((p) => {
     if (!includeArchived && p.stage === "archived") return false;
+    if (stageFilter && (p.stage || "inquiry") !== stageFilter) return false;
+    if (
+      workflowFilter &&
+      (p.workflowStep || "inquiry") !== workflowFilter
+    ) {
+      return false;
+    }
     if (!q) return true;
     return (
       p.name.toLowerCase().includes(q) ||
@@ -100,8 +112,8 @@ export async function POST(req: Request) {
     id: nanoid(),
     studioId: admin.studioId,
     name: String(body.name),
-    email: String(body.email),
-    phone: body.phone ? String(body.phone) : undefined,
+    email: String(body.email || "").trim(),
+    phone: body.phone ? String(body.phone).trim() : undefined,
     notes: body.notes ? String(body.notes) : undefined,
     type: body.type ? String(body.type) : "Session",
     stage: body.stage || "inquiry",
@@ -112,6 +124,7 @@ export async function POST(req: Request) {
     updatedAt: now,
   };
   await updateStudioDb(admin.studioId, (db) => {
+    project.adminSlug = allocateProjectAdminSlug(db, project.name, project.id);
     db.projects.unshift(project);
   });
   return NextResponse.json({ project, sessions: [] });

@@ -1,4 +1,4 @@
-# Aura service worker strategy (AURA-290 / AURA-368 / AURA-300)
+# Aura service worker strategy (AURA-290 / AURA-368 / AURA-300 / AURA-394)
 
 Source: `public/sw.js` · register: `src/components/pwa/RegisterSW.tsx` · scopes: `src/lib/pwa-sw-scope.ts`
 
@@ -8,7 +8,7 @@ Source: `public/sw.js` · register: `src/components/pwa/RegisterSW.tsx` · scope
 - Never cache auth mistakes (`Set-Cookie`, `Cache-Control: private|no-store`).
 - APIs (except budgeted browse media) always hit the network.
 - Gallery **thumb / preview** derivatives may be cached under a **byte budget**; **originals never**.
-- Offline navigations get an honest shell (`/offline.html`), not a wrong studio home.
+- Offline navigations get an honest shell (`/offline.html`) — **not** cached App Router HTML (which needs uncached `/_next` chunks).
 
 ## Registration scopes (AURA-368)
 
@@ -29,10 +29,9 @@ On register, any legacy registration with scope `origin/` (pre-368 sitewide) is 
 | Cache | Versioned name | Contents |
 |-------|----------------|----------|
 | Static | `aura-static-v*` | Precache: offline page, PWA icons |
-| Pages | `aura-pages-v*` | Successful public HTML navigations only |
 | Media | `aura-media-v*` | Thumb / preview derivatives only (AURA-300) |
 
-Bump `VERSION` in `sw.js` on strategy or precache changes. Activate deletes other keys. Current: **v5**.
+Bump `VERSION` in `sw.js` on strategy or precache changes. Activate deletes other keys (including legacy `aura-pages-*`). Current: **v7** (AURA-394 — no App Router HTML page cache).
 
 ### Media budget (AURA-300)
 
@@ -55,28 +54,23 @@ Bump `VERSION` in `sw.js` on strategy or precache changes. Activate deletes othe
 | `/_next/*` | Network only |
 | `/admin/login` | Network only |
 | Precache paths (`/offline.html`, icons) | Cache-first |
-| `navigate` | Network-first → cached page (non-`/admin`) → `/offline.html` |
+| `navigate` | Network-first → `/offline.html` on failure (AURA-394) |
 
-### Cache eligibility (HTML)
+### Why not cache App Router HTML (AURA-394)
 
-Cache only when all hold:
-
-- `response.ok`
-- No `Set-Cookie` header
-- `Cache-Control` does not include `private` or `no-store`
-- `Content-Type` is `text/html` (not RSC / flight)
-
-Admin HTML is never written to the pages cache.
+Next.js documents need matching `/_next/static` chunks. Those are network-only, so a cached HTML document offline often renders a **blank shell**. Honest offline = self-contained `/offline.html` (inline CSS, no chunk deps).
 
 ## Updates
 
 1. `install` precaches, then `skipWaiting()`.
 2. `activate` purges old caches, then `clients.claim()`.
 3. Client registers with `updateViaCache: "none"` and posts `SKIP_WAITING` when a waiting worker appears.
-4. SW is **not** registered in development (unregister + clear caches).
+4. After the page is already controlled, `controllerchange` triggers a single reload so clients pick up the new SW (AURA-393). First install does not reload.
+5. SW is **not** registered in development (unregister + clear caches).
 
 ## Related issues
 
 - **AURA-291** — in-app offline toasts / mutation honesty.
 - **AURA-297** — gallery install UX within `/g/{token}` manifest scope.
 - **AURA-300** — media cache budget (thumbs / previews only).
+- **AURA-394** — offline navigate honesty (no App Router HTML cache).

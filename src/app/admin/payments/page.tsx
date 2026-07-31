@@ -26,6 +26,10 @@ import {
   newIdempotencyKey,
   withIdempotencyHeaders,
 } from "@/lib/client/idempotency-key";
+import {
+  OPEN_LINK_DEFAULT_MAX,
+  OPEN_LINK_DEFAULT_MIN,
+} from "@/lib/payments/open-link-limits";
 import type {
   Invoice,
   PaymentLinkTemplate,
@@ -37,6 +41,8 @@ type EditDraft = {
   title: string;
   mode: "fixed" | "customer_chooses";
   amount: string;
+  minAmount: string;
+  maxAmount: string;
   active: boolean;
   projectId: string;
 };
@@ -139,7 +145,7 @@ export default function PaymentsPage() {
       return;
     }
     if (data.emailed === false) {
-      push("Email skipped", "danger");
+      push("Couldn't email", "danger");
       return;
     }
     push("Email sent", "success");
@@ -152,6 +158,8 @@ export default function PaymentsPage() {
       title: link.title,
       mode: link.mode,
       amount: String(link.amount ?? ""),
+      minAmount: String(link.minAmount ?? OPEN_LINK_DEFAULT_MIN),
+      maxAmount: String(link.maxAmount ?? OPEN_LINK_DEFAULT_MAX),
       active: link.active !== false,
       projectId: link.projectId || "",
     });
@@ -170,13 +178,22 @@ export default function PaymentsPage() {
         mode: editDraft.mode,
         amount:
           editDraft.mode === "fixed" ? Number(editDraft.amount) : undefined,
+        minAmount:
+          editDraft.mode === "customer_chooses"
+            ? Number(editDraft.minAmount)
+            : undefined,
+        maxAmount:
+          editDraft.mode === "customer_chooses"
+            ? Number(editDraft.maxAmount)
+            : undefined,
         active: editDraft.active,
         projectId: editDraft.projectId || null,
       }),
     });
+    const data = await res.json().catch(() => ({}));
     setEditBusy(false);
     if (!res.ok) {
-      push("Could not update link", "danger");
+      push(String(data.error || "Could not update link"), "danger");
       return;
     }
     push("Link updated", "success");
@@ -483,12 +500,17 @@ export default function PaymentsPage() {
               <Select
                 id="edit-mode"
                 value={editDraft.mode}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const mode = e.target.value as "fixed" | "customer_chooses";
                   setEditDraft({
                     ...editDraft,
-                    mode: e.target.value as "fixed" | "customer_chooses",
-                  })
-                }
+                    mode,
+                    minAmount:
+                      editDraft.minAmount || String(OPEN_LINK_DEFAULT_MIN),
+                    maxAmount:
+                      editDraft.maxAmount || String(OPEN_LINK_DEFAULT_MAX),
+                  });
+                }}
               >
                 <option value="fixed">Fixed amount</option>
                 <option value="customer_chooses">Open amount</option>
@@ -509,7 +531,44 @@ export default function PaymentsPage() {
                   required
                 />
               </Field>
-            ) : null}
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field>
+                  <Label htmlFor="edit-min">Min ($)</Label>
+                  <Input
+                    id="edit-min"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={editDraft.minAmount}
+                    onChange={(e) =>
+                      setEditDraft({
+                        ...editDraft,
+                        minAmount: e.target.value,
+                      })
+                    }
+                    required
+                  />
+                </Field>
+                <Field>
+                  <Label htmlFor="edit-max">Max ($)</Label>
+                  <Input
+                    id="edit-max"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={editDraft.maxAmount}
+                    onChange={(e) =>
+                      setEditDraft({
+                        ...editDraft,
+                        maxAmount: e.target.value,
+                      })
+                    }
+                    required
+                  />
+                </Field>
+              </div>
+            )}
             <Field>
               <Label htmlFor="edit-project">Project</Label>
               <Select

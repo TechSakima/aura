@@ -13,7 +13,7 @@ import {
   notifyStudio,
 } from "@/lib/notify/send";
 import { assertPublicContractAccess } from "@/lib/public-access";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 import { workflowStepAfterContractSigned } from "@/lib/workflow/state-rules";
 
 function parseSignedDate(raw: unknown): string | null {
@@ -59,7 +59,11 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const limited = rateLimit(`contract-sign:${token}:${clientIp(req)}`, 10, 60_000);
+  const limited = await rateLimitShared(
+    `contract-sign:${token}:${clientIp(req)}`,
+    6,
+    60_000,
+  );
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },

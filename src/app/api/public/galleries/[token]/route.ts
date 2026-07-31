@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { COL } from "@/lib/db/collections";
 import {
   findGalleryByPublicToken,
+  getPhotosByIds,
   getProjectById,
   getSessionById,
   getStudioDoc,
   listCommentsByGalleryId,
-  listPhotosByGalleryId,
+  listPhotosByGalleryIdPage,
   listSubAlbumsByGalleryId,
   patchStudioDoc,
 } from "@/lib/db/store";
@@ -66,12 +67,10 @@ export async function GET(
   const { offset, limit } = parsePublicPhotoPage(new URL(req.url));
   const isPhotosPage = offset > 0;
 
-  const allPhotos =
+  const { photos: pagePhotos, total: photoTotal } =
     gallery.status === "expired"
-      ? []
-      : await listPhotosByGalleryId(gallery.id);
-  const photoTotal = allPhotos.length;
-  const pagePhotos = allPhotos.slice(offset, offset + limit);
+      ? { photos: [], total: 0 }
+      : await listPhotosByGalleryIdPage(gallery.id, { offset, limit });
   const photos = await mapPublicGalleryPhotos(pagePhotos, gallery);
   const hasMore = offset + photos.length < photoTotal;
 
@@ -100,10 +99,13 @@ export async function GET(
       ? await getProjectById(gallery.projectId)
       : null;
 
-  const coverIds = rawSubAlbums
-    .map((s) => s.photoIds.find((id) => allPhotos.some((p) => p.id === id)))
-    .filter((id): id is string => Boolean(id));
-  const coverPhotos = allPhotos.filter((p) => coverIds.includes(p.id));
+  // Cover thumbs: fetch candidate ids only (not the full gallery photo graph).
+  const coverCandidates = [
+    ...new Set(rawSubAlbums.flatMap((s) => s.photoIds.slice(0, 8))),
+  ];
+  const coverPhotos = coverCandidates.length
+    ? await getPhotosByIds(coverCandidates)
+    : [];
   const signedCovers = await mapPublicGalleryPhotos(coverPhotos, gallery);
   const coverById = new Map(signedCovers.map((p) => [p.id, p]));
 

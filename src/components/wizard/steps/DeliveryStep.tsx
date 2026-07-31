@@ -20,6 +20,7 @@ import { GalleryDesignPanel } from "@/components/admin/GalleryDesignPanel";
 import { DeliveryPublishChecklist } from "@/components/wizard/DeliveryPublishChecklist";
 import { cn } from "@/lib/cn";
 import { mutateJson } from "@/lib/client/mutation";
+import { toastAfterEmailAttempt } from "@/lib/copy/email-toast";
 import {
   confirmDeletePhotos,
   confirmGoLive,
@@ -237,7 +238,12 @@ export function DeliveryStep({
       push(String(data.error || "Could not email gallery"), "danger");
       return;
     }
-    push(data.emailed === false ? "Email skipped" : "Gallery link emailed", "success");
+    const toast = toastAfterEmailAttempt(
+      data.emailed !== false,
+      "Gallery link emailed",
+      "Gallery link ready",
+    );
+    push(toast.message, toast.tone);
     if (data.emailed !== false) await onChanged();
   }
 
@@ -252,8 +258,7 @@ export function DeliveryStep({
       push("Could not refresh watermarks", "danger");
       return;
     }
-    const data = await res.json().catch(() => ({}));
-    push(`Watermarks refreshed (${data.updated ?? 0} photos)`, "success");
+    push("Watermark refresh queued", "success");
     await onChanged();
   }
 

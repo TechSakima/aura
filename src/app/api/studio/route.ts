@@ -52,6 +52,7 @@ import {
   resolveStudioThemePreset,
   studioThemeFromPreset,
 } from "@/lib/themes";
+import { resolveBrowseMediaUrl } from "@/lib/media-url-server";
 import { absoluteExternalUrl } from "@/lib/urls";
 
 function studioForClient(studio: Studio) {
@@ -88,8 +89,19 @@ export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = await readStudioDb(admin.studioId);
+  const studio = studioForClient(db.studio);
+  const [logoUrl, coverLogoUrl, defaultCoverImageUrl] = await Promise.all([
+    resolveBrowseMediaUrl(studio.logoUrl),
+    resolveBrowseMediaUrl(studio.coverLogoUrl),
+    resolveBrowseMediaUrl(studio.defaultCoverImageUrl),
+  ]);
   return NextResponse.json({
-    studio: studioForClient(db.studio),
+    studio: {
+      ...studio,
+      ...(logoUrl !== undefined ? { logoUrl } : {}),
+      ...(coverLogoUrl !== undefined ? { coverLogoUrl } : {}),
+      ...(defaultCoverImageUrl !== undefined ? { defaultCoverImageUrl } : {}),
+    },
     watermarkPresets: db.watermarkPresets,
   });
 }

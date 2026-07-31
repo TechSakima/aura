@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { isMissingCryptoSecretError } from "@/lib/crypto-secrets";
 import { updateStudioDb } from "@/lib/db/store";
+import {
+  GOOGLE_OAUTH_STATE_COOKIE,
+  googleOAuthStateCookieOptions,
+  mintGoogleOAuthState,
+} from "@/lib/google-oauth-state";
 import { appOrigin } from "@/lib/notify/send";
 
-function googleAuthUrl(clientId: string, redirectUri: string): string {
+function googleAuthUrl(
+  clientId: string,
+  redirectUri: string,
+  state: string,
+): string {
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
@@ -14,7 +24,38 @@ function googleAuthUrl(clientId: string, redirectUri: string): string {
   );
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
+  url.searchParams.set("state", state);
   return url.toString();
+}
+
+function authUrlResponse(
+  studioId: string,
+  clientId: string,
+  extra: Record<string, unknown>,
+) {
+  const redirect = `${appOrigin()}/api/integrations/google/callback`;
+  let minted: ReturnType<typeof mintGoogleOAuthState>;
+  try {
+    minted = mintGoogleOAuthState(studioId);
+  } catch (err) {
+    if (isMissingCryptoSecretError(err)) {
+      return NextResponse.json(
+        { error: "Calendar connect unavailable", configured: false },
+        { status: 503 },
+      );
+    }
+    throw err;
+  }
+  const res = NextResponse.json({
+    ...extra,
+    authUrl: googleAuthUrl(clientId, redirect, minted.state),
+  });
+  res.cookies.set(
+    GOOGLE_OAUTH_STATE_COOKIE,
+    minted.cookieValue,
+    googleOAuthStateCookieOptions(),
+  );
+  return res;
 }
 
 /** Start Google Calendar OAuth for the current studio (per-studio refresh token). */
@@ -29,11 +70,7 @@ export async function GET() {
       error: "Calendar connect unavailable",
     });
   }
-  const redirect = `${appOrigin()}/api/integrations/google/callback`;
-  return NextResponse.json({
-    configured: true,
-    authUrl: googleAuthUrl(clientId, redirect),
-  });
+  return authUrlResponse(admin.studioId, clientId, { configured: true });
 }
 
 export async function POST(req: Request) {
@@ -45,6 +82,7 @@ export async function POST(req: Request) {
     await updateStudioDb(admin.studioId, (db) => {
       db.studio.googleCalendarConnected = false;
       db.studio.googleCalendarRefreshToken = undefined;
+      delete db.studio.googleCalendarId;
       delete db.studio.googleCalendarLastSyncAt;
       delete db.studio.googleCalendarLastSyncError;
     });
@@ -57,6 +95,33 @@ export async function POST(req: Request) {
     );
     const health = await probeGoogleCalendarHealth(admin.studioId);
     return NextResponse.json(health);
+  }
+
+  if (body.action === "calendars") {
+    const { listGoogleCalendars } = await import("@/lib/google-calendar");
+    const result = await listGoogleCalendars(admin.studioId);
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.error || "Could not list calendars", calendars: [] },
+        { status: 502 },
+      );
+    }
+    return NextResponse.json({
+      calendars: result.calendars,
+      selectedId: result.selectedId,
+    });
+  }
+
+  if (body.action === "setCalendar") {
+    const { setGoogleCalendarId } = await import("@/lib/google-calendar");
+    const result = await setGoogleCalendarId(
+      admin.studioId,
+      String(body.calendarId || ""),
+    );
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, calendarId: result.calendarId });
   }
 
   if (body.action === "busy") {
@@ -87,9 +152,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const redirect = `${appOrigin()}/api/integrations/google/callback`;
-  return NextResponse.json({
+  return authUrlResponse(admin.studioId, clientId, {
     ok: true,
-    authUrl: googleAuthUrl(clientId, redirect),
+    configured: true,
   });
 }

@@ -7,39 +7,13 @@
 export const BROWSE_SIGNED_TTL_SEC = 60 * 60 * 6;
 
 /**
- * Normalize stored media URLs so images always load through a working path.
- * Brand logos may have been saved as Firebase public URLs (often blocked);
- * prefer the /api/media proxy when we can recover the object path.
+ * Client-safe URL normalize. Do not invent unsigned `/api/media` paths
+ * (AURA-386 — proxy requires server HMAC). Prefer API `resolveBrowseMediaUrl`.
  */
 export function resolveMediaUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
   if (url.startsWith("/api/media/")) return url;
   if (url.startsWith("/")) return url;
-
-  try {
-    const parsed = new URL(url);
-    if (
-      parsed.hostname === "firebasestorage.googleapis.com" ||
-      parsed.hostname.endsWith("storage.googleapis.com")
-    ) {
-      // …/o/<encodedPath>?alt=media
-      const marker = "/o/";
-      const idx = parsed.pathname.indexOf(marker);
-      if (idx >= 0) {
-        const encoded = parsed.pathname.slice(idx + marker.length);
-        const objectPath = decodeURIComponent(encoded);
-        if (objectPath.startsWith("studios/")) {
-          return `/api/media/${objectPath
-            .split("/")
-            .map(encodeURIComponent)
-            .join("/")}`;
-        }
-      }
-    }
-  } catch {
-    // keep original
-  }
-
   return url;
 }
 
@@ -114,4 +88,32 @@ export function homepageCoverSrcSet(
   if (thumbUrl) parts.push(`${thumbUrl} 480w`);
   if (largeUrl && largeUrl !== thumbUrl) parts.push(`${largeUrl} 1800w`);
   return parts.length ? parts.join(", ") : undefined;
+}
+
+/** Gallery grid thumb srcSet — same 480 / ~1800 breakpoints (AURA-412). */
+export function galleryThumbSrcSet(
+  thumbUrl?: string | null,
+  largeUrl?: string | null,
+): string | undefined {
+  return homepageCoverSrcSet(thumbUrl || undefined, largeUrl || undefined);
+}
+
+/**
+ * `sizes` for public gallery grids — matches MediaGrid column counts (AURA-412).
+ * masonry: 2 / 3 / 4 / 5 cols; columns: 2 / 3 / 4; diary full-bleed; justified short strip.
+ */
+export function galleryThumbSizes(
+  mode: "masonry" | "justified" | "columns" | "diary",
+): string {
+  switch (mode) {
+    case "diary":
+      return "(min-width: 768px) 48rem, 100vw";
+    case "justified":
+      return "(min-width: 640px) 200px, 45vw";
+    case "columns":
+      return "(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw";
+    case "masonry":
+    default:
+      return "(min-width: 1280px) 20vw, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw";
+  }
 }

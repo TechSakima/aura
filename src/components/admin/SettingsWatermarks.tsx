@@ -113,7 +113,11 @@ export function SettingsWatermarks({
       form.set("scale", String(clampWatermarkScale(wmScale)));
       if (wmFile) form.set("file", wmFile);
 
-      const result = await mutateJson<{ photosUpdated?: number }>(
+      const result = await mutateJson<{
+        photosUpdated?: number;
+        watermarksQueued?: number;
+        galleries?: number;
+      }>(
         editingId ? `/api/watermarks/${editingId}` : "/api/watermarks",
         { method: editingId ? "PATCH" : "POST", body: form },
         { action: editingId ? "update watermark" : "add watermark" },
@@ -123,10 +127,11 @@ export function SettingsWatermarks({
         return;
       }
       const data = result.data;
-      if (editingId && data.photosUpdated != null) {
+      const queued = data.watermarksQueued ?? data.galleries;
+      if (editingId && queued != null && queued > 0) {
         push(
-          `Watermark updated · refreshed ${data.photosUpdated} photo${
-            data.photosUpdated === 1 ? "" : "s"
+          `Watermark updated · refresh queued for ${queued} ${
+            queued === 1 ? "gallery" : "galleries"
           }`,
           "success",
         );

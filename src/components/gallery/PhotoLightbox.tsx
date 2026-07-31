@@ -12,13 +12,16 @@ import type { MasonryPhoto } from "@/components/gallery/MasonryGrid";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/cn";
+import {
+  galleryPhotoAlt,
+  galleryPhotoBasename,
+} from "@/lib/gallery-photo-alt";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import { usePrefersReducedMotion } from "@/lib/use-prefers-reduced-motion";
 
 function displayFilename(photo: MasonryPhoto): string | undefined {
-  const raw = photo.filename?.trim();
-  if (!raw) return undefined;
-  const base = raw.split(/[/\\]/).pop() || raw;
+  const base = galleryPhotoBasename(photo.filename);
+  if (!base) return undefined;
   return base.length > 48 ? `${base.slice(0, 45)}…` : base;
 }
 
@@ -194,7 +197,12 @@ export function PhotoLightbox({
             <img
               key={photo.id}
               src={photo.url}
-              alt={fileCaption || `Photo ${index + 1} of ${photos.length}`}
+              alt={galleryPhotoAlt({
+                filename: photo.filename,
+                index,
+                total: photos.length,
+                kind: isVideo ? "video" : "photo",
+              })}
               className={cn(
                 "max-h-full max-w-full object-contain",
                 !prefersReducedMotion && "animate-enter",

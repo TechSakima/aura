@@ -65,6 +65,7 @@ function BookingsPageInner() {
 
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [requests, setRequests] = useState<BookingRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [slug, setSlug] = useState("");
   const [gcalConnected, setGcalConnected] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -96,9 +97,11 @@ function BookingsPageInner() {
       params.set("offset", String(opts?.historyOffset ?? 0));
     }
     if (opts?.appendHistory) setHistoryLoadingMore(true);
+    else setLoading(true);
     const res = await fetch(`/api/bookings/session-types?${params}`);
     if (!res.ok) {
       setHistoryLoadingMore(false);
+      setLoading(false);
       push("Could not load bookings", "danger");
       return;
     }
@@ -124,6 +127,7 @@ function BookingsPageInner() {
     setSlug(data.homepageSlug || "");
     setGcalConnected(Boolean(data.gcalConnected));
     setHistoryLoadingMore(false);
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -135,8 +139,30 @@ function BookingsPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
+  function markRequestStatus(
+    id: string,
+    status: BookingRequest["status"],
+    declineReason?: string,
+  ) {
+    setRequests((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status,
+              ...(status === "declined" && declineReason
+                ? { declineReason }
+                : {}),
+            }
+          : r,
+      ),
+    );
+  }
+
   async function confirmRequest(id: string, force = false) {
     setBusyId(id);
+    setDeclineId(null);
+    setDeclineReason("");
     const res = await fetch("/api/bookings/requests", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -154,11 +180,17 @@ function BookingsPageInner() {
     }
 
     if (!res.ok) {
+      if (data.status && data.status !== "pending") {
+        markRequestStatus(id, data.status);
+        setConflict(null);
+      }
       push(data.error || "Could not update request", "danger");
+      void load();
       return;
     }
 
     setConflict(null);
+    markRequestStatus(id, "confirmed");
     if (data.calendarPushFailed) {
       push("Confirmed · calendar not updated", "danger");
     }
@@ -190,12 +222,14 @@ function BookingsPageInner() {
       push("Decline reason required", "danger");
       return;
     }
-    setBusyId(declineId);
+    const id = declineId;
+    setBusyId(id);
+    setConflict(null);
     const res = await fetch("/api/bookings/requests", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: declineId,
+        id,
         status: "declined",
         declineReason: reason,
       }),
@@ -203,9 +237,16 @@ function BookingsPageInner() {
     const data = await res.json().catch(() => ({}));
     setBusyId(null);
     if (!res.ok) {
+      if (data.status && data.status !== "pending") {
+        markRequestStatus(id, data.status);
+      }
       push(data.error || "Could not update request", "danger");
+      setDeclineId(null);
+      setDeclineReason("");
+      void load();
       return;
     }
+    markRequestStatus(id, "declined", reason);
     setDeclineId(null);
     setDeclineReason("");
     push("Request declined", "success");
@@ -249,151 +290,193 @@ function BookingsPageInner() {
 
       {tab === "requests" ? (
         <section className="space-y-4">
-          {pending.length === 0 && others.length === 0 ? (
+          {loading ? (
+            <EmptyState variant="loading" title="Loading requests…" />
+          ) : pending.length === 0 && others.length === 0 ? (
             <EmptyState
               variant="inline"
-              title="No requests yet."
+              title="No requests yet"
               description="Share your booking form when session types are ready."
               className="border-y border-line py-4"
             />
-          ) : null}
+          ) : (
+            <>
+              {pending.length > 0 ? (
+                <ul className="space-y-4">
+                  {pending.map((r) => (
+                    <li key={r.id}>
+                      <Panel variant="interactive" className="sm:p-5">
+                        <div className="flex flex-col gap-4">
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-xs uppercase tracking-[0.14em] text-muted">
+                              Pending inquiry
+                            </p>
+                            <h3 className="font-display text-2xl">{r.name}</h3>
+                            <p className="text-sm text-muted">
+                              {r.sessionTypeName} ·{" "}
+                              {new Date(r.startsAt).toLocaleString(undefined, {
+                                weekday: "short",
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                            <p className="break-all text-sm">
+                              <a
+                                className="inline-flex min-h-11 items-center text-accent no-underline"
+                                href={`mailto:${r.email}`}
+                              >
+                                {r.email}
+                              </a>
+                              {r.phone ? (
+                                <span className="text-muted"> · {r.phone}</span>
+                              ) : null}
+                            </p>
+                            {r.notes ? (
+                              <p className="mt-2 text-sm text-muted">{r.notes}</p>
+                            ) : null}
+                            {r.rescheduleRequestedAt ? (
+                              <p className="mt-2 text-sm text-muted">
+                                Reschedule
+                                {r.reschedulePreferredStartsAt
+                                  ? ` · preferred ${new Date(r.reschedulePreferredStartsAt).toLocaleString(undefined, {
+                                      weekday: "short",
+                                      month: "short",
+                                      day: "numeric",
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                    })}`
+                                  : ""}
+                                {r.rescheduleNote
+                                  ? ` — ${r.rescheduleNote}`
+                                  : ""}
+                              </p>
+                            ) : null}
+                            <p className="mt-3 text-sm">
+                              Linked project:{" "}
+                              <span className="font-medium">
+                                {r.projectName || r.name}
+                              </span>
+                            </p>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            {r.projectHref ? (
+                              <Link
+                                href={r.projectHref}
+                                className="w-full sm:w-auto"
+                              >
+                                <Button className="min-h-11 w-full sm:w-auto">
+                                  Open inquiry in Projects
+                                </Button>
+                              </Link>
+                            ) : null}
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              <Button
+                                tone="neutral"
+                                className="min-h-11"
+                                pending={busyId === r.id}
+                                pendingLabel="Confirming…"
+                                onClick={() => void confirmRequest(r.id)}
+                              >
+                                Confirm
+                              </Button>
+                              <Button
+                                tone="ghost"
+                                className="min-h-11"
+                                disabled={busyId === r.id}
+                                onClick={() => {
+                                  setConflict(null);
+                                  setDeclineId(r.id);
+                                  setDeclineReason("");
+                                }}
+                              >
+                                Decline
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </Panel>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState
+                  variant="inline"
+                  title="No pending requests"
+                  className="border-y border-line py-3"
+                />
+              )}
 
-          {pending.length > 0 ? (
-            <ul className="space-y-4">
-              {pending.map((r) => (
-                <li key={r.id}>
-                  <Panel variant="interactive" className="sm:p-5">
-                    <div className="flex flex-col gap-4">
-                      <div className="min-w-0 space-y-1">
-                        <p className="text-xs uppercase tracking-[0.14em] text-muted">
-                          Pending inquiry
-                        </p>
-                        <h3 className="font-display text-2xl">{r.name}</h3>
-                        <p className="text-sm text-muted">
-                          {r.sessionTypeName} ·{" "}
-                          {new Date(r.startsAt).toLocaleString(undefined, {
-                            weekday: "short",
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                        <p className="break-all text-sm">
-                          <a
-                            className="inline-flex min-h-11 items-center text-accent no-underline"
-                            href={`mailto:${r.email}`}
-                          >
-                            {r.email}
-                          </a>
-                          {r.phone ? (
-                            <span className="text-muted"> · {r.phone}</span>
+              {others.length > 0 ? (
+                <div className="space-y-4">
+                  <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
+                    {others.map((r) => (
+                      <li
+                        key={r.id}
+                        className="border border-line bg-surface p-4 text-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:border-0 sm:bg-transparent sm:p-0 sm:py-4"
+                      >
+                        <div className="min-w-0">
+                          <p className="flex flex-wrap items-center gap-2 font-medium">
+                            <span>{r.name}</span>
+                            <StatusBadge
+                              domain="bookingRequest"
+                              value={r.status}
+                            />
+                          </p>
+                          <p className="text-muted">
+                            {r.sessionTypeName} ·{" "}
+                            {new Date(r.startsAt).toLocaleString()}
+                          </p>
+                          {r.declineReason ? (
+                            <p className="mt-1 text-muted">
+                              Reason: {r.declineReason}
+                            </p>
                           ) : null}
-                        </p>
-                        {r.notes ? (
-                          <p className="mt-2 text-sm text-muted">{r.notes}</p>
-                        ) : null}
-                        <p className="mt-3 text-sm">
-                          Linked project:{" "}
-                          <span className="font-medium">
-                            {r.projectName || r.name}
-                          </span>{" "}
-                          · stage {r.projectStage || "inquiry"}
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-2">
+                          {r.rescheduleRequestedAt ? (
+                            <p className="mt-1 text-muted">
+                              Reschedule
+                              {r.reschedulePreferredStartsAt
+                                ? ` · preferred ${new Date(r.reschedulePreferredStartsAt).toLocaleString()}`
+                                : ""}
+                              {r.rescheduleNote
+                                ? ` — ${r.rescheduleNote}`
+                                : ""}
+                            </p>
+                          ) : null}
+                        </div>
                         {r.projectHref ? (
-                          <Link href={r.projectHref} className="w-full sm:w-auto">
-                            <Button className="min-h-11 w-full sm:w-auto">
-                              Open inquiry in Projects
-                            </Button>
+                          <Link
+                            className="mt-2 inline-flex min-h-11 items-center text-sm text-accent no-underline sm:mt-0"
+                            href={r.projectHref}
+                          >
+                            Open project
                           </Link>
                         ) : null}
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          <Button
-                            tone="neutral"
-                            className="min-h-11"
-                            pending={busyId === r.id}
-                            pendingLabel="Confirming…"
-                            onClick={() => void confirmRequest(r.id)}
-                          >
-                            Confirm
-                          </Button>
-                          <Button
-                            tone="ghost"
-                            className="min-h-11"
-                            disabled={busyId === r.id}
-                            onClick={() => {
-                              setDeclineId(r.id);
-                              setDeclineReason("");
-                            }}
-                          >
-                            Decline
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </Panel>
-                </li>
-              ))}
-            </ul>
-          ) : pending.length === 0 && others.length > 0 ? (
-            <p className="text-sm text-muted">No pending requests.</p>
-          ) : null}
-
-          {others.length > 0 ? (
-            <div className="space-y-4">
-              <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
-                {others.map((r) => (
-                  <li
-                    key={r.id}
-                    className="border border-line bg-surface p-4 text-sm sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:border-0 sm:bg-transparent sm:p-0 sm:py-4"
-                  >
-                    <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-2 font-medium">
-                        <span>{r.name}</span>
-                        <StatusBadge domain="bookingRequest" value={r.status} />
-                      </p>
-                      <p className="text-muted">
-                        {r.sessionTypeName} ·{" "}
-                        {new Date(r.startsAt).toLocaleString()}
-                      </p>
-                      {r.declineReason ? (
-                        <p className="mt-1 text-muted">
-                          Reason: {r.declineReason}
-                        </p>
-                      ) : null}
-                    </div>
-                    {r.projectHref ? (
-                      <Link
-                        className="mt-2 inline-flex min-h-11 items-center text-sm text-accent no-underline sm:mt-0"
-                        href={r.projectHref}
-                      >
-                        Open project
-                      </Link>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-              {historyHasMore ? (
-                <Button
-                  type="button"
-                  tone="neutral"
-                  className="min-h-11 w-full sm:w-auto"
-                  pending={historyLoadingMore}
-                  pendingLabel="Loading…"
-                  onClick={() =>
-                    void load({
-                      historyOffset: others.length,
-                      appendHistory: true,
-                    })
-                  }
-                >
-                  Load more
-                </Button>
+                      </li>
+                    ))}
+                  </ul>
+                  {historyHasMore ? (
+                    <Button
+                      type="button"
+                      tone="neutral"
+                      className="min-h-11 w-full sm:w-auto"
+                      pending={historyLoadingMore}
+                      pendingLabel="Loading…"
+                      onClick={() =>
+                        void load({
+                          historyOffset: others.length,
+                          appendHistory: true,
+                        })
+                      }
+                    >
+                      Load more
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
-            </div>
-          ) : null}
+            </>
+          )}
         </section>
       ) : null}
 

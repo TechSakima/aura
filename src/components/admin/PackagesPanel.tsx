@@ -19,6 +19,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { useUnsavedChangesGuard } from "@/lib/hooks/use-unsaved-changes";
+import { hasUnsetPricing } from "@/lib/packages/pricing-ready";
 import type { PackageTemplate } from "@/lib/types";
 
 export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
@@ -83,6 +84,33 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
     setPackages((prev) => prev.filter((p) => p.id !== pkg.id));
   }
 
+  async function createPackage() {
+    const res = await fetch("/api/packages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "New package",
+        contractTerms: "",
+        inclusions: ["Online gallery for 60 days"],
+        // No seeded $0 tiers — add pricing before sending quotes (AURA-135).
+        defaultPricing: [],
+        intakeQuestions: [],
+      }),
+    });
+    if (!res.ok) {
+      push("Create failed", "danger");
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    const created = data.package as PackageTemplate | undefined;
+    push("Package created", "success");
+    await load();
+    if (created) {
+      setEditing(created);
+      setEditDirty(false);
+    }
+  }
+
   return (
     <div>
       {!embedded ? (
@@ -97,37 +125,7 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
               >
                 Session types
               </ButtonLink>
-              <Button
-                onClick={async () => {
-                  const res = await fetch("/api/packages", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      name: "New package",
-                      contractTerms: "",
-                      inclusions: ["Online gallery for 60 days"],
-                      defaultPricing: [
-                        {
-                          id: crypto.randomUUID(),
-                          name: "Standard",
-                          price: 0,
-                          description: "Customize this tier",
-                          highlighted: true,
-                        },
-                      ],
-                      intakeQuestions: [],
-                    }),
-                  });
-                  if (!res.ok) {
-                    push("Create failed", "danger");
-                    return;
-                  }
-                  push("Package created", "success");
-                  await load();
-                }}
-              >
-                New package
-              </Button>
+              <Button onClick={() => void createPackage()}>New package</Button>
             </>
           }
         />
@@ -144,35 +142,7 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
               Session types
             </ButtonLink>
           </div>
-          <Button
-            size="sm"
-            onClick={async () => {
-              const res = await fetch("/api/packages", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  name: "New package",
-                  contractTerms: "",
-                  inclusions: ["Online gallery for 60 days"],
-                  defaultPricing: [
-                    {
-                      id: crypto.randomUUID(),
-                      name: "Standard",
-                      price: 0,
-                      description: "Customize this tier",
-                      highlighted: true,
-                    },
-                  ],
-                  intakeQuestions: [],
-                }),
-              });
-              if (!res.ok) {
-                push("Create failed", "danger");
-                return;
-              }
-              await load();
-            }}
-          >
+          <Button size="sm" onClick={() => void createPackage()}>
             New package
           </Button>
         </div>
@@ -185,8 +155,13 @@ export function PackagesPanel({ embedded = false }: { embedded?: boolean }) {
                 <div className="min-w-0">
                   <p className="font-medium">{pkg.name}</p>
                   <p className="text-sm text-muted">
-                    {pkg.defaultPricing.length} tiers · {pkg.intakeQuestions.length}{" "}
-                    questions
+                    {pkg.defaultPricing.length === 0
+                      ? "No pricing yet"
+                      : hasUnsetPricing(pkg.defaultPricing)
+                        ? "Needs price"
+                        : `${pkg.defaultPricing.length} tiers`}
+                    {" · "}
+                    {pkg.intakeQuestions.length} questions
                   </p>
                 </div>
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:shrink-0">

@@ -57,7 +57,7 @@ export function GalleryChrome({
         aria-label="Gallery"
         className={cn(
           "flex w-full shrink-0 items-center justify-around gap-0",
-          !iconOnly && "roomy:w-auto roomy:justify-start roomy:gap-1",
+          !iconOnly && "desk:w-auto desk:justify-start desk:gap-1",
           variant === "bottom-bar" && "w-full justify-around gap-0",
         )}
       >
@@ -127,8 +127,8 @@ export function GalleryChrome({
       {chrome.showStudioName ? (
         <p
           className={cn(
-            "truncate text-[10px] uppercase tracking-[0.22em]",
-            branded ? "text-accent-ink/75" : "text-muted",
+            "truncate text-xs uppercase tracking-[0.18em]",
+            branded ? "text-accent-ink/80" : "text-muted",
           )}
         >
           {studioName}
@@ -137,11 +137,11 @@ export function GalleryChrome({
     </div>
   );
 
-  /** Thumb-zone: icon-primary until roomy (AURA-250/286/378). */
+  /** Thumb-zone until desk (AURA-250/286/378/410) — tablets keep bottom nav. */
   const mobileBottomNav = showNav ? (
     <div
       className={cn(
-        "fixed inset-x-0 bottom-0 z-30 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] roomy:hidden",
+        "fixed inset-x-0 bottom-0 z-30 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] desk:hidden",
         branded
           ? "bg-accent pb-[env(safe-area-inset-bottom)] text-accent-ink"
           : "border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md",
@@ -152,7 +152,7 @@ export function GalleryChrome({
   ) : null;
 
   const headerNav = showNav ? (
-    <div className="hidden roomy:block">{renderNav(false)}</div>
+    <div className="hidden desk:block">{renderNav(false)}</div>
   ) : null;
 
   const headerInner =
@@ -172,7 +172,7 @@ export function GalleryChrome({
           <>
             <div
               className={cn(
-                "fixed z-40 hidden roomy:block",
+                "fixed z-40 hidden desk:block",
                 "top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))]",
               )}
             >
@@ -180,7 +180,7 @@ export function GalleryChrome({
                 {renderNav(false)}
               </div>
             </div>
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-md roomy:hidden">
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-md desk:hidden">
               <div className="px-1 py-1">{renderNav(true)}</div>
             </div>
           </>
@@ -217,7 +217,7 @@ export function GalleryChrome({
     );
   }
 
-  /* sticky-minimal — thumb bar until roomy (AURA-286) */
+  /* sticky-minimal — thumb bar until desk (AURA-286/410) */
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-line bg-surface/95 pt-[env(safe-area-inset-top)] backdrop-blur-md">
@@ -238,6 +238,6 @@ export function galleryChromePadClass(
   showContact?: boolean,
 ): string {
   if (expired && !showContact) return "";
-  /* Thumb bar until roomy — unified floating + sticky variants (AURA-286/378) */
-  return "pb-[calc(4.75rem+env(safe-area-inset-bottom))] roomy:pb-0";
+  /* Thumb bar until desk — unified floating + sticky variants (AURA-286/378/410) */
+  return "pb-[calc(4.75rem+env(safe-area-inset-bottom))] desk:pb-0";
 }

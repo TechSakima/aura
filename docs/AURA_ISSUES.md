@@ -39,7 +39,7 @@ Work top → bottom. Within a wave, keep listed sequence.
 | **W2**  | Money truth                     | **009** → **016** (Phase 1), then **365** pay idempotency                                                               | W0                                                                        |
 | **W3**  | Happy-path pipeline             | **017** → **030** (Phase 2), then **369** GCal scope                                                                    | W0; W2 for deposit/pay honesty                                            |
 | **W4**  | Public client surfaces          | **031**–**050** except **037** (downloads) runs **after W1 355/356**, then **364** zip TTL/skips                        | W0; W1 for download-related                                               |
-| **W5**  | Admin load/perf                 | **051**–**057**, then **367** null email                                                                                | W0 (002/003 especially)                                                   |
+| **W5**  | Admin load/perf                 | **051**–**057** (**055** done), then **367** null email                                                                 | W0 (002/003 especially)                                                   |
 | **W6**  | Delivery / wrap polish          | **366** archive egress, then **073**–**081**                                                                            | W1 for upload/download paths                                              |
 | **W7**  | BE/FE unification               | **153**–**200** (**151** is `[!]` — folded into 001)                                                                    | W0 (001/152/002)                                                          |
 | **W8**  | Unified UI primitives           | **201**–**221**, then **363** (Dialog viewport portal)                                                                  | Prefer before mega UI rebuilds; may land earlier when a screen is touched |
@@ -47,13 +47,14 @@ Work top → bottom. Within a wave, keep listed sequence.
 | **W10** | Website + gallery designer      | **222**–**259**                                                                                                         | W8 tokens; W9 Brand/Website; W1 media                                     |
 | **W11** | Contact (Resend)                | **304**–**316**, then **371**–**374** (project inbound Reply-To)                                                        | W0; **041** escape before **306**; **315** before **371**                 |
 | **W12** | Responsive + PWA productization | **281**–**287**, pull **088**/**089**, then **375**–**383** (deep audit), then **288**–**303**, **368**, **385**       | Continuous bar always; this wave closes systemic gaps                     |
-| **W13** | No-headache workflows + DoD     | **260**–**280** done; remaining Phase 5/7/8/9/10/11 debt in ID order (**128** next; skip blocked **055**)               | Prior foundations                                                         |
-| **W14** | Leftover polish                 | **384**, **386**, **387** (watermark job), then any still-open IDs not pulled earlier                                   | —                                                                         |
+| **W13** | No-headache workflows + DoD     | **260**–**280** + residual through **369** done → **W14**                                                               | Prior foundations                                                         |
+| **W14** | Leftover polish                 | **384**/**386**/**387**/**200**/**370**/**055** done                                                                    | —                                                                         |
+| **W15** | Web/PWA audit residuals         | **complete** (through **418**) | W0–W14 done; full report [`WEB_PWA_AUDIT.md`](WEB_PWA_AUDIT.md)           |
 
 
-**Next to implement:** first open checkbox in **W13** residual debt → currently **AURA-128**.
+**Next to implement:** none in Canonical waves — **W0–W15** complete. Pick a new phase item or append backlog.
 
-**R2:** **W1 complete** incl. **361** unified direct upload. **W2 complete** (**009–016**, **365**). **W3 complete** (**017–030**). **W4 complete** (**031–050**, **364**). **W5 complete** (**051–057**, **367**; 055 blocked). **W6 complete** (**366**, **073–081**). **W7 complete** (**153–199**). **W8 complete** (**201–221**, **363**). **W9 complete** (**349**–**353**). **W10 complete** (**222**–**259**). **W11 complete** (**304**–**316**, **371**–**374**). **W12 complete** (**281**–**303**, **088**/**089**, **375**–**383**, **368**, **385**). **W13 DoD 260–280 complete** → residual **AURA-128** (skip **055**; **103**–**117**, **124**–**125**, **127** done).
+**R2:** **W0–W15** complete.
 
 **Dedup (do not double-implement):**
 
@@ -64,6 +65,7 @@ Work top → bottom. Within a wave, keep listed sequence.
 | **317+** Settings IA              | **070** closed with 317 stopgap routes                              |
 | **355/356** download architecture | **037** polish **after** 355/356                                    |
 | **202** theme var parity          | covers much of **031** — close 031 via 202 when fixing dark gallery |
+| **212** ShootDay Dialog overlay   | **138** → `[x]` verified (same work)                                |
 
 
 ### Performance bar (applies to every item)
@@ -318,8 +320,9 @@ When implementing any AURA-###:
 - [x] **AURA-054** · P1 · UX · Project detail hang  
   Timeout/abort and error state for project load; don’t spin forever.
 
-- [ ] **AURA-055** · P1 · Performance · `loadStudioDatabase`  
+- [x] **AURA-055** · P1 · Performance · `loadStudioDatabase`  
   Stop loading all photos + all analytics into every admin mutation path; paginate or lazy-load heavy collections. **Blocked:** photos/analytics are used in many RMW paths — do not half-migrate. Revisit after AURA-188 (project-related bundle) or when per-collection reads exist.
+  **Done:** `updateStudioDb` skips photos/analytics by default; persist omits unloaded empty heavies (upsert-safe); opt-in `{ photos: true }`; scoped reads (`listPhotosByGalleryId` / `countPhotosByGalleryId` / photo `updateStudioDoc`).
 
 - [x] **AURA-056** · P2 · Bug · Workflow silent subfetch failures  
   `ProjectWorkflowPanel` loadRelated failures look like “no packages/templates.” Surface errors.
@@ -550,18 +553,20 @@ When implementing any AURA-###:
   Delete expired Firestore auth sessions; clarify Firebase client vs Aura cookie logout.  
   **Done:** `deleteExpiredAuthSessions`; purge on get/list/login + cron; `clientLogout` = cookie/row + Firebase Auth; API logout cookie-only documented.
 
-- [ ] **AURA-386** · P2 · Security · Media proxy re-mint  
+- [x] **AURA-386** · P2 · Security · Media proxy re-mint
   `/api/media` re-signs derivatives if object path is known (no gallery token). Harden (token/HMAC bind) or retire public proxy once all clients use gallery-minted browse URLs.
+  **Done:** HMAC `exp`+`sig` required; path-only 403; remint on gallery/wizard/studio/analytics/book GET; client no longer invents unsigned proxy paths.
 
-- [ ] **AURA-387** · P2 · Performance · Watermark reprocess job  
+- [x] **AURA-387** · P2 · Performance · Watermark reprocess job
   Move gallery/preset rewatermark off request-path `updateStudioDb` (no image I/O under full-studio lock). Enqueue + worker; patch photo docs only. Pairs **AURA-113**.
+  **Done:** `watermarkJobs` queue + `drainWatermarkJobs` in maintenance cron; gallery/preset/reprocess enqueue; photo `patchStudioDoc` only; sliced resume cursor.
 
 - [x] **AURA-111** · P2 · Performance · `findStudioBySlug`  
   Index slug → studioId instead of scanning all studios on book/homepage.
 
 - [x] **AURA-112** · P2 · Incomplete · Background jobs
   Watermark reprocess, analytics compaction, gallery expiry, email retries should not all be request-path RMW.  
-  **Done:** `runMaintenanceJobs` cron — email outbox + auth purge + `expireDueGalleries` via `patchStudioDoc` (index status+expiresAt). Email already outbox (313). Watermark job → **AURA-387**; analytics → **117**.
+  **Done:** `runMaintenanceJobs` cron — email outbox + auth purge + `expireDueGalleries` via `patchStudioDoc` (index status+expiresAt). Email already outbox (313). Watermark jobs → **AURA-387**; analytics → **117**.
 
 - [x] **AURA-113** · P2 · Bug · Upload/rewatermark non-jpg assumptions
   Derivative paths and rewatermark must handle png/webp/bin fallbacks.  
@@ -582,8 +587,9 @@ When implementing any AURA-###:
   Gallery events should use `sessionId` after migration, not only deprecated `shootId`.  
   **Done:** `linkedSessionId` + `recordEvent` persists `sessionId` only; normalize promotes legacy `shootId`; gallery single-doc reads coerce; create gallery posts `sessionId`.
 
-- [ ] **AURA-369** · P2 · Bug · Google Calendar scope  
+- [x] **AURA-369** · P2 · Bug · Google Calendar scope  
   Hardcodes `primary` calendar for freeBusy + CRUD; `dateTime` omits `timeZone` (DST risk). Multi-calendar / local time when studios need it (W0/W3 debt).
+  **Done:** `googleCalendarId` + Settings picker; event start/end use studio IANA zone; freeBusy/CRUD target selected calendar.
 
 - [x] **AURA-117** · P2 · Reliability · Analytics retention  
   Bound/compacts `analyticsEvents` growth.  
@@ -627,74 +633,92 @@ Superseded by **AURA-248** (X of Y + submit + Wrap review).
   Separate Archive/Delete from primary nav actions; reduce mis-tap on mobile.  
   **Done:** Project header `ActionStack` — All projects primary; Archive/Delete always under More (`menuIds`).
 
-- [ ] **AURA-128** · P1 · UX · Quote/session required path
-  When Pricing needs a session, CTA to create session inline — don’t bury “New session” below the fold.
+- [x] **AURA-128** · P1 · UX · Quote/session required path
+  When Pricing needs a session, CTA to create session inline — don’t bury “New session” below the fold.  
+  **Done:** Pricing step shows inline Add session (label + date) when none exist; then package/quote UI.
 
-- [ ] **AURA-129** · P1 · UX · Multi-session workflow status  
-  Prep/delivery badges must consider all sessions or the selected session explicitly.
+- [x] **AURA-129** · P1 · UX · Multi-session workflow status  
+  Prep/delivery badges must consider all sessions or the selected session explicitly.  
+  **Done:** Aggregate prep/delivery across open sessions (`session-readiness`); badges show `1 of N` / `Done · N`; workflow API aligned.
 
-- [ ] **AURA-130** · P2 · UX · Projects list stages  
-  Humanize stage labels; optional filter by stage/workflow.
+- [x] **AURA-130** · P2 · UX · Projects list stages  
+  Humanize stage labels; optional filter by stage/workflow.  
+  **Done:** List shows stage badge + workflow step label; Stage/Workflow selects; API `stage` + `workflowStep` filters.
 
-- [ ] **AURA-131** · P2 · UX · Walk-in projects  
-  Allow projects without email (or defer email until send) for phone-only inquiries.
+- [x] **AURA-131** · P2 · UX · Walk-in projects  
+  Allow projects without email (or defer email until send) for phone-only inquiries.  
+  **Done:** Empty email on create/edit; send paths require email (`PROJECT_EMAIL_REQUIRED`); questionnaire still creates + copies link.
 
-- [ ] **AURA-132** · P2 · UX · Bookings empty/loading duplication  
-  Fix double empty messages and confirm/decline reopen flows.
+- [x] **AURA-132** · P2 · UX · Bookings empty/loading duplication  
+  Fix double empty messages and confirm/decline reopen flows.  
+  **Done:** Loading EmptyState before empty flash; single pending/history empty pattern; PATCH 409 if not pending; optimistic status + dialog mutual exclusion.
 
-- [ ] **AURA-133** · P2 · UX · Documents contract preview  
-  Preview public `/c/` rendering before send.
+- [x] **AURA-133** · P2 · UX · Documents contract preview  
+  Preview public `/c/` rendering before send.  
+  **Done:** Shared `ContractPublicView`; template Preview page; workflow draft→`/c/` preview; send promotes draft; drafts excluded from sent/client links.
 
-- [ ] **AURA-134** · P2 · UX · Payments open-link limits  
-  Expose min/max for customer-chooses mode instead of silent 25–500.
+- [x] **AURA-134** · P2 · UX · Payments open-link limits  
+  Expose min/max for customer-chooses mode instead of silent 25–500.  
+  **Done:** Edit dialog Min/Max fields; `parseOpenLinkLimits` (default 1–500); pay page shows range; API validates.
 
-- [ ] **AURA-135** · P2 · UX · Packages $0 defaults  
-  Don’t seed sendable $0 tiers without friction.
+- [x] **AURA-135** · P2 · UX · Packages $0 defaults  
+  Don’t seed sendable $0 tiers without friction.  
+  **Done:** New packages start with empty pricing; API strips all-$0 seeds; create/send confirm on $0; empty package blocked.
 
-- [ ] **AURA-136** · P2 · Copy · Toast infra voice  
-  “Email skipped” / “Quote marked; email skipped” → sparse product language.
+- [x] **AURA-136** · P2 · Copy · Toast infra voice  
+  “Email skipped” / “Quote marked; email skipped” → sparse product language.  
+  **Done:** `toastAfterEmailAttempt` → Quote/Pay/Gallery “ready”; payments “Couldn't email”.
 
-- [ ] **AURA-137** · P2 · UX · Cancel link placement  
-  Keep cancel link available but out of the primary workflow chrome competition.
+- [x] **AURA-137** · P2 · UX · Cancel link placement  
+  Keep cancel link available but out of the primary workflow chrome competition.  
+  **Done:** Removed from workflow header; Copy cancel link under project More (with Archive/Delete).
 
-- [ ] **AURA-138** · P2 · Design · ShootDay preview modal  
-  Use shared `Dialog`, not a one-off fixed overlay.
+- [x] **AURA-138** · P2 · Design · ShootDay preview modal  
+  Use shared `Dialog`, not a one-off fixed overlay.  
+  **Done:** Already Dialog via AURA-212; verified `SessionShootDay`; dropped redundant Close button.
 
-- [ ] **AURA-139** · P2 · Copy · Helper / shoot language  
-  “Photoshoot helper”, “No plan for this shoot”, “Nice work…” → Session tone, sparse copy.
+- [x] **AURA-139** · P2 · Copy · Helper / shoot language  
+  “Photoshoot helper”, “No plan for this shoot”, “Nice work…” → Session tone, sparse copy.  
+  **Done:** Session day labels; sparse “No plan yet.” / “Must-haves done”; Start plan; Plan the session handoff.
 
-- [ ] **AURA-140** · P3 · UX · Login control consistency  
-  Mode toggle uses design-system patterns.
+- [x] **AURA-140** · P3 · UX · Login control consistency  
+  Mode toggle uses design-system patterns.  
+  **Done:** Sign in / Create studio via `SegmentedControl`; removed underline mode buttons.
 
-- [ ] **AURA-141** · P3 · Polish · Bottom tab labels  
-  Icon + text for primary destinations.
+- [x] **AURA-141** · P3 · Polish · Bottom tab labels  
+  Icon + text for primary destinations.  
+  **Done:** Readable `text-xs` labels; Home/Projects/Bookings/More; taller `--admin-tab-bar`.
 
-- [ ] **AURA-142** · P3 · Polish · Analytics date range / export  
-  Beyond fixed 14-day activity slices.
+- [x] **AURA-142** · P3 · Polish · Analytics date range / export  
+  Beyond fixed 14-day activity slices.  
+  **Done:** `days` API filter (7/14/30/90/all); SegmentedControl range; Export CSV (activity + revenue + totals).
 
-- [ ] **AURA-143** · P3 · A11y · Gallery image labels  
+- [x] **AURA-143** · P3 · A11y · Gallery image labels
   Consider non-empty alts or figcaptions where filenames exist.
 
-- [ ] **AURA-144** · P3 · Polish · Email template theming  
+- [x] **AURA-144** · P3 · Polish · Email template theming
   Optional alignment with studio dark themes (or keep linen deliberately — decide).
 
-- [ ] **AURA-145** · P3 · Workflow · Reschedule  
+- [x] **AURA-145** · P3 · Workflow · Reschedule
   Client-facing reschedule beyond cancel-only (product decision).
+  **Done:** Request-only (not self-serve slots): `/cancel` → Change or cancel; preferred time + note → studio notify/email; session unchanged until studio edits.
 
-- [ ] **AURA-146** · P3 · Bug · Booking received email prefs  
+- [x] **AURA-146** · P3 · Bug · Booking received email prefs  
   Apply `clientEmailAllowed("booking")` to request-received as well as confirmed.
 
-- [ ] **AURA-147** · P3 · Polish · Gallery footer logo  
+- [x] **AURA-147** · P3 · Polish · Gallery footer logo
   Show studio logo when available on public gallery footer.
 
-- [ ] **AURA-148** · P3 · UX · Download favorites discoverability  
+- [x] **AURA-148** · P3 · UX · Download favorites discoverability
   Entry from hub chrome, not only inside favorites view.
 
-- [ ] **AURA-149** · P2 · Reliability · Email outbox  
+- [x] **AURA-149** · P2 · Reliability · Email outbox
   Durable retry for Resend failures (replace deleted `emailJobs` with something real).
+  **Done:** `transactional` outbox jobs store payload; `emailClient({ studioId })` enqueues on Resend fail; contact path keeps `skipOutbox` + 313 rebuild.
 
-- [ ] **AURA-150** · P2 · Security · Public pay double Checkout  
+- [x] **AURA-150** · P2 · Security · Public pay double Checkout  
   Disable submit while redirecting; prevent duplicate sessions.
+  **Done:** submitLock + redirecting lock; fields/button disabled; POST rate limit (pairs 365 Idempotency-Key).
 
 ---
 
@@ -861,14 +885,152 @@ Same as AURA-161; no full photo arrays for cards. *(Superseded — keep 161 only
 - [x] **AURA-199** · P2 · Tests · Unification contracts  
   Bundle shapes, normalize field preservation, delete cascades, no dual-write when flag off.
 
-- [ ] **AURA-384** · P2 · Cutover · Remove `/api/clients` + `/api/shoots`  
+- [x] **AURA-384** · P2 · Cutover · Remove `/api/clients` + `/api/shoots`  
   After AURA-273 admin FE cutover: delete alias routes (or 410); keep `AURA_LEGACY_COLLECTIONS` for Firestore backfill only. **W14.**
+  **Done:** plan/wizard/wrap live under `/api/sessions`; clients/shoots → 410 + successor Link; legacy Firestore flag unchanged.
 
-- [ ] **AURA-200** · P3 · not Optional · Rename collection `proposals` → `quotes`  
+- [x] **AURA-200** · P3 · Decision · Rename collection `proposals` → `quotes`  
   Only after API stable; prefer noun “quote” with collection `proposals` if migration costly.
+  **Done:** Keep Firestore `proposals`; product/API noun remains Quote (`/api/quotes`). No dual-read migration — cost > benefit (ADR updated).
 
-- [ ] **AURA-370** · P2 · UX · Pretty admin URLs  
+- [x] **AURA-370** · P2 · UX · Pretty admin URLs  
   `/admin/projects/{id}/sessions/{id}?step=prep` uses opaque ids — offer slugs or short ids (e.g. `/admin/projects/wedding-smith/sessions/engagement`) while keeping id deep-links working. **Studio slug in admin path is optional** — duplicate studio names are allowed; prefer no studio segment (current) or session-first URLs (`/admin/sessions/{id}`) over `/admin/{studioSlug}/…`. After AURA-197 cutover.
+  **Done:** `adminSlug` on project/session; resolve id|slug; `/admin/sessions/{ref}` entry; canonicalize to pretty path; id deep-links kept.
+
+---
+
+## Phase 21 — Web / PWA comprehensive audit residuals (2026-07-31)
+
+Full report + Before/After notes: [`docs/WEB_PWA_AUDIT.md`](WEB_PWA_AUDIT.md).  
+Do **not** reopen closed Phase 18 PWA IDs — these are residual gaps found against the audit engine.
+
+### W15 — Critical / ship security & PWA install
+
+- [x] **AURA-388** · P0 · PWA · Static icons for SW precache  
+  Commit `public/icon-192.png` + `public/icon-512.png` (AURA-289 claimed done but only `icon-512-maskable.png` exists). `sw.js` PRECACHE + fallback manifests 404 → SW install can fail entirely.
+  **Done:** Regenerated via `npm run icons` (192/512/maskable present + git-tracked); SW v6 per-URL precache so one miss cannot abort install.
+
+- [x] **AURA-389** · P0 · Security · HMAC secrets fail-closed  
+  Production must not fall back to `NEXT_PUBLIC_APP_URL` / `"aura-session"` / `"aura-media-proxy"` for session, media-proxy, homepage-unlock, Google token seal. Require App Hosting secrets; 503 if unset.
+  **Done:** `crypto-secrets.ts` fail-closed in prod; wired session/media/homepage/Google seal; `AURA_SESSION_SECRET` in `apphosting.yaml`; mint paths 503.
+
+- [x] **AURA-395** · P0 · Performance · Gallery photo server paging  
+  Public gallery GET must not `listPhotosByGalleryId` then slice — Firestore limit/offset or cursor. Bounds memory for large galleries.
+  **Done:** `listPhotosByGalleryIdPage` (orderBy sortOrder + offset/limit + count agg); public GET + cover ids via `getPhotosByIds`; photos composite index.
+
+- [x] **AURA-396** · P0 · Performance · Photo count without full load  
+  `countPhotosByGalleryId` must not materialize all docs; aggregation or cheap count. Fixes N× scans on project detail.
+  **Done:** Firestore `.count()` aggregation; optional `kind` filter; `galleryId+kind` index.
+
+### W15 — High security / PWA / offline / hot paths
+
+- [x] **AURA-390** · P1 · Security · CSP + security headers  
+  `Content-Security-Policy` (report→enforce), `frame-ancestors`/`X-Frame-Options`, `nosniff`, Referrer-Policy, Permissions-Policy, HSTS in prod (`next.config` / middleware / hosting).
+  **Done:** `security-headers.ts` via `next.config` headers; Report-Only CSP + `/api/csp-report`; `AURA_CSP_ENFORCE=1` to enforce; HSTS in prod.
+
+- [x] **AURA-391** · P1 · Security · Google OAuth `state`  
+  CSRF-safe authorize + callback verify before storing refresh token.
+  **Done:** Signed HttpOnly `aura_gcal_oauth` bound to studioId; authorize `state` nonce; callback verify + clear.
+
+- [x] **AURA-392** · P1 · Security · Shared rate limits on auth + public mutators  
+  `rateLimitShared` on login/signup + pay/book/proposal accept/contract sign/cancel/questionnaire (multi-instance safe). Pairs **AURA-107**.
+  **Done:** Shared limits on login/signup + pay/book/accept/sign/cancel/questionnaire; tightened pay/accept/sign/questionnaire caps.
+
+- [x] **AURA-393** · P1 · PWA · SW update reload  
+  After `SKIP_WAITING`, listen for `controllerchange` and reload once (or “Update available”).
+  **Done:** `RegisterSW` arms `controllerchange` reload after first control; updates reload once; first install does not.
+
+- [x] **AURA-394** · P1 · PWA · Offline App Router honesty  
+  Do not serve cached HTML that needs uncached `/_next` chunks; prefer `/offline.html` or co-cache critical assets.
+  **Done:** SW v7 — stop App Router HTML page cache; offline navigate → `/offline.html` only; purge legacy `aura-pages-*`.
+
+- [x] **AURA-397** · P1 · Performance · Download path scoped photos  
+  Public download must not full `readStudioDb` + filter all photos — gallery-scoped list (after **395**).
+  **Done:** Download uses `listPhotosByGalleryId` / `getPhotosByIds` only — no studio graph.
+
+- [x] **AURA-399** · P1 · Reliability · Book + workflow offline honesty  
+  Public book + `ProjectWorkflowPanel` mutations: `mutateJson` / offline toast; never stuck pending on flaky network.
+  **Done:** Book POST + ProjectWorkflowPanel mutations/load via `mutateJson`; `finally` clears pending/busy.
+
+- [x] **AURA-400** · P1 · PWA · Admin icons without auth  
+  Manifest/OS icon fetch for admin must not 401 when session cookie cold — static or public mark URL.
+  **Done:** Admin manifest uses `studio=` icon query; `surface=admin` fails open to static (no 401).
+
+- [x] **AURA-398** · P1 · Performance · Font strategy  
+  Root layout loads six Google fonts on every route — subset + load kit fonts on demand.
+  **Done:** Root = Fraunces+Figtree only; kit faces via `EnsureKitFonts` / settings `all-kits`; latin + `display:swap`.
+
+- [x] **AURA-404** · P1 · Bug · Shoot-day optimistic race  
+  Notes rollback must not wipe concurrent checkbox toggles (functional updates / version).
+  **Done:** Toggle/notes use functional setState; rollbacks touch only the failed field; notes skip rollback if edited further.
+
+- [x] **AURA-407** · P1 · Performance · Book + dashboard light reads  
+  `readStudioDb({ photos:false, analytics:false })` or scoped lists on book GET + dashboard.
+  **Done:** Book GET uses `listSessionTypesForStudio`; dashboard `readStudioDb({ photos:false, analytics:false })`.
+
+### W15 — Medium / Low residuals
+
+- [x] **AURA-401** · P2 · UX · Route `loading.tsx` / `error.tsx`  
+  Admin, `/g`, `/h`, `/book` streaming + recovery shells.
+  **Done:** Shared `AdminRouteLoading`/`PublicRouteLoading` + error retry (`refresh`+`reset`); wired under admin, `g/[token]`, `h/[slug]`, `book/[slug]`.
+
+- [x] **AURA-402** · P2 · PWA · Unknown gallery manifest 404  
+  Missing gallery token must not emit installable “Aura Gallery” manifest.
+  **Done:** Manifest route 404s; layout omits `manifest` / appleWebApp when gallery missing.
+
+- [x] **AURA-403** · P2 · PWA · Per-token install dismiss  
+  Gallery InstallHint storage key scoped to token (like homepage slug).
+  **Done:** `aura-install-dismiss-g-${token}` (matches homepage / book pattern).
+
+- [x] **AURA-405** · P2 · a11y · NotificationBell focus + rollback  
+  Focus trap + Escape; mark-read failure restores unread state.
+  **Done:** `useFocusTrap` on panel (Escape + restore); mark-read / mark-all rollback on non-OK / network fail.
+
+- [x] **AURA-406** · P2 · Reliability · Favorites concurrent toggle  
+  Firestore txn or atomic union/remove — no lost hearts under double-tap.
+  **Done:** `toggleVisitorFavorite` via `runTransaction` (limit + submitted checks inside txn).
+
+- [x] **AURA-408** · P2 · Security · Lock down `/api/status`  
+  Admin-only or strip project/R2/host details in production.
+  **Done:** Prod unauth → `{ ok, error }` only; full project/R2/host payload for admins (dev keeps detailed for local setup).
+
+- [x] **AURA-409** · P2 · a11y · Muted small-text contrast  
+  Audit `--muted` at `text-xs`/`text-[10px]` on canvas; bump token or size.
+  **Done:** Root `--muted` `#5a544c`; sand/olive/spring/sage muted darkened to AA; gallery chrome + AlbumNav labels `text-xs`.
+
+- [x] **AURA-410** · P2 · Responsive · `roomy` + builder density at 768  
+  Soften bottom↔top chrome flip; designers usable at tablet without horizontal scavenger UI.
+  **Done:** `desk` (1024×560) retires thumb chrome; `roomy` keeps hero layout; builders use step tabs / 2-col swatches / wrapped segments until `lg`.
+
+- [x] **AURA-411** · P2 · Performance · Split gallery guest client island  
+  Lazy-chunk lightbox/download/comments; pair **401** loading UI.
+  **Done:** `lazy-gallery-overlays` chunk (lightbox/PIN/contact/`PhotoCommentPanel`); prefetch after load; `OverlayChunkLoading` + route `loading.tsx`.
+
+- [x] **AURA-412** · P2 · Performance · Gallery thumb dimensions  
+  Reserved aspect / `sizes` (reduce CLS); prefer shared image helper over bare `<img>`.
+  **Done:** `GalleryThumb` + `galleryThumbSrcSet`/`sizes`; public photos pass width/height; masonry reserves aspect (4:5 fallback).
+
+- [x] **AURA-413** · P3 · Performance · Coalesce photo-view analytics  
+  Session-dedupe lightbox opens (fewer RTTs on slow networks).
+  **Done:** `recordGalleryPhotoView` — sessionStorage + in-flight dedupe; fire-and-forget on lightbox selected id.
+
+- [x] **AURA-414** · P2 · Security · Client IP trust  
+  Prefer platform client IP (`CF-Connecting-IP` / rightmost XFF) for rate limits.
+  **Done:** `clientIp` → CF-Connecting-IP, then rightmost XFF, then X-Real-IP; rejects spoofable leftmost.
+
+- [x] **AURA-415** · P3 · Security · Admin Origin allowlist  
+  Optional defense-in-depth on cookie-auth mutating APIs (beyond SameSite=Lax).
+  **Done:** Middleware Origin/Referer check on admin API mutations; prod default on when APP URL set; `AURA_ADMIN_ORIGINS` extras.
+
+- [x] **AURA-416** · P3 · Privacy · Public quote field allowlist  
+  Do not spread full proposal doc to clients.
+  **Done:** `toPublicProposal` allowlist on GET/POST; omits studio/project/session ids, token, template id, answers, timestamps.
+
+- [x] **AURA-417** · P3 · a11y · Dialog `inert` background  
+  `inert` + `aria-hidden` on `document.body` siblings while Dialog open (`inert-background.ts`).
+
+- [x] **AURA-418** · P3 · PWA · `/q` + `/cancel` theme-color  
+  Layouts + manifests via `publicFlowPwaChrome`; `questionnaire`/`cancel` pwa-icon keys; InstallHint; no SW.
 
 ---
 
@@ -1634,6 +1796,7 @@ Do not narrate “Aura / Resend / Firebase” in UI copy — labels like “Mess
 | AURA-053     | 2026-07-29 | Projects/Payments/Documents/Settings: loading state before empty flash                                     |
 | AURA-365     | 2026-07-29 | Stripe Checkout Idempotency-Key on public pay                                                              |
 | AURA-054     | 2026-07-29 | Project detail: 15s timeout + error/retry (no infinite Loading)                                            |
+| AURA-055     | 2026-07-30 | updateStudioDb skips photos/analytics by default; scoped gallery photo helpers; upsert-safe persist          |
 | AURA-055     | 2026-07-29 | Reverted unsafe lazy-load; blocked — do not half-migrate (needs 188)                                       |
 | AURA-056     | 2026-07-29 | Workflow loadRelated: toast on failed subfetch (not fake empty)                                            |
 | AURA-057     | 2026-07-29 | beforeunload guard on Settings/Documents/Packages editors                                                  |
@@ -1873,6 +2036,35 @@ Do not narrate “Aura / Resend / Firebase” in UI copy — labels like “Mess
 | AURA-110     | 2026-07-30 | Expired auth sessions purged; clientLogout = Aura + Firebase Auth                                          |
 | AURA-112     | 2026-07-30 | Maintenance cron: expire galleries + email/auth; watermark→387 analytics→117                               |
 | AURA-113     | 2026-07-30 | Derivative paths for png/webp/bin; rewatermark + delete use storage-paths                                   |
+| AURA-131     | 2026-07-30 | Walk-in projects: email optional until send; shared PROJECT_EMAIL_REQUIRED                                 |
+| AURA-132     | 2026-07-30 | Bookings: loading EmptyState; single empty pattern; PATCH rejects non-pending; optimistic status           |
+| AURA-133     | 2026-07-30 | Contract preview: ContractPublicView; template page; workflow draft /c/ before send; promote on send       |
+| AURA-134     | 2026-07-30 | Open payment links: Min/Max in edit UI; validated defaults; pay page amount range label                   |
+| AURA-135     | 2026-07-30 | Packages: no seeded $0 tiers; confirm before create/send with $0; empty pricing blocked                   |
+| AURA-136     | 2026-07-30 | Email toasts: Quote/Pay/Gallery “ready” when not emailed; payments “Couldn't email”                       |
+| AURA-137     | 2026-07-30 | Cancel link moved from workflow header to project More menu                                               |
+| AURA-138     | 2026-07-30 | ShootDay preview already Dialog (AURA-212); removed duplicate Close button                                |
+| AURA-139     | 2026-07-30 | Helper copy → Session day; sparse empty/done; plan/handoff session language                               |
+| AURA-140     | 2026-07-30 | Login mode toggle → SegmentedControl (Sign in / Create studio)                                            |
+| AURA-141     | 2026-07-30 | Bottom tabs: text-xs labels + Home; --admin-tab-bar 3.5rem                                                |
+| AURA-370     | 2026-07-30 | adminSlug project/session paths; session-first /admin/sessions; id deep-links kept                             |
+| AURA-200     | 2026-07-30 | Keep Firestore `proposals`; Quote noun via /api/quotes — no collection rename                                  |
+| AURA-387     | 2026-07-30 | watermarkJobs queue + cron drain; no image I/O under updateStudioDb; photo patches only                        |
+| AURA-386     | 2026-07-30 | /api/media HMAC-bound; path-only 403; remint on gallery/wizard/studio/analytics/book GET                       |
+| AURA-384     | 2026-07-30 | /api/clients + /api/shoots → 410; session plan/wizard/wrap owned under /api/sessions                            |
+| AURA-369     | 2026-07-30 | GCal: selectable calendarId; event dateTime+studio timeZone; freeBusy/CRUD use chosen calendar                 |
+| AURA-150     | 2026-07-30 | Public pay: submitLock + redirecting lock; rate-limit POST; pairs Stripe Idempotency-Key (365)                 |
+| AURA-149     | 2026-07-30 | Transactional emailOutbox on Resend fail; emailClient studioId; contact skipOutbox; cron drain both kinds      |
+| AURA-148     | 2026-07-30 | Hub Download chooser: All photos / Favorites (N); favorites view chrome downloads favorites                    |
+| AURA-147     | 2026-07-30 | Public gallery footer shows studio logo when logoUrl present                                                   |
+| AURA-146     | 2026-07-30 | Booking received → emailBookingReceived; honors emailClientBooking like confirmed                              |
+| AURA-145     | 2026-07-30 | Client reschedule request on /cancel (not auto-slot); studio notify; bookings surface preferred time           |
+| AURA-144     | 2026-07-30 | Email shell: light canvas always (dark kits → Linen); studio accent on CTAs/links via emailShellColors          |
+| AURA-143     | 2026-07-30 | Gallery alts: filename/ordinal via galleryPhotoAlt; masonry open label + lightbox; decorative covers stay empty |
+| AURA-142     | 2026-07-30 | Analytics: days range API + SegmentedControl; CSV export of day series                                    |
+| AURA-130     | 2026-07-30 | Projects list: stage + workflow filters; human workflow step on each row                                   |
+| AURA-129     | 2026-07-30 | Prep/delivery badges aggregate all open sessions; 1 of N labels; workflow API                              |
+| AURA-128     | 2026-07-30 | Pricing step: inline Add session when project has none                                                     |
 | AURA-127     | 2026-07-30 | Project header: Archive/Delete behind More; All projects primary (ActionStack menuIds)                     |
 | AURA-125     | 2026-07-30 | Removed dead firestore-store, Countdown.tsx, hashPassword; indexes already wired                           |
 | AURA-124     | 2026-07-30 | Admin Jump/⌘K command palette → projects + pages                                                          |
@@ -1928,8 +2120,40 @@ Do not narrate “Aura / Resend / Firebase” in UI copy — labels like “Mess
 | AURA-189     | 2026-07-29 | Superseded → `[!]` (keep 161)                                                                              |
 | Audit        | 2026-07-29 | App re-eval: 037/060/070/201/202 rewritten; 114/190 done, 189 `[!]`; added 364–369; waves updated          |
 | AURA-361     | 2026-07-29 | Unified direct R2 upload; photos get Sharp derivatives on complete; video multipart                        |
+| AURA-388     | 2026-07-31 | Regenerated static PWA icons; SW v6 resilient precache                                                     |
+| AURA-389     | 2026-07-31 | Prod HMAC/seal secrets fail-closed; App Hosting `AURA_SESSION_SECRET`; mint 503                            |
+| AURA-395     | 2026-07-31 | Public gallery photo page via Firestore offset/limit + count; cover ids scoped                              |
+| AURA-396     | 2026-07-31 | `countPhotosByGalleryId` via Firestore aggregation count (no full-list load)                               |
+| AURA-390     | 2026-07-31 | Security headers + CSP Report-Only (enforce via `AURA_CSP_ENFORCE`); `/api/csp-report`                     |
+| AURA-391     | 2026-07-31 | Google Calendar OAuth CSRF `state` + signed cookie verify on callback                                      |
+| AURA-392     | 2026-07-31 | rateLimitShared on auth + pay/book/accept/sign/cancel/questionnaire                                        |
+| AURA-393     | 2026-07-31 | SW `controllerchange` reload-once after update (not first install)                                         |
+| AURA-394     | 2026-07-31 | SW v7: no App Router HTML cache; offline navigate → `/offline.html` only                                   |
+| AURA-397     | 2026-07-31 | Public download gallery-scoped photos (no `readStudioDb` photo graph)                                      |
+| AURA-399     | 2026-07-31 | Book + ProjectWorkflowPanel mutations via mutateJson (offline toast, clear pending)                        |
+| AURA-400     | 2026-07-31 | Admin PWA icons via public `studio=` query; legacy `surface=admin` → static (no 401)                       |
+| AURA-398     | 2026-07-31 | Root fonts = Fraunces+Figtree; kit faces on-demand (EnsureKitFonts / settings)                              |
+| AURA-404     | 2026-07-31 | Shoot-day optimistic rollbacks are field-scoped (no stale full-plan wipe)                                  |
+| AURA-407     | 2026-07-31 | Book GET → session types only; dashboard skips photos + analytics                                          |
+| AURA-401     | 2026-07-31 | Route loading/error shells for admin, `/g`, `/h`, `/book` (EmptyState + Try again)                         |
+| AURA-402     | 2026-07-31 | Unknown gallery token → 404 manifest; no installable “Aura Gallery” metadata                               |
+| AURA-403     | 2026-07-31 | Gallery InstallHint dismiss key scoped per token (`aura-install-dismiss-g-*`)                              |
+| AURA-405     | 2026-07-31 | NotificationBell focus trap + Escape; mark-read/mark-all rollback on failure                               |
+| AURA-406     | 2026-07-31 | Favorites heart toggle via Firestore transaction (no lost ids under concurrent taps)                       |
+| AURA-408     | 2026-07-31 | `/api/status` prod strips project/R2/host unless admin; public health is `{ ok, error }` only               |
+| AURA-409     | 2026-07-31 | Muted token + sand/olive/spring/sage kits AA on canvas; gallery chrome/AlbumNav to `text-xs`              |
+| AURA-410     | 2026-07-31 | `desk` chrome retirement (1024×560); builder density at 768 via step tabs / 2-col kits / wrap segments   |
+| AURA-411     | 2026-07-31 | Gallery guest overlays lazy-chunked (lightbox/PIN/contact/comments) + OverlayChunkLoading               |
+| AURA-412     | 2026-07-31 | GalleryThumb: reserved aspect + srcSet/sizes; public photo width/height; AlbumTile uses helper          |
+| AURA-413     | 2026-07-31 | photo-view analytics session-deduped (one RTT per photo; open + swipe)                                 |
+| AURA-414     | 2026-07-31 | `clientIp` trusts CF-Connecting-IP / rightmost XFF (not spoofable leftmost)                             |
+| AURA-415     | 2026-07-31 | Admin API mutation Origin/Referer allowlist in middleware (prod default; AURA_ADMIN_ORIGINS)            |
+| AURA-416     | 2026-07-31 | Public quote GET/POST via `toPublicProposal` allowlist (no full proposal doc)                           |
+| AURA-417     | 2026-07-31 | Dialog marks body siblings `inert`/`aria-hidden` while open (nested-safe)                               |
+| AURA-418     | 2026-07-31 | `/q` + `/cancel` theme-color + manifests/InstallHint (public-flow PWA, no SW)                            |
+| Audit        | 2026-07-31 | Comprehensive Web/PWA audit → `WEB_PWA_AUDIT.md`; open **388–418** as W15 / Phase 21                       |
 
 
 ---
 
-*Living document. Amend in place — do not start parallel lists. **Execution order** (waves) beats ID number. Performance, Responsive, and PWA bars apply to every fix. Media = Cloudflare R2 (Phase 0b / W1). Contact = Resend (Phase 19). Settings = Phase 20.*
+*Living document. Amend in place — do not start parallel lists. **Execution order** (waves) beats ID number. Performance, Responsive, and PWA bars apply to every fix. Media = Cloudflare R2 (Phase 0b / W1). Contact = Resend (Phase 19). Settings = Phase 20. Web/PWA audit residuals = Phase 21 / W15 — [`WEB_PWA_AUDIT.md`](WEB_PWA_AUDIT.md).*

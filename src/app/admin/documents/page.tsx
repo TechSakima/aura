@@ -27,6 +27,7 @@ import type {
   QuestionnaireTemplate,
 } from "@/lib/types";
 import { defaultContractBody } from "@/lib/contracts/defaults";
+import { CONTRACT_PREVIEW_STORAGE_KEY } from "@/lib/contracts/preview-storage";
 
 type DocTab = "contracts" | "questionnaires" | "templates";
 
@@ -320,10 +321,12 @@ function DocumentsPageInner() {
             <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
               {loading ? (
                 <li className="py-4 text-sm text-muted">Loading documents…</li>
-              ) : contracts.length === 0 ? (
+              ) : contracts.filter((c) => c.status !== "draft").length === 0 ? (
                 <li className="py-4 text-sm text-muted">No contracts yet.</li>
               ) : (
-                contracts.map((c) => (
+                contracts
+                  .filter((c) => c.status !== "draft")
+                  .map((c) => (
                   <li
                     key={c.id}
                     className="flex flex-col gap-3 border border-line p-4 sm:flex-row sm:flex-wrap sm:justify-between sm:border-0 sm:p-0 sm:py-4"
@@ -566,9 +569,30 @@ function DocumentsPageInner() {
                   />
                 </Field>
               </fieldset>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <Button type="submit" className="min-h-11">
                   {editingTemplateId ? "Save template" : "Create template"}
+                </Button>
+                <Button
+                  type="button"
+                  tone="ghost"
+                  className="min-h-11"
+                  onClick={() => {
+                    sessionStorage.setItem(
+                      CONTRACT_PREVIEW_STORAGE_KEY,
+                      JSON.stringify({
+                        title: tmplName,
+                        body: tmplBody,
+                      }),
+                    );
+                    window.open(
+                      "/admin/documents/contract-preview",
+                      "_blank",
+                      "noopener,noreferrer",
+                    );
+                  }}
+                >
+                  Preview
                 </Button>
                 {editingTemplateId ? (
                   <Button
@@ -600,14 +624,30 @@ function DocumentsPageInner() {
                           : ""}
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      tone="ghost"
-                      className="min-h-11 w-full sm:w-auto"
-                      onClick={() => startEditTemplate(t)}
-                    >
-                      Edit
-                    </Button>
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                      <Button
+                        type="button"
+                        tone="ghost"
+                        className="min-h-11 w-full sm:w-auto"
+                        onClick={() =>
+                          window.open(
+                            `/admin/documents/contract-preview?templateId=${encodeURIComponent(t.id)}`,
+                            "_blank",
+                            "noopener,noreferrer",
+                          )
+                        }
+                      >
+                        Preview
+                      </Button>
+                      <Button
+                        type="button"
+                        tone="ghost"
+                        className="min-h-11 w-full sm:w-auto"
+                        onClick={() => startEditTemplate(t)}
+                      >
+                        Edit
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>

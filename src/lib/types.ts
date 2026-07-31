@@ -499,15 +499,49 @@ export type ContactMessage = {
  * Durable email retry queue (AURA-313 contact; generalize in AURA-149).
  * Not loaded into AuraDatabase / TENANT_COLLECTIONS.
  */
+/** Durable Resend retry payload (AURA-149). */
+export type EmailOutboxPayload = {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+  replyTo?: string;
+  fromDisplayName?: string;
+  idempotencyKey?: string;
+};
+
 export type EmailOutboxJob = {
   id: string;
   studioId: string;
-  kind: "contact_message";
-  /** contactMessages doc id */
+  /** contact_message = rebuild from ContactMessage; transactional = stored payload */
+  kind: "contact_message" | "transactional";
+  /** contactMessages id, or idempotency key / job id for transactional */
   refId: string;
   status: "pending" | "sent" | "dead";
   attempts: number;
   nextAttemptAt: string;
+  lastError?: string;
+  /** Required when kind === "transactional" */
+  payload?: EmailOutboxPayload;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/**
+ * Durable gallery watermark reprocess (AURA-387).
+ * Not loaded into AuraDatabase / TENANT_COLLECTIONS.
+ */
+export type WatermarkReprocessJob = {
+  id: string;
+  studioId: string;
+  galleryId: string;
+  status: "pending" | "running" | "done" | "dead";
+  attempts: number;
+  nextAttemptAt: string;
+  /** Index into sorted gallery photos for resume */
+  cursor: number;
+  updated: number;
+  errors: number;
   lastError?: string;
   createdAt: string;
   updatedAt: string;
@@ -527,6 +561,12 @@ export type Project = {
   id: string;
   studioId: string;
   name: string;
+  /**
+   * Admin URL segment (AURA-370). Unique per studio.
+   * Path: `/admin/projects/{adminSlug|id}` — opaque id deep-links still work.
+   */
+  adminSlug?: string;
+  /** Empty string allowed for walk-in / phone-only (AURA-131). */
   email: string;
   phone?: string;
   notes?: string;
@@ -560,6 +600,11 @@ export type ProjectSession = {
   studioId: string;
   projectId: string;
   type: string;
+  /**
+   * Admin URL segment within the project (AURA-370).
+   * Path: `…/sessions/{adminSlug|id}` — opaque id deep-links still work.
+   */
+  adminSlug?: string;
   /** ISO UTC start */
   startsAt?: string;
   /** ISO UTC end */
@@ -777,6 +822,11 @@ export type Studio = {
   /** Google Calendar OAuth refresh token — AES-GCM sealed at rest (`enc:v1:…`, AURA-109). */
   googleCalendarRefreshToken?: string;
   googleCalendarConnected?: boolean;
+  /**
+   * Calendar id for freeBusy + event CRUD (AURA-369).
+   * Defaults to `primary` when unset.
+   */
+  googleCalendarId?: string;
   /** Last successful GCal freeBusy/write (AURA-343). */
   googleCalendarLastSyncAt?: string;
   /** Last GCal sync/write failure message for Settings health. */
@@ -1045,6 +1095,10 @@ export type BookingRequest = {
   status: "pending" | "confirmed" | "declined" | "canceled";
   declineReason?: string;
   cancelReason?: string;
+  /** Client reschedule request (AURA-145) — studio applies manually */
+  rescheduleRequestedAt?: string;
+  reschedulePreferredStartsAt?: string;
+  rescheduleNote?: string;
   projectId?: string;
   sessionId?: string;
   createdAt: string;

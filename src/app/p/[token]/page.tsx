@@ -24,16 +24,16 @@ import {
   resolveStudioThemePreset,
   studioThemeCssVars,
 } from "@/lib/themes";
+import type { PublicProposal } from "@/lib/public-proposal";
 import type {
   IntakeQuestion,
   PackageTier,
-  Proposal,
   StudioTheme,
 } from "@/lib/types";
 import type { QuoteAcceptNext } from "@/lib/workflow/quote-next";
 
 type ProposalPayload = {
-  proposal: Proposal;
+  proposal: PublicProposal;
   studio: {
     name: string;
     logoUrl?: string;
@@ -124,15 +124,17 @@ export default function PublicProposalPage() {
   const clientName = projectName || rawName;
   const selectedTier = proposal.tiers.find((t) => t.id === selectedTierId);
   const declined = proposal.status === "declined";
+  const fontPreset = studio.theme?.fontPreset;
   const themeStyle = studioThemeCssVars(
     resolveStudioThemePreset(studio.theme),
-    { fontPreset: studio.theme?.fontPreset },
+    { fontPreset },
   ) as CSSProperties;
 
   return (
     <PublicShell
       bare
       style={themeStyle}
+      fontPreset={fontPreset}
       footer={
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-medium text-ink">{studio.name}</p>

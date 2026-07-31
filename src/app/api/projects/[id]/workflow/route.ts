@@ -8,8 +8,13 @@ import {
   projectRemainingBalance,
 } from "@/lib/payments/project-balance";
 import type { ProjectWorkflowStep } from "@/lib/types";
+import {
+  aggregateSessionStepState,
+  isSessionDeliveryReady,
+  isSessionPrepReady,
+} from "@/lib/workflow/session-readiness";
 
-/** Server-computed workflow readiness (AURA-172). UI consumes; does not re-derive. */
+/** Server-computed workflow readiness (AURA-172 / AURA-129). */
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -30,7 +35,9 @@ export async function GET(
   const qDone = questionnaires.some((r) => Boolean(r.submittedAt));
   const qSent = questionnaires.length > 0;
   const contractSigned = contracts.some((c) => c.status === "completed");
-  const contractSent = contracts.length > 0;
+  const contractSent = contracts.some(
+    (c) => c.status === "awaiting_signature" || c.status === "completed",
+  );
   const quoteAccepted = proposals.some((p) => p.status === "accepted");
   const quoteExists = proposals.length > 0;
   const depositReceived = proposals.some((p) => p.depositStatus === "received");
@@ -48,30 +55,46 @@ export async function GET(
     remainingBalance === 0 ||
     invoices.some((i) => i.status === "paid" && isBalanceInvoiceTitle(i.title));
 
-  const primarySession = sessions[0];
-  const gallery = primarySession?.galleryId
-    ? db.galleries.find((g) => g.id === primarySession.galleryId)
-    : db.galleries.find(
-        (g) => (g.sessionId || g.shootId) === primarySession?.id,
-      );
-  const photoCount = gallery
-    ? db.photos.filter((p) => p.galleryId === gallery.id).length
-    : 0;
-
-  const prepReady = Boolean(
-    primarySession?.wizardSkippedPrep ||
-      db.shootPlans.some((p) => p.sessionId === primarySession?.id),
-  );
-  const deliveryReady = Boolean(
-    gallery?.status === "live" ||
-      gallery?.status === "archived" ||
-      photoCount > 0 ||
-      primarySession?.status === "delivered" ||
-      primarySession?.status === "archived",
-  );
+  const openSessions = sessions.filter((s) => s.status !== "archived");
+  const prepReadyCount = openSessions.filter((s) =>
+    isSessionPrepReady({
+      status: s.status,
+      wizardSkippedPrep: s.wizardSkippedPrep,
+      prepComplete:
+        Boolean(s.wizardSkippedPrep) ||
+        db.shootPlans.some(
+          (p) => (p.sessionId || p.shootId) === s.id,
+        ),
+    }),
+  ).length;
+  const deliveryReadyCount = openSessions.filter((s) => {
+    const gallery = s.galleryId
+      ? db.galleries.find((g) => g.id === s.galleryId)
+      : db.galleries.find((g) => (g.sessionId || g.shootId) === s.id);
+    return isSessionDeliveryReady({
+      status: s.status,
+      galleryStatus: gallery?.status,
+      deliveryComplete:
+        gallery?.status === "live" ||
+        gallery?.status === "archived" ||
+        s.status === "delivered",
+    });
+  }).length;
 
   const sessionUnlocked = depositPaid;
   const current = project.workflowStep || "inquiry";
+  const prepAgg = aggregateSessionStepState({
+    unlocked: sessionUnlocked,
+    currentIsStep: current === "prep",
+    readyCount: prepReadyCount,
+    total: openSessions.length,
+  });
+  const deliveryAgg = aggregateSessionStepState({
+    unlocked: sessionUnlocked,
+    currentIsStep: current === "delivery",
+    readyCount: deliveryReadyCount,
+    total: openSessions.length,
+  });
 
   const statusByStep: Record<ProjectWorkflowStep, "done" | "active" | "todo"> = {
     inquiry: "done",
@@ -79,14 +102,8 @@ export async function GET(
     pricing: quoteAccepted ? "done" : quoteExists ? "active" : "todo",
     contract: contractSigned ? "done" : contractSent ? "active" : "todo",
     deposit: depositPaid ? "done" : "todo",
-    prep: !sessionUnlocked ? "todo" : prepReady ? "done" : current === "prep" ? "active" : "todo",
-    delivery: !sessionUnlocked
-      ? "todo"
-      : deliveryReady
-        ? "done"
-        : current === "delivery"
-          ? "active"
-          : "todo",
+    prep: prepAgg.state,
+    delivery: deliveryAgg.state,
   };
 
   return NextResponse.json({
@@ -98,5 +115,10 @@ export async function GET(
     balancePaid,
     remainingBalance,
     quotedTotal,
+    sessionCounts: {
+      open: openSessions.length,
+      prepReady: prepReadyCount,
+      deliveryReady: deliveryReadyCount,
+    },
   });
 }

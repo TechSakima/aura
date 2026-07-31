@@ -13,13 +13,19 @@ import {
   List,
   ListRow,
   PageHeader,
+  PROJECT_STAGE_FILTER_OPTIONS,
+  Select,
   StatusBadge,
   Textarea,
   useToast,
 } from "@/components/ui";
 import { ADMIN_LIST_PAGE } from "@/lib/admin-list-page";
+import {
+  PROJECT_PATH_STEPS,
+  workflowStepLabel,
+} from "@/lib/workflow/path";
 
-import type { Project } from "@/lib/types";
+import type { Project, ProjectStage, ProjectWorkflowStep } from "@/lib/types";
 
 function ProjectsPageInner() {
   const router = useRouter();
@@ -39,6 +45,8 @@ function ProjectsPageInner() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [stageFilter, setStageFilter] = useState("");
+  const [workflowFilter, setWorkflowFilter] = useState("");
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedQ(q.trim()), 250);
@@ -53,7 +61,11 @@ function ProjectsPageInner() {
       limit: String(ADMIN_LIST_PAGE),
     });
     if (debouncedQ) params.set("q", debouncedQ);
-    if (showArchived) params.set("includeArchived", "1");
+    if (showArchived || stageFilter === "archived") {
+      params.set("includeArchived", "1");
+    }
+    if (stageFilter) params.set("stage", stageFilter);
+    if (workflowFilter) params.set("workflowStep", workflowFilter);
     const res = await fetch(`/api/projects?${params}`);
     if (!res.ok) {
       setLoading(false);
@@ -73,7 +85,7 @@ function ProjectsPageInner() {
   useEffect(() => {
     void loadPage(0, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQ, showArchived]);
+  }, [debouncedQ, showArchived, stageFilter, workflowFilter]);
 
   // Dashboard first-project CTA → open create form (AURA-260).
   useEffect(() => {
@@ -108,8 +120,13 @@ function ProjectsPageInner() {
     resetForm();
     setAdding(false);
     push("Project saved", "success");
-    router.push(`/admin/projects/${project.id}`);
+    router.push(
+      `/admin/projects/${project.adminSlug || project.id}`,
+    );
   }
+
+  const filteredEmpty =
+    Boolean(debouncedQ || stageFilter || workflowFilter) || showArchived;
 
   return (
     <div className="space-y-6">
@@ -161,7 +178,7 @@ function ProjectsPageInner() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Optional — required when emailing"
+                placeholder="Optional until you send"
               />
             </Field>
             <Field>
@@ -206,19 +223,60 @@ function ProjectsPageInner() {
         </Card>
       ) : (
         <>
-          <Field className="max-w-md">
-            <Label htmlFor="q">Search</Label>
-            <Input
-              id="q"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Name, email, phone"
-            />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field className="sm:col-span-2 lg:col-span-1">
+              <Label htmlFor="q">Search</Label>
+              <Input
+                id="q"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Name, email, phone"
+              />
+            </Field>
+            <Field>
+              <Label htmlFor="stage">Stage</Label>
+              <Select
+                id="stage"
+                value={stageFilter}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setStageFilter(next);
+                  if (next === "archived") setShowArchived(true);
+                }}
+              >
+                <option value="">All stages</option>
+                {PROJECT_STAGE_FILTER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field>
+              <Label htmlFor="workflow">Workflow</Label>
+              <Select
+                id="workflow"
+                value={workflowFilter}
+                onChange={(e) => setWorkflowFilter(e.target.value)}
+              >
+                <option value="">All steps</option>
+                {PROJECT_PATH_STEPS.map((step) => (
+                  <option key={step.id} value={step.id}>
+                    {step.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
           <label className="flex min-h-11 items-center gap-2 text-sm">
             <Checkbox
-              checked={showArchived}
-              onChange={(e) => setShowArchived(e.target.checked)}
+              checked={showArchived || stageFilter === "archived"}
+              onChange={(e) => {
+                setShowArchived(e.target.checked);
+                if (!e.target.checked && stageFilter === "archived") {
+                  setStageFilter("");
+                }
+              }}
             />
             Show archived
           </label>
@@ -226,12 +284,16 @@ function ProjectsPageInner() {
             <EmptyState variant="loading" title="Loading projects…" />
           ) : projects.length === 0 ? (
             <EmptyState
-              title={total === 0 && !debouncedQ ? "No projects yet" : "No matches"}
+              title={
+                total === 0 && !filteredEmpty ? "No projects yet" : "No matches"
+              }
               description={
-                total === 0 && !debouncedQ ? undefined : "Try a different search."
+                total === 0 && !filteredEmpty
+                  ? undefined
+                  : "Try a different search or filter."
               }
               action={
-                total === 0 && !debouncedQ && !adding ? (
+                total === 0 && !filteredEmpty && !adding ? (
                   <Button
                     onClick={() => {
                       setAdding(true);
@@ -246,24 +308,35 @@ function ProjectsPageInner() {
           ) : (
             <div className="space-y-4">
               <List>
-                {projects.map((c) => (
-                  <ListRow key={c.id} href={`/admin/projects/${c.id}`}>
-                    <div className="min-w-0">
-                      <p className="font-display text-xl text-ink">{c.name}</p>
-                      <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
-                        <span className="truncate">{c.type || "Project"}</span>
-                        <StatusBadge
-                          domain="projectStage"
-                          value={c.stage || "inquiry"}
-                        />
-                        {c.email ? (
-                          <span className="truncate">· {c.email}</span>
-                        ) : null}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-sm text-accent">Open</span>
-                  </ListRow>
-                ))}
+                {projects.map((c) => {
+                  const stage = (c.stage || "inquiry") as ProjectStage;
+                  const step = (c.workflowStep ||
+                    "inquiry") as ProjectWorkflowStep;
+                  const stepLabel = workflowStepLabel(step);
+                  return (
+                    <ListRow
+                      key={c.id}
+                      href={`/admin/projects/${c.adminSlug || c.id}`}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-display text-xl text-ink">
+                          {c.name}
+                        </p>
+                        <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
+                          <span className="truncate">
+                            {c.type || "Project"}
+                          </span>
+                          <StatusBadge domain="projectStage" value={stage} />
+                          <span className="truncate">· {stepLabel}</span>
+                          {c.email ? (
+                            <span className="truncate">· {c.email}</span>
+                          ) : null}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-sm text-accent">Open</span>
+                    </ListRow>
+                  );
+                })}
               </List>
               {hasMore ? (
                 <Button

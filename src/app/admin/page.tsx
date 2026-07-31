@@ -193,7 +193,7 @@ export default function AdminDashboard() {
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href={data.upcomingSession.helperHref}>
-              <Button size="lg">Open shoot day</Button>
+              <Button size="lg">Session day</Button>
             </Link>
             <Link href={data.upcomingSession.projectHref}>
               <Button size="lg" tone="neutral">

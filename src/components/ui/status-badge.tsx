@@ -20,6 +20,31 @@ const PROJECT_STAGE: Record<string, StatusMeta> = {
   archived: { label: "Archived", tone: "neutral" },
 };
 
+/** Ordered stage options for filters (AURA-130). */
+export const PROJECT_STAGE_FILTER_OPTIONS: {
+  value: ProjectStage;
+  label: string;
+}[] = (
+  [
+    "inquiry",
+    "booked",
+    "in_progress",
+    "delivered",
+    "completed",
+    "canceled",
+    "archived",
+  ] as const
+).map((value) => ({
+  value,
+  label: PROJECT_STAGE[value]!.label,
+}));
+
+export function projectStageLabel(
+  stage?: ProjectStage | string | null,
+): string {
+  return resolve("projectStage", stage).label;
+}
+
 const SESSION_STATUS: Record<string, StatusMeta> = {
   inquiry: { label: "Inquiry", tone: "accent" },
   proposed: { label: "Proposed", tone: "accent" },

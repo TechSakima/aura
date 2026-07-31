@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { recordEvent } from "@/lib/analytics";
-import { nextStepHtml, offeringLabel } from "@/lib/copy/offering";
 import { COL } from "@/lib/db/collections";
 import { findStudioByHomepageSlug } from "@/lib/db/homepage-slug";
 import {
   appendStudioDoc,
   listSessionTypesForStudio,
 } from "@/lib/db/store";
-import { notifyStudio, emailClient, wrapHtml } from "@/lib/notify/send";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import {
+  allocateProjectAdminSlug,
+  allocateSessionAdminSlug,
+} from "@/lib/admin-slug";
+import { resolveBrowseMediaUrl } from "@/lib/media-url-server";
+import { emailBookingReceived, notifyStudio } from "@/lib/notify/send";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 import type { BookingRequest, Project, ProjectSession } from "@/lib/types";
 
 export async function GET(
@@ -19,8 +23,8 @@ export async function GET(
   const { slug } = await ctx.params;
   const studio = await findStudioByHomepageSlug(slug);
   if (!studio) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const { readStudioDb } = await import("@/lib/db/store");
-  const db = await readStudioDb(studio.id);
+  // Session types only — no full studio graph (AURA-407).
+  const sessionTypes = await listSessionTypesForStudio(studio.id);
 
   const url = new URL(req.url);
   if (url.searchParams.get("availability") === "1") {
@@ -39,7 +43,7 @@ export async function GET(
         reason: "past",
       });
     }
-    const st = db.sessionTypes.find((t) => t.id === sessionTypeId && t.active);
+    const st = sessionTypes.find((t) => t.id === sessionTypeId && t.active);
     if (!st) {
       return NextResponse.json({
         available: false,
@@ -79,10 +83,10 @@ export async function GET(
   return NextResponse.json({
     studio: {
       name: studio.name,
-      logoUrl: studio.logoUrl,
+      logoUrl: await resolveBrowseMediaUrl(studio.logoUrl),
       theme: studio.theme,
     },
-    sessionTypes: db.sessionTypes
+    sessionTypes: sessionTypes
       .filter((t) => t.active)
       .map((t) => ({
         id: t.id,
@@ -102,7 +106,7 @@ export async function POST(
 ) {
   const { slug } = await ctx.params;
   const ip = clientIp(req);
-  const ipLimit = rateLimit(`book:${slug}:${ip}`, 5, 10 * 60_000);
+  const ipLimit = await rateLimitShared(`book:${slug}:${ip}`, 5, 10 * 60_000);
   if (!ipLimit.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -124,7 +128,11 @@ export async function POST(
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
-  const emailLimit = rateLimit(`book-email:${email}`, 2, 60 * 60_000);
+  const emailLimit = await rateLimitShared(
+    `book-email:${email}`,
+    2,
+    60 * 60_000,
+  );
   if (!emailLimit.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -175,6 +183,13 @@ export async function POST(
     );
   }
 
+  const { listProjectsForStudio, listSessionsForStudio } = await import(
+    "@/lib/db/store"
+  );
+  const [existingProjects, existingSessions] = await Promise.all([
+    listProjectsForStudio(studio.id),
+    listSessionsForStudio(studio.id),
+  ]);
   const project: Project = {
     id: nanoid(),
     studioId: studio.id,
@@ -191,6 +206,11 @@ export async function POST(
     createdAt: now,
     updatedAt: now,
   };
+  project.adminSlug = allocateProjectAdminSlug(
+    { projects: existingProjects },
+    name,
+    project.id,
+  );
   const createdProjectId = project.id;
   const end = new Date(startsAt);
   end.setMinutes(end.getMinutes() + stPreview.durationMinutes);
@@ -205,6 +225,12 @@ export async function POST(
     createdAt: now,
     updatedAt: now,
   };
+  session.adminSlug = allocateSessionAdminSlug(
+    { sessions: existingSessions },
+    project.id,
+    session.type,
+    session.id,
+  );
   const booking: BookingRequest = {
     id: nanoid(),
     studioId: studio.id,
@@ -244,20 +270,12 @@ export async function POST(
     body: `${name} · ${stPreview.name}`,
     href: "/admin/bookings",
   });
-  await emailClient({
+  await emailBookingReceived({
+    studioId: studio.id,
     to: email,
-    subject: `Booking received — ${studio.name}`,
-    fromDisplayName: studio.name,
-    replyTo: studio.ownerEmail,
-    html: wrapHtml({
-      studioName: studio.name,
-      title: "Request received",
-      bodyHtml: `<p>Hi ${name},</p>
-<p>Thanks — we received your booking request for ${offeringLabel(stPreview?.name)} and will confirm shortly.</p>
-${nextStepHtml("No action needed yet. We'll email you when your booking is confirmed.")}`,
-    }),
-    text: `Hi ${name},\n\nThanks — we received your booking request for ${offeringLabel(stPreview?.name)} and will confirm shortly.\n\nNext: No action needed yet. We'll email you when your booking is confirmed.`,
-    idempotencyKey: `booking-received/${createdProjectId}`,
+    clientName: name,
+    sessionTypeName: stPreview.name,
+    projectId: createdProjectId,
   });
 
   return NextResponse.json({ ok: true });

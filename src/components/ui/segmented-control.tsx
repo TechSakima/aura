@@ -35,7 +35,8 @@ export function SegmentedControl<T extends string>({
           onClick={() => onChange(opt.id)}
           className={cn(
             "min-h-11 min-w-0 grow basis-[calc(50%-0.25rem)] border px-3 py-2 text-[11px] uppercase tracking-wider transition",
-            "sm:grow-0 sm:basis-auto",
+            /* Keep 2-up wrap through tablet; single-line from lg (AURA-410). */
+            "lg:grow-0 lg:basis-auto",
             value === opt.id
               ? "border-accent bg-accent text-accent-ink"
               : "border-line bg-surface text-ink hover:border-ink/30",

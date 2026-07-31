@@ -1,20 +1,16 @@
 /**
- * Signed Aura session cookie — Edge-safe (Web Crypto) for middleware (AURA-104).
+ * Signed Aura session cookie — Edge-safe (Web Crypto) for middleware (AURA-104 / AURA-389).
  * Cookie value: `token.exp.sig` (HMAC-SHA256). Layout still loads the Firestore session.
  */
+
+import {
+  auraSessionSecret,
+  tryAuraSessionSecret,
+} from "@/lib/crypto-secrets";
 
 export const SESSION_COOKIE = "aura_session";
 export const SESSION_DAYS = 14;
 export const SESSION_MAX_AGE_SEC = SESSION_DAYS * 24 * 60 * 60;
-
-function sessionSecret(): string {
-  return (
-    process.env.AURA_SESSION_SECRET?.trim() ||
-    process.env.HOMEPAGE_UNLOCK_SECRET?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    "aura-session"
-  );
-}
 
 function toBase64Url(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
@@ -34,11 +30,11 @@ function safeEqual(a: string, b: string): boolean {
   return out === 0;
 }
 
-async function signPayload(payload: string): Promise<string> {
+async function signPayload(payload: string, secret: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
-    enc.encode(sessionSecret()),
+    enc.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -78,7 +74,7 @@ export async function mintSessionCookieValue(
     throw new Error("Invalid session for cookie");
   }
   const payload = `${token}.${exp}`;
-  const sig = await signPayload(payload);
+  const sig = await signPayload(payload, auraSessionSecret());
   return `${payload}.${sig}`;
 }
 
@@ -102,8 +98,10 @@ export async function verifySessionCookie(
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
   const exp = Number(expRaw);
   if (!Number.isFinite(exp) || exp * 1000 <= nowMs) return null;
+  const secret = tryAuraSessionSecret();
+  if (!secret) return null;
   const payload = `${token}.${expRaw}`;
-  const expected = await signPayload(payload);
+  const expected = await signPayload(payload, secret);
   if (!safeEqual(sig, expected)) return null;
   return { token, expiresAtMs: exp * 1000 };
 }

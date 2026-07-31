@@ -1,23 +1,23 @@
 /**
- * Aura service worker (AURA-290 / AURA-368 / AURA-300).
+ * Aura service worker (AURA-290 / AURA-368 / AURA-300 / AURA-394).
  * Strategy: docs/PWA_SERVICE_WORKER.md
  *
  * - Registered per surface scope: /admin/, /g/, /h/, /book/ (not origin-wide)
  * - Precache static shell (offline page + icons)
- * - Navigations: network-first; cache only safe public HTML; offline fallback
+ * - Navigations: network-first; offline → /offline.html (never App Router HTML cache)
  * - /api/* (except budgeted media thumbs): network only
  * - Media: thumb/preview derivatives only, capped byte budget; never originals
  * - Versioned caches; skipWaiting + clients.claim
  */
-const VERSION = "v5";
+const VERSION = "v7";
 const STATIC = `aura-static-${VERSION}`;
-const PAGES = `aura-pages-${VERSION}`;
 const MEDIA = `aura-media-${VERSION}`;
 
 /** Soft cap for gallery derivative images (AURA-300). */
 const MEDIA_BUDGET_BYTES = 48 * 1024 * 1024;
 const MEDIA_SIZE_FALLBACK = { thumb: 80_000, preview: 350_000 };
 
+/** Static shell — regenerate via `npm run icons` (AURA-388). */
 const PRECACHE = [
   "/offline.html",
   "/icon-192.png",
@@ -82,19 +82,6 @@ function isImageLikeRequest(request) {
   if (d === "image" || d === "") return true;
   const accept = (request.headers.get("Accept") || "").toLowerCase();
   return accept.includes("image");
-}
-
-/** Do not persist auth-sensitive or private HTML responses. */
-function canCacheResponse(response) {
-  if (!response || !response.ok || response.type === "opaque") return false;
-  if (response.headers.has("Set-Cookie")) return false;
-  const cc = (response.headers.get("Cache-Control") || "").toLowerCase();
-  if (cc.includes("no-store") || cc.includes("private")) return false;
-  const ct = (response.headers.get("Content-Type") || "").toLowerCase();
-  if (ct.includes("text/x-component") || ct.includes("text/x-script")) {
-    return false;
-  }
-  return ct.includes("text/html");
 }
 
 function canCacheMediaResponse(response) {
@@ -179,17 +166,36 @@ async function mediaCacheFirst(request, kind) {
   }
 }
 
+async function offlineNavigateResponse() {
+  const offline = await caches.match("/offline.html");
+  return (
+    offline ||
+    new Response("Offline", {
+      status: 503,
+      headers: { "Content-Type": "text/plain" },
+    })
+  );
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(STATIC)
-      .then((cache) => cache.addAll(PRECACHE))
-      .then(() => self.skipWaiting()),
+    (async () => {
+      const cache = await caches.open(STATIC);
+      /* Per-URL add — one 404 must not abort entire SW install (AURA-388). */
+      await Promise.all(
+        PRECACHE.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn("[sw] precache skip", url, err);
+          }),
+        ),
+      );
+      await self.skipWaiting();
+    })(),
   );
 });
 
 self.addEventListener("activate", (event) => {
-  const keep = new Set([STATIC, PAGES, MEDIA]);
+  const keep = new Set([STATIC, MEDIA]);
   event.waitUntil(
     caches
       .keys()
@@ -259,30 +265,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigations: network-first → optional page cache → offline shell
+  // Navigations: network-first; offline → self-contained /offline.html (AURA-394).
+  // Never cache App Router HTML — /_next chunks are network-only and leave blank shells.
   if (request.mode === "navigate") {
     event.respondWith(
       (async () => {
         try {
-          const res = await fetch(request);
-          if (canCacheResponse(res)) {
-            const cache = await caches.open(PAGES);
-            if (!url.pathname.startsWith("/admin")) {
-              cache.put(request, res.clone());
-            }
-          }
-          return res;
+          return await fetch(request);
         } catch {
-          const cached = await caches.match(request);
-          if (cached) return cached;
-          const offline = await caches.match("/offline.html");
-          return (
-            offline ||
-            new Response("Offline", {
-              status: 503,
-              headers: { "Content-Type": "text/plain" },
-            })
-          );
+          return offlineNavigateResponse();
         }
       })(),
     );

@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import {
+  ensureProjectAdminSlug,
+  ensureSessionAdminSlug,
+  findSessionByRef,
+} from "@/lib/admin-slug";
 import { deleteShootCascade } from "@/lib/db/delete-shoot";
-import { getShootBundle, updateStudioDb } from "@/lib/db/store";
+import {
+  getShootBundle,
+  readStudioDb,
+  updateStudioDb,
+} from "@/lib/db/store";
 import {
   defaultSessionEndsAt,
   deleteGoogleCalendarEvent,
@@ -11,13 +20,33 @@ import {
 import { normalizeSessionStartsAt } from "@/lib/validation/session-datetime";
 import type { ShootStatus } from "@/lib/types";
 
+async function resolveSessionId(
+  studioId: string,
+  ref: string,
+): Promise<string | null> {
+  const db = await readStudioDb(studioId);
+  const session = findSessionByRef(db, ref);
+  if (!session) return null;
+  if (!session.adminSlug) {
+    await updateStudioDb(studioId, (d) => {
+      const s = d.sessions.find((x) => x.id === session.id);
+      if (s) ensureSessionAdminSlug(d, s);
+      const p = d.projects.find((x) => x.id === session.projectId);
+      if (p) ensureProjectAdminSlug(d, p);
+    });
+  }
+  return session.id;
+}
+
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { id } = await ctx.params;
+  const { id: ref } = await ctx.params;
+  const id = await resolveSessionId(admin.studioId, ref);
+  if (!id) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const bundle = await getShootBundle(id);
   if (!bundle || bundle.shoot.studioId !== admin.studioId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -41,7 +70,9 @@ export async function PATCH(
 ) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { id } = await ctx.params;
+  const { id: ref } = await ctx.params;
+  const id = await resolveSessionId(admin.studioId, ref);
+  if (!id) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await req.json();
 
   let prevEventId: string | undefined;
@@ -110,6 +141,7 @@ export async function PATCH(
     if (body.wizardAdvancedPastShootDay != null) {
       s.wizardAdvancedPastShootDay = Boolean(body.wizardAdvancedPastShootDay);
     }
+    ensureSessionAdminSlug(db, s);
     s.updatedAt = new Date().toISOString();
     return s;
   });
@@ -171,7 +203,9 @@ export async function DELETE(
 ) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { id } = await ctx.params;
+  const { id: ref } = await ctx.params;
+  const id = await resolveSessionId(admin.studioId, ref);
+  if (!id) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const ok = await deleteShootCascade(admin.studioId, id);
   if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ok: true, deleted: id });

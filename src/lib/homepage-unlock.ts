@@ -1,20 +1,20 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import {
+  homepageUnlockSecret,
+  tryHomepageUnlockSecret,
+} from "@/lib/crypto-secrets";
 
 export const HOMEPAGE_UNLOCK_COOKIE = "aura_hp_unlock";
 
 /** Unlock lasts 30 days or until site password changes. */
 const MAX_AGE_SEC = 60 * 60 * 24 * 30;
 
-function signingKey(passwordHash: string): string {
-  const salt =
-    process.env.HOMEPAGE_UNLOCK_SECRET ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "aura-homepage-unlock";
+function signingKey(passwordHash: string, salt: string): string {
   return `${passwordHash}:${salt}`;
 }
 
-function sign(payload: string, passwordHash: string): string {
-  return createHmac("sha256", signingKey(passwordHash))
+function sign(payload: string, passwordHash: string, salt: string): string {
+  return createHmac("sha256", signingKey(passwordHash, salt))
     .update(payload)
     .digest("base64url");
 }
@@ -37,7 +37,8 @@ export function createHomepageUnlockToken(
 ): string {
   const exp = Math.floor(nowMs / 1000) + MAX_AGE_SEC;
   const payload = `${slug}.${exp}`;
-  return `${payload}.${sign(payload, passwordHash)}`;
+  const salt = homepageUnlockSecret();
+  return `${payload}.${sign(payload, passwordHash, salt)}`;
 }
 
 export function verifyHomepageUnlockToken(
@@ -47,6 +48,8 @@ export function verifyHomepageUnlockToken(
   nowMs = Date.now(),
 ): boolean {
   if (!token || !slug || !passwordHash) return false;
+  const salt = tryHomepageUnlockSecret();
+  if (!salt) return false;
   const parts = token.split(".");
   if (parts.length !== 3) return false;
   const [tokenSlug, expRaw, sig] = parts;
@@ -55,7 +58,7 @@ export function verifyHomepageUnlockToken(
   const exp = Number(expRaw);
   if (!Number.isFinite(exp) || exp * 1000 < nowMs) return false;
   const payload = `${tokenSlug}.${expRaw}`;
-  const expected = sign(payload, passwordHash);
+  const expected = sign(payload, passwordHash, salt);
   return safeEqual(sig, expected);
 }
 

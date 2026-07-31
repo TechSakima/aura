@@ -7,11 +7,22 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
 } from "firebase/auth";
-import { Button, Field, Input, Label } from "@/components/ui";
+import {
+  Button,
+  Field,
+  Input,
+  Label,
+  SegmentedControl,
+} from "@/components/ui";
 import { firebaseConfigured, getFirebaseAuth } from "@/lib/firebase/client";
 import { mergeAdminNextWithLast } from "@/lib/admin-last-route";
 
 type Mode = "signin" | "signup";
+
+const LOGIN_MODES: { id: Mode; label: string }[] = [
+  { id: "signin", label: "Sign in" },
+  { id: "signup", label: "Create studio" },
+];
 
 async function exchangeIdToken(idToken: string) {
   const res = await fetch("/api/auth/login", {
@@ -158,12 +169,18 @@ function LoginForm() {
     <form onSubmit={onSubmit} className="mx-auto w-full max-w-md space-y-5">
       <div>
         <h1 className="font-display text-4xl text-ink">Aura</h1>
-        <p className="mt-2 text-muted">
-          {mode === "signup"
-            ? "Create your studio workspace."
-            : "Sign in to your studio workspace."}
-        </p>
+        <p className="mt-2 text-muted">Studio workspace</p>
       </div>
+
+      <SegmentedControl
+        ariaLabel="Account"
+        options={LOGIN_MODES}
+        value={mode}
+        onChange={(next) => {
+          setMode(next);
+          setError("");
+        }}
+      />
 
       {mode === "signup" ? (
         <Field>
@@ -203,46 +220,14 @@ function LoginForm() {
           minLength={6}
         />
       </Field>
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading
-          ? mode === "signup"
-            ? "Creating…"
-            : "Signing in…"
-          : mode === "signup"
-            ? "Create studio"
-            : "Sign in"}
+      <Button
+        type="submit"
+        className="w-full min-h-11"
+        pending={loading}
+        pendingLabel={mode === "signup" ? "Creating…" : "Signing in…"}
+      >
+        {mode === "signup" ? "Create studio" : "Sign in"}
       </Button>
-      <p className="text-center text-sm text-muted">
-        {mode === "signup" ? (
-          <>
-            Already have a studio?{" "}
-            <button
-              type="button"
-              className="text-ink underline underline-offset-2"
-              onClick={() => {
-                setMode("signin");
-                setError("");
-              }}
-            >
-              Sign in
-            </button>
-          </>
-        ) : (
-          <>
-            New here?{" "}
-            <button
-              type="button"
-              className="text-ink underline underline-offset-2"
-              onClick={() => {
-                setMode("signup");
-                setError("");
-              }}
-            >
-              Create a studio
-            </button>
-          </>
-        )}
-      </p>
     </form>
   );
 }

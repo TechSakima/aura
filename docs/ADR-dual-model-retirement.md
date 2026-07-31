@@ -10,7 +10,7 @@ Aura had parallel entities: `Client`/`Shoot` (legacy) and `Project`/`ProjectSess
 
 ## Decision — domain language
 
-**Canonical names:** `Project` and `ProjectSession` (API nouns: `projects`, `sessions`). Product noun for proposals: **Quote** (`/api/quotes`; collection may stay `proposals` — AURA-200).
+**Canonical names:** `Project` and `ProjectSession` (API nouns: `projects`, `sessions`). Product noun for quotes: **Quote** (`/api/quotes`). Firestore collection remains **`proposals`** (**AURA-200** closed — no rename).
 
 **Collection map (Firestore):**
 
@@ -18,7 +18,7 @@ Aura had parallel entities: `Client`/`Shoot` (legacy) and `Project`/`ProjectSess
 |-----------|--------------------------------|
 | `projects` | `clients` |
 | `projectSessions` | `shoots` |
-| `proposals` | (noun “quote” in API; collection rename optional — AURA-200) |
+| `proposals` | (stores Quote docs; API/UI say quote — **AURA-200** no rename) |
 | `shootPlans` | (session plans; `shootId` → `sessionId` on new writes) |
 
 **Forbidden aliases in new code:**
@@ -32,7 +32,7 @@ Aura had parallel entities: `Client`/`Shoot` (legacy) and `Project`/`ProjectSess
 
 **Admin URLs:** Canonical paths and legacy redirects → [`ADMIN_ROUTES.md`](ADMIN_ROUTES.md) (AURA-063). Prefer `admin-deep-links` helpers in new code.
 
-**API:** `/api/projects`, `/api/sessions` (+ `plan` / `wizard` / `wrap`), `/api/quotes` are canonical. `/api/clients` and `/api/shoots` remain deprecated aliases with `Deprecation` / `X-Aura-Canonical` until **AURA-384** (W14).
+**API:** `/api/projects`, `/api/sessions` (+ `plan` / `wizard` / `wrap`), `/api/quotes` are canonical. `/api/clients` and `/api/shoots` return **410 Gone** with `Deprecation` / successor `Link` (**AURA-384**).
 
 **Read path:** `loadStudioDatabase` skips `clients`/`shoots` when canonical is non-empty (AURA-167). `normalizeDb` backfills from legacy only when canonical empty. **`AURA_LEGACY_COLLECTIONS=0`** disables all legacy collection reads (AURA-273).
 
@@ -52,7 +52,9 @@ Aura had parallel entities: `Client`/`Shoot` (legacy) and `Project`/`ProjectSess
 
 **Avoid on hot / public paths:** full-studio `updateStudioDb` RMW. Public gallery traffic, favorites, comments, contact, and analytics must not rewrite the whole studio.
 
-**Still OK:** rare admin mutations that already load a studio bundle and need multi-doc consistency — prefer narrowing over time (**AURA-055** for photos/analytics off every path).
+**Still OK:** rare admin mutations that already load a studio bundle and need multi-doc consistency — prefer narrowing over time.
+
+**Heavy collections (AURA-055):** `updateStudioDb` defaults to **not** loading `photos` / `analyticsEvents`. Persist skips those collections when unloaded and empty (upsert-only — no wipe). Opt in with `{ photos: true }` / `{ analytics: true }` when the mutator must scan existing rows. Prefer `listPhotosByGalleryId` / `appendStudioDoc` / `updateStudioDoc` on hot paths.
 
 **Multi-instance:** upsert-only collection writes + per-doc patches prevent wipe races. **AURA-099:** hard deletes write tombstones so a concurrent stale `updateStudioDb` cannot resurrect projects/sessions (or cascade children). Session cascade owns Google Calendar event cleanup. Shared rate-limit store remains **AURA-107**.
 
@@ -75,7 +77,4 @@ Do not extend dual-model aliases or full-studio RMW on public paths. Missing UI 
 
 ## Remaining follow-ups
 
-- **AURA-384** — delete `/api/clients` + `/api/shoots` (W14)
-- **AURA-200** — optional `proposals` → `quotes` collection rename
-- **AURA-055** — stop loading all photos/analytics on every admin mutation (blocked until safer migration)
-- **AURA-149** — generalize email outbox beyond contact
+- Firestore legacy `clients`/`shoots` still optional via `AURA_LEGACY_COLLECTIONS` (**AURA-384** API aliases are 410)

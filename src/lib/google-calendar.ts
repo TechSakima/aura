@@ -5,6 +5,53 @@ import {
   sealGoogleRefreshToken,
 } from "@/lib/google-token-crypto";
 import { notifyDeliveryIssue } from "@/lib/notify/send";
+import { isValidIanaTimeZone } from "@/lib/timezones";
+import type { Studio } from "@/lib/types";
+
+/** Calendar id for API paths (AURA-369). */
+export function resolveGoogleCalendarId(
+  studio: Pick<Studio, "googleCalendarId">,
+): string {
+  const id = String(studio.googleCalendarId || "").trim();
+  return id || "primary";
+}
+
+/** Studio IANA zone for event start/end (AURA-369). */
+export function resolveGoogleEventTimeZone(
+  studio: Pick<Studio, "timeZone">,
+): string {
+  const tz = String(studio.timeZone || "").trim();
+  if (tz && isValidIanaTimeZone(tz)) return tz;
+  return "UTC";
+}
+
+/**
+ * Wall-clock dateTime + timeZone for Google Calendar (DST-safe).
+ * Instant is preserved; zone tells Google how to display/store.
+ */
+export function googleEventDateTime(
+  iso: string,
+  timeZone: string,
+): { dateTime: string; timeZone: string } {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return { dateTime: iso, timeZone };
+  }
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value || "00";
+  const dateTime = `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}`;
+  return { dateTime, timeZone };
+}
 
 /** Plain refresh token for Google API; lazily seals legacy plaintext (AURA-109). */
 async function plainGoogleRefreshToken(
@@ -162,6 +209,7 @@ export async function getBusyIntervals(opts: {
       };
     }
 
+    const calendarId = resolveGoogleCalendarId(db.studio);
     const freeBusy = await fetch(
       "https://www.googleapis.com/calendar/v3/freeBusy",
       {
@@ -173,7 +221,8 @@ export async function getBusyIntervals(opts: {
         body: JSON.stringify({
           timeMin: opts.timeMin,
           timeMax: opts.timeMax,
-          items: [{ id: "primary" }],
+          timeZone: resolveGoogleEventTimeZone(db.studio),
+          items: [{ id: calendarId }],
         }),
       },
     );
@@ -185,10 +234,14 @@ export async function getBusyIntervals(opts: {
       };
     }
     const data = (await freeBusy.json()) as {
-      calendars?: { primary?: { busy?: BusyInterval[] } };
+      calendars?: Record<string, { busy?: BusyInterval[] }>;
     };
+    const busy =
+      data.calendars?.[calendarId]?.busy ||
+      data.calendars?.primary?.busy ||
+      [];
     return {
-      busy: data.calendars?.primary?.busy || [],
+      busy,
       syncFailed: false,
     };
   } catch {
@@ -326,9 +379,13 @@ export async function pushSessionToGoogleCalendar(opts: {
     });
   }
 
+  const db = await readStudioDb(opts.studioId);
+  const calendarId = encodeURIComponent(resolveGoogleCalendarId(db.studio));
+  const tz = resolveGoogleEventTimeZone(db.studio);
+
   try {
     const create = await fetch(
-      "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`,
       {
         method: "POST",
         headers: {
@@ -338,8 +395,8 @@ export async function pushSessionToGoogleCalendar(opts: {
         body: JSON.stringify({
           summary: opts.title,
           description: opts.description || "",
-          start: { dateTime: opts.startsAt },
-          end: { dateTime: opts.endsAt },
+          start: googleEventDateTime(opts.startsAt, tz),
+          end: googleEventDateTime(opts.endsAt, tz),
         }),
       },
     );
@@ -394,9 +451,13 @@ export async function updateGoogleCalendarEvent(opts: {
     });
   }
 
+  const db = await readStudioDb(opts.studioId);
+  const calendarId = encodeURIComponent(resolveGoogleCalendarId(db.studio));
+  const tz = resolveGoogleEventTimeZone(db.studio);
+
   try {
     const patch = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(opts.eventId)}`,
+      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(opts.eventId)}`,
       {
         method: "PATCH",
         headers: {
@@ -408,8 +469,8 @@ export async function updateGoogleCalendarEvent(opts: {
           ...(opts.description !== undefined
             ? { description: opts.description }
             : {}),
-          start: { dateTime: opts.startsAt },
-          end: { dateTime: opts.endsAt },
+          start: googleEventDateTime(opts.startsAt, tz),
+          end: googleEventDateTime(opts.endsAt, tz),
         }),
       },
     );
@@ -451,9 +512,12 @@ export async function deleteGoogleCalendarEvent(opts: {
     });
   }
 
+  const db = await readStudioDb(opts.studioId);
+  const calendarId = encodeURIComponent(resolveGoogleCalendarId(db.studio));
+
   try {
     const del = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(opts.eventId)}`,
+      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(opts.eventId)}`,
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token.accessToken}` },
@@ -481,6 +545,92 @@ export async function deleteGoogleCalendarEvent(opts: {
       error: "Google Calendar delete error",
     });
   }
+}
+
+export type GoogleCalendarListItem = {
+  id: string;
+  summary: string;
+  primary?: boolean;
+  accessRole?: string;
+};
+
+/** List calendars the connected account can write (AURA-369). */
+export async function listGoogleCalendars(studioId: string): Promise<{
+  ok: boolean;
+  calendars: GoogleCalendarListItem[];
+  selectedId: string;
+  error?: string;
+}> {
+  const db = await readStudioDb(studioId);
+  const selectedId = resolveGoogleCalendarId(db.studio);
+  const token = await getGoogleAccessToken(studioId);
+  if (!token.ok) {
+    return {
+      ok: false,
+      calendars: [],
+      selectedId,
+      error: token.error || "Not connected",
+    };
+  }
+  try {
+    const res = await fetch(
+      "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=writer",
+      { headers: { Authorization: `Bearer ${token.accessToken}` } },
+    );
+    if (!res.ok) {
+      return {
+        ok: false,
+        calendars: [],
+        selectedId,
+        error: "Could not list calendars",
+      };
+    }
+    const data = (await res.json()) as {
+      items?: {
+        id?: string;
+        summary?: string;
+        primary?: boolean;
+        accessRole?: string;
+      }[];
+    };
+    const calendars: GoogleCalendarListItem[] = (data.items || [])
+      .filter((c) => c.id)
+      .map((c) => ({
+        id: c.id!,
+        summary: c.summary || c.id!,
+        primary: Boolean(c.primary),
+        accessRole: c.accessRole,
+      }));
+    if (!calendars.some((c) => c.id === selectedId)) {
+      calendars.unshift({
+        id: selectedId,
+        summary: selectedId === "primary" ? "Primary" : selectedId,
+        primary: selectedId === "primary",
+      });
+    }
+    return { ok: true, calendars, selectedId };
+  } catch {
+    return {
+      ok: false,
+      calendars: [],
+      selectedId,
+      error: "Could not list calendars",
+    };
+  }
+}
+
+export async function setGoogleCalendarId(
+  studioId: string,
+  calendarId: string,
+): Promise<{ ok: true; calendarId: string } | { ok: false; error: string }> {
+  const id = String(calendarId || "").trim() || "primary";
+  if (id.length > 256 || /[\s]/.test(id)) {
+    return { ok: false, error: "Invalid calendar" };
+  }
+  await updateStudioDb(studioId, (db) => {
+    db.studio.googleCalendarId = id;
+  });
+  return { ok: true, calendarId: id };
 }
 
 /** Probe freeBusy and record health (Settings Integrations). */

@@ -23,6 +23,6 @@ export function pwaSwSurfaceForPath(pathname: string): PwaSwSurface {
   if (pathname.startsWith("/book/")) {
     return { kind: "book", scope: "/book/" };
   }
-  // Quote / contract / pay / cancel — no SW (AURA-299 lightweight)
+  // Quote / contract / pay / q / cancel — no SW (AURA-299 / 418 lightweight)
   return { kind: "none", scope: null };
 }

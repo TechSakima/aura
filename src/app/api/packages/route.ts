@@ -15,11 +15,24 @@ export async function POST(req: Request) {
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
   const now = new Date().toISOString();
+  const rawPricing = Array.isArray(body.defaultPricing)
+    ? body.defaultPricing
+    : [];
+  // Reject silent all-$0 seeds — start empty so prices are set deliberately (AURA-135).
+  const defaultPricing =
+    rawPricing.length > 0 &&
+    rawPricing.every(
+      (t: { price?: unknown }) =>
+        !Number.isFinite(Number(t?.price)) || Number(t.price) <= 0,
+    )
+      ? []
+      : rawPricing;
+
   const pkg = {
     id: nanoid(),
     studioId: admin.studioId,
     name: String(body.name || "Untitled package"),
-    defaultPricing: body.defaultPricing || [],
+    defaultPricing,
     contractTerms: String(body.contractTerms || ""),
     inclusions: body.inclusions || [],
     intakeQuestions: body.intakeQuestions || [],

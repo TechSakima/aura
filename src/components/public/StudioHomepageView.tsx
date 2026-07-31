@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { EnsureKitFonts } from "@/components/fonts/EnsureKitFonts";
 import { HomepageModuleList } from "@/components/public/homepage/HomepageModules";
 import { InstallHint } from "@/components/pwa/InstallHint";
 import { PublicShell } from "@/components/shells/PublicShell";
@@ -26,8 +27,9 @@ export function StudioHomepageView({
   className,
 }: Props) {
   const themePreset = resolveStudioThemePreset(data.studio.theme);
+  const fontPreset = data.studio.theme?.fontPreset;
   const themeStyle = studioThemeCssVars(themePreset, {
-    fontPreset: data.studio.theme?.fontPreset,
+    fontPreset,
   }) as CSSProperties;
 
   const body = (
@@ -45,6 +47,7 @@ export function StudioHomepageView({
         )}
         style={themeStyle}
       >
+        <EnsureKitFonts preset={fontPreset} />
         {body}
       </div>
     );
@@ -56,7 +59,12 @@ export function StudioHomepageView({
     : "aura-install-dismiss-h";
 
   return (
-    <PublicShell bare style={themeStyle} className={className}>
+    <PublicShell
+      bare
+      style={themeStyle}
+      fontPreset={fontPreset}
+      className={className}
+    >
       {body}
       {!preview ? (
         <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">

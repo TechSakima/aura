@@ -16,7 +16,7 @@ export const BOOK_STEPS: { id: ProjectWorkflowStep; label: string }[] = [
 ];
 
 export const SESSION_STEPS: { id: ProjectWorkflowStep; label: string }[] = [
-  { id: "prep", label: "Plan the shoot" },
+  { id: "prep", label: "Plan the session" },
   { id: "delivery", label: "Deliver photos" },
 ];
 
@@ -29,7 +29,7 @@ export const HANDOFF_AFTER_STEP: ProjectWorkflowStep = "deposit";
 /** First session step on the project spine (session wizard continues shoot-day → wrap). */
 export const SESSION_START_STEP: ProjectWorkflowStep = "prep";
 
-export const HANDOFF_COPY = "Plan the shoot after you get paid";
+export const HANDOFF_COPY = "Plan the session after you get paid";
 
 const PATH_IDS = new Set(PROJECT_PATH_STEPS.map((s) => s.id));
 

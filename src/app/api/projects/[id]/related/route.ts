@@ -31,7 +31,11 @@ export async function GET(
     contracts,
     contractTemplates: db.contractTemplates,
     proposals,
-    packages: db.packageTemplates.map((p) => ({ id: p.id, name: p.name })),
+    packages: db.packageTemplates.map((p) => ({
+      id: p.id,
+      name: p.name,
+      defaultPricing: p.defaultPricing,
+    })),
     invoices,
     paymentLinks,
     paymentDefaults: studioPaymentDefaults(db.studio),

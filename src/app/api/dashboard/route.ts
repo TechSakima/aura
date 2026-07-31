@@ -22,7 +22,11 @@ export async function GET() {
     console.error("[dashboard] outbox drain", err);
   });
 
-  const db = await readStudioDb(admin.studioId);
+  // Hot path: skip photos + analytics (AURA-407).
+  const db = await readStudioDb(admin.studioId, {
+    photos: false,
+    analytics: false,
+  });
   const recentContacts = await listRecentContactMessages(admin.studioId, 8);
   const now = Date.now();
   const soon = now + 7 * 24 * 60 * 60 * 1000;

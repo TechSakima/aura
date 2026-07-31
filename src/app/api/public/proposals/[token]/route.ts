@@ -11,7 +11,8 @@ import { linkedSessionId, recordEvent } from "@/lib/analytics";
 import { resolveBrowseMediaUrl, resolveBrowseMediaUrls } from "@/lib/media-url-server";
 import { notifyQuoteAccepted } from "@/lib/notify/send";
 import { assertPublicProposalAccess } from "@/lib/public-access";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
+import { toPublicProposal } from "@/lib/public-proposal";
 import { resolveQuoteAcceptNext } from "@/lib/workflow/quote-next";
 import type { Proposal } from "@/lib/types";
 
@@ -68,10 +69,7 @@ export async function GET(
   }));
 
   return NextResponse.json({
-    proposal: {
-      ...proposal,
-      moodBoard: moodItems,
-    },
+    proposal: toPublicProposal(proposal, moodItems),
     studio: {
       name: db.studio.name,
       logoUrl: await resolveBrowseMediaUrl(db.studio.logoUrl),
@@ -90,7 +88,11 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const limited = rateLimit(`proposal-accept:${token}:${clientIp(req)}`, 10, 60_000);
+  const limited = await rateLimitShared(
+    `proposal-accept:${token}:${clientIp(req)}`,
+    6,
+    60_000,
+  );
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -184,5 +186,8 @@ export async function POST(
   const db = await readStudioDb(hit.studioId);
   const next = resolveQuoteAcceptNext(db, projectId);
 
-  return NextResponse.json({ proposal, next });
+  return NextResponse.json({
+    proposal: toPublicProposal(proposal),
+    next,
+  });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ActionStack,
   Badge,
@@ -35,7 +35,14 @@ import {
   newIdempotencyKey,
   withIdempotencyHeaders,
 } from "@/lib/client/idempotency-key";
+import { mutateJson } from "@/lib/client/mutation";
+import { toastAfterEmailAttempt } from "@/lib/copy/email-toast";
 import { confirmReplaceQuote } from "@/lib/destructive-confirm";
+import {
+  confirmUnsetPricing,
+  hasUnsetPricing,
+} from "@/lib/packages/pricing-ready";
+import { PROJECT_EMAIL_REQUIRED } from "@/lib/project-contact";
 import {
   BOOK_STEPS,
   HANDOFF_COPY,
@@ -46,13 +53,22 @@ import {
   projectPathIndex,
   workflowStepLabel,
 } from "@/lib/workflow/path";
+import {
+  aggregateSessionStepState,
+  isSessionDeliveryReady,
+  isSessionPrepReady,
+  multiSessionBadgeLabel,
+} from "@/lib/workflow/session-readiness";
 
 function absoluteUrl(path: string) {
   if (typeof window === "undefined") return path;
   return `${window.location.origin}${path}`;
 }
 
-type SessionHint = Pick<ProjectSession, "id" | "type" | "status" | "startsAt"> & {
+type SessionHint = Pick<
+  ProjectSession,
+  "id" | "type" | "status" | "startsAt" | "adminSlug"
+> & {
   currentStep?: string;
   galleryToken?: string;
   galleryStatus?: string;
@@ -90,7 +106,7 @@ export function ProjectWorkflowPanel({
   >([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [packages, setPackages] = useState<
-    Pick<PackageTemplate, "id" | "name">[]
+    Pick<PackageTemplate, "id" | "name" | "defaultPricing">[]
   >([]);
   const [qTemplates, setQTemplates] = useState<{ id: string; name: string }[]>(
     [],
@@ -104,6 +120,10 @@ export function ProjectWorkflowPanel({
   const [toolSessionId, setToolSessionId] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [balanceAmount, setBalanceAmount] = useState("");
+  const [inlineSessionType, setInlineSessionType] = useState(
+    () => project.type?.trim() || "Wedding",
+  );
+  const [inlineSessionDate, setInlineSessionDate] = useState("");
   /** Mobile: which step card is expanded (follows current when it advances). */
   const [viewStep, setViewStep] = useState<ProjectWorkflowStep>(
     () => project.workflowStep || "inquiry",
@@ -175,12 +195,23 @@ export function ProjectWorkflowPanel({
   );
 
   async function loadRelated() {
-    const res = await fetch(`/api/projects/${project.id}/related`);
-    if (!res.ok) {
-      push("Could not load workflow data — retry from refresh", "danger");
+    const result = await mutateJson<{
+      questionnaires?: QuestionnaireResponse[];
+      questionnaireTemplates?: { id: string; name: string }[];
+      contracts?: Contract[];
+      contractTemplates?: ContractTemplate[];
+      legalDefaults?: { defaultContractTemplateId?: string };
+      invoices?: Invoice[];
+      paymentLinks?: typeof paymentLinks;
+      proposals?: Proposal[];
+      packages?: PackageTemplate[];
+      paymentDefaults?: { defaultDepositAmount?: number };
+    }>(`/api/projects/${project.id}/related`, undefined, { action: "load" });
+    if (!result.ok) {
+      push(result.errorMessage, "danger");
       return;
     }
-    const data = await res.json();
+    const data = result.data;
     setQuestionnaires((data.questionnaires || []) as QuestionnaireResponse[]);
     setQTemplates(
       ((data.questionnaireTemplates || []) as { id: string; name: string }[]).map(
@@ -193,27 +224,29 @@ export function ProjectWorkflowPanel({
     setContracts((data.contracts || []) as Contract[]);
     setContractTemplates((data.contractTemplates || []) as ContractTemplate[]);
     if (!contractTemplateId && data.contractTemplates?.length) {
-      const preferred = (
-        data.legalDefaults as { defaultContractTemplateId?: string } | undefined
-      )?.defaultContractTemplateId;
+      const preferred = data.legalDefaults?.defaultContractTemplateId;
       const match = preferred
         ? (data.contractTemplates as ContractTemplate[]).find(
             (t) => t.id === preferred,
           )
         : undefined;
       setContractTemplateId(
-        match?.id || data.contractTemplates[0].id,
+        match?.id || data.contractTemplates[0]!.id,
       );
     }
     setInvoices((data.invoices || []) as Invoice[]);
     setPaymentLinks(data.paymentLinks || []);
     setProposals((data.proposals || []) as Proposal[]);
     const pkgs = (data.packages || []) as PackageTemplate[];
-    setPackages(pkgs.map((p) => ({ id: p.id, name: p.name })));
+    setPackages(
+      pkgs.map((p) => ({
+        id: p.id,
+        name: p.name,
+        defaultPricing: p.defaultPricing || [],
+      })),
+    );
     if (!packageId && pkgs[0]) setPackageId(pkgs[0].id);
-    const defaultDeposit = (
-      data.paymentDefaults as { defaultDepositAmount?: number } | undefined
-    )?.defaultDepositAmount;
+    const defaultDeposit = data.paymentDefaults?.defaultDepositAmount;
     if (
       !depositAmount &&
       defaultDeposit != null &&
@@ -240,7 +273,12 @@ export function ProjectWorkflowPanel({
   const qDone = questionnaires.some((r) => Boolean(r.submittedAt));
   const qSent = questionnaires.length > 0;
   const contractSigned = contracts.some((c) => c.status === "completed");
-  const contractSent = contracts.length > 0;
+  const contractSent = contracts.some(
+    (c) => c.status === "awaiting_signature" || c.status === "completed",
+  );
+  const awaitingCount = contracts.filter(
+    (c) => c.status === "awaiting_signature",
+  ).length;
   const quoteAccepted = proposals.some(
     (p) => p.projectId === project.id && p.status === "accepted",
   );
@@ -277,51 +315,48 @@ export function ProjectWorkflowPanel({
   }, [remainingBalance, balanceAmount]);
 
   const prepHref = toolSession
-    ? `/admin/projects/${project.id}/sessions/${toolSession.id}?step=prep`
+    ? `/admin/projects/${project.adminSlug || project.id}/sessions/${toolSession.adminSlug || toolSession.id}?step=prep`
     : undefined;
   const deliveryHref = toolSession
-    ? `/admin/projects/${project.id}/sessions/${toolSession.id}?step=delivery`
+    ? `/admin/projects/${project.adminSlug || project.id}/sessions/${toolSession.adminSlug || toolSession.id}?step=delivery`
     : undefined;
 
   const sessionUnlocked = depositPaid;
   const nextStep = nextProjectPathStep(current);
   const prevStep = previousProjectPathStep(current);
 
-  const statusByStep = useMemo(() => {
-    const prepReady = Boolean(
-      toolSession?.prepComplete ||
-        toolSession?.currentStep === "shoot-day" ||
-        toolSession?.currentStep === "delivery" ||
-        toolSession?.currentStep === "wrap",
-    );
-    const deliveryReady = Boolean(
-      toolSession?.deliveryComplete ||
-        toolSession?.status === "delivered" ||
-        toolSession?.status === "archived" ||
-        toolSession?.galleryStatus === "live" ||
-        toolSession?.galleryStatus === "archived",
-    );
+  const sessionStepAgg = useMemo(() => {
+    const open = sessions.filter((s) => s.status !== "archived");
+    const total = open.length;
+    const prepReadyCount = open.filter((s) => isSessionPrepReady(s)).length;
+    const deliveryReadyCount = open.filter((s) =>
+      isSessionDeliveryReady(s),
+    ).length;
+    return {
+      prep: aggregateSessionStepState({
+        unlocked: sessionUnlocked,
+        currentIsStep: current === "prep",
+        readyCount: prepReadyCount,
+        total,
+      }),
+      delivery: aggregateSessionStepState({
+        unlocked: sessionUnlocked,
+        currentIsStep: current === "delivery",
+        readyCount: deliveryReadyCount,
+        total,
+      }),
+    };
+  }, [sessions, sessionUnlocked, current]);
 
+  const statusByStep = useMemo(() => {
     return {
       inquiry: "done" as const,
       questionnaire: qDone ? "done" : qSent ? "active" : "todo",
       pricing: quoteAccepted ? "done" : quoteExists ? "active" : "todo",
       contract: contractSigned ? "done" : contractSent ? "active" : "todo",
       deposit: depositPaid ? "done" : "todo",
-      prep: !sessionUnlocked
-        ? "todo"
-        : prepReady
-          ? "done"
-          : current === "prep"
-            ? "active"
-            : "todo",
-      delivery: !sessionUnlocked
-        ? "todo"
-        : deliveryReady
-          ? "done"
-          : current === "delivery"
-            ? "active"
-            : "todo",
+      prep: sessionStepAgg.prep.state,
+      delivery: sessionStepAgg.delivery.state,
     } satisfies Record<ProjectWorkflowStep, "done" | "active" | "todo">;
   }, [
     qDone,
@@ -331,25 +366,30 @@ export function ProjectWorkflowPanel({
     contractSigned,
     contractSent,
     depositPaid,
-    sessionUnlocked,
-    toolSession,
-    current,
+    sessionStepAgg,
   ]);
 
   async function setWorkflowStep(step: ProjectWorkflowStep) {
     setBusy("workflow");
-    const res = await fetch(`/api/projects/${project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workflowStep: step }),
-    });
-    setBusy(null);
-    if (!res.ok) {
-      push("Could not update workflow", "danger");
-      return;
+    try {
+      const result = await mutateJson(
+        `/api/projects/${project.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workflowStep: step }),
+        },
+        { action: "update" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      push("Workflow updated", "success");
+      await refresh();
+    } finally {
+      setBusy(null);
     }
-    push("Workflow updated", "success");
-    await refresh();
   }
 
   async function advanceWorkflow() {
@@ -375,27 +415,87 @@ export function ProjectWorkflowPanel({
 
   async function sendQuestionnaire() {
     setBusy("questionnaire");
-    const res = await fetch("/api/documents/questionnaires", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "send",
-        projectId: project.id,
-        templateId: sendTemplateId || undefined,
-      }),
-    });
-    const data = await res.json();
-    setBusy(null);
-    if (!res.ok) {
-      push(data.error || "Could not send questionnaire", "danger");
+    try {
+      const result = await mutateJson<{
+        url?: string;
+        emailed?: boolean;
+      }>(
+        "/api/documents/questionnaires",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "send",
+            projectId: project.id,
+            templateId: sendTemplateId || undefined,
+          }),
+        },
+        { action: "send" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      const data = result.data;
+      if (data.url) {
+        await navigator.clipboard.writeText(data.url).catch(() => undefined);
+      }
+      if (data.emailed === false) {
+        push("Link copied", "success");
+      } else {
+        push("Questionnaire sent", "success");
+        if (data.url) push("Link copied", "success");
+      }
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function createSessionForQuote(e: FormEvent) {
+    e.preventDefault();
+    const type = inlineSessionType.trim();
+    if (!type) {
+      push("Session label required", "danger");
       return;
     }
-    push("Questionnaire sent", "success");
-    if (data.url) {
-      await navigator.clipboard.writeText(data.url).catch(() => undefined);
-      push("Link copied", "success");
+    setBusy("pricing-session");
+    try {
+      const result = await mutateJson<{
+        session?: ProjectSession;
+        calendarSyncFailed?: boolean;
+      }>(
+        "/api/sessions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: project.id,
+            type,
+            startsAt: inlineSessionDate || undefined,
+          }),
+        },
+        { action: "create" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      const session = result.data.session;
+      if (session?.id) {
+        setQuoteSessionId(session.id);
+        setToolSessionId(session.id);
+      }
+      if (result.data.calendarSyncFailed) {
+        push("Session created · calendar not updated", "danger");
+      } else {
+        push("Session created", "success");
+      }
+      setInlineSessionDate("");
+      await refresh();
+    } finally {
+      setBusy(null);
     }
-    await refresh();
   }
 
   async function createQuote() {
@@ -407,40 +507,71 @@ export function ProjectWorkflowPanel({
       push("Create a package in Library first", "danger");
       return;
     }
+    const pkg = packages.find((p) => p.id === packageId);
+    if (!pkg?.defaultPricing?.length) {
+      push("Add package pricing first", "danger");
+      return;
+    }
+    if (hasUnsetPricing(pkg.defaultPricing)) {
+      const ok = await confirm(confirmUnsetPricing("create"));
+      if (!ok) return;
+    }
     if (proposal) {
       const ok = await confirm(confirmReplaceQuote());
       if (!ok) return;
     }
     setBusy("pricing");
-    const res = await fetch("/api/proposals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        shootId: activeSessionId,
-        packageTemplateId: packageId,
-      }),
-    });
-    setBusy(null);
-    if (!res.ok) {
-      push("Could not create quote", "danger");
-      return;
+    try {
+      const result = await mutateJson(
+        "/api/proposals",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: activeSessionId,
+            packageTemplateId: packageId,
+          }),
+        },
+        { action: "create" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      push(proposal ? "Quote replaced" : "Quote created", "success");
+      await refresh();
+    } finally {
+      setBusy(null);
     }
-    push(proposal ? "Quote replaced" : "Quote created", "success");
-    await refresh();
   }
 
   async function copyQuoteLink() {
     if (!proposal) return;
+    if (
+      proposal.status === "draft" &&
+      hasUnsetPricing(proposal.tiers)
+    ) {
+      const ok = await confirm(confirmUnsetPricing("send"));
+      if (!ok) return;
+    }
     const url = absoluteUrl(`/p/${proposal.token}`);
     try {
       await navigator.clipboard.writeText(url);
       push("Link copied", "success");
       if (proposal.status === "draft") {
-        await fetch(`/api/proposals/${proposal.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "sent" }),
-        });
+        const result = await mutateJson(
+          `/api/proposals/${proposal.id}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "sent" }),
+          },
+          { action: "update" },
+        );
+        if (!result.ok) {
+          push(result.errorMessage, "danger");
+          return;
+        }
         await refresh();
       }
     } catch {
@@ -450,22 +581,34 @@ export function ProjectWorkflowPanel({
 
   async function emailQuote() {
     if (!proposal || busy) return;
-    setBusy("pricing");
-    const res = await fetch(`/api/proposals/${proposal.id}/email`, {
-      method: "POST",
-      headers: withIdempotencyHeaders(newIdempotencyKey()),
-    });
-    setBusy(null);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      push(String(data.error || "Could not email quote"), "danger");
-      return;
+    if (hasUnsetPricing(proposal.tiers)) {
+      const ok = await confirm(confirmUnsetPricing("send"));
+      if (!ok) return;
     }
-    push(
-      data.emailed === false ? "Quote marked; email skipped" : "Quote emailed",
-      data.emailed === false ? "neutral" : "success",
-    );
-    await refresh();
+    setBusy("pricing");
+    try {
+      const result = await mutateJson<{ emailed?: boolean }>(
+        `/api/proposals/${proposal.id}/email`,
+        {
+          method: "POST",
+          headers: withIdempotencyHeaders(newIdempotencyKey()),
+        },
+        { action: "send" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      const toast = toastAfterEmailAttempt(
+        result.data.emailed !== false,
+        "Quote emailed",
+        "Quote ready",
+      );
+      push(toast.message, toast.tone);
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function markQuoteAccepted() {
@@ -479,64 +622,119 @@ export function ProjectWorkflowPanel({
     });
     if (!ok) return;
     setBusy("pricing");
-    const res = await fetch(`/api/proposals/${proposal.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "accepted" }),
-    });
-    setBusy(null);
-    if (!res.ok) {
-      push("Could not mark accepted", "danger");
-      return;
+    try {
+      const result = await mutateJson(
+        `/api/proposals/${proposal.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "accepted" }),
+        },
+        { action: "update" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      push(
+        `Quote accepted · continue with ${workflowStepLabel("contract")}`,
+        "success",
+      );
+      await refresh();
+      if (typeof document !== "undefined") {
+        document.getElementById("workflow")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    } finally {
+      setBusy(null);
     }
-    push(
-      `Quote accepted · continue with ${workflowStepLabel("contract")}`,
-      "success",
-    );
-    await refresh();
-    if (typeof document !== "undefined") {
-      document.getElementById("workflow")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
+  }
+
+  function contractPayload() {
+    const tmpl = contractTemplates.find((t) => t.id === contractTemplateId);
+    return {
+      projectId: project.id,
+      title: tmpl?.name || "Photography agreement",
+      body: tmpl?.body || defaultContractBody(),
+      templateId: contractTemplateId || undefined,
+      cancelPolicy: tmpl?.cancelPolicy,
+    };
+  }
+
+  async function previewContract() {
+    if (busy) return;
+    setBusy("contract-preview");
+    try {
+      const result = await mutateJson<{
+        url?: string;
+        contract?: { token?: string };
+      }>(
+        "/api/documents/contracts",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "preview", ...contractPayload() }),
+        },
+        { action: "open" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      const data = result.data;
+      const href =
+        typeof data.url === "string"
+          ? data.url
+          : data.contract?.token
+            ? `/c/${data.contract.token}`
+            : null;
+      if (href) {
+        window.open(href, "_blank", "noopener,noreferrer");
+      }
+      await refresh();
+    } finally {
+      setBusy(null);
     }
   }
 
   async function sendContract() {
     if (busy) return;
-    const tmpl = contractTemplates.find((t) => t.id === contractTemplateId);
     setBusy("contract");
-    const res = await fetch("/api/documents/contracts", {
-      method: "POST",
-      headers: withIdempotencyHeaders(newIdempotencyKey(), {
-        "Content-Type": "application/json",
-      }),
-      body: JSON.stringify({
-        projectId: project.id,
-        title: tmpl?.name || "Photography agreement",
-        body:
-          tmpl?.body ||
-          defaultContractBody(),
-        templateId: contractTemplateId || undefined,
-        cancelPolicy: tmpl?.cancelPolicy,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setBusy(null);
-    if (!res.ok) {
-      push(String(data.error || "Could not send contract"), "danger");
-      return;
+    try {
+      const result = await mutateJson<{ url?: string }>(
+        "/api/documents/contracts",
+        {
+          method: "POST",
+          headers: withIdempotencyHeaders(newIdempotencyKey(), {
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify(contractPayload()),
+        },
+        { action: "send" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      push("Contract sent", "success");
+      if (result.data.url) {
+        await navigator.clipboard
+          .writeText(result.data.url)
+          .catch(() => undefined);
+        push("Sign link copied", "success");
+      }
+      await refresh();
+    } finally {
+      setBusy(null);
     }
-    push("Contract sent", "success");
-    if (data.url) {
-      await navigator.clipboard.writeText(data.url).catch(() => undefined);
-      push("Sign link copied", "success");
-    }
-    await refresh();
   }
 
   async function copyContractLink() {
-    const c = contracts[0];
+    const c =
+      contracts.find((x) => x.status === "awaiting_signature") ||
+      contracts.find((x) => x.status === "completed");
     if (!c) return;
     try {
       await navigator.clipboard.writeText(absoluteUrl(`/c/${c.token}`));
@@ -546,46 +744,43 @@ export function ProjectWorkflowPanel({
     }
   }
 
-  async function copyCancelLink() {
-    if (!project.cancelToken) return;
-    try {
-      await navigator.clipboard.writeText(
-        absoluteUrl(`/cancel/${project.cancelToken}`),
-      );
-      push("Cancel link copied", "success");
-    } catch {
-      push("Could not copy link", "danger");
-    }
-  }
-
   async function createDeposit() {
     setBusy("deposit");
-    const res = await fetch(`/api/projects/${project.id}/deposit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: depositAmount ? Number(depositAmount) : undefined,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setBusy(null);
-    if (!res.ok) {
-      push(String(data.error || "Could not create deposit"), "danger");
-      return;
-    }
-    const url = (data.payUrl || data.checkoutUrl) as string | undefined;
-    if (url) {
-      try {
-        await navigator.clipboard.writeText(url);
-        push("Deposit link copied", "success");
-      } catch {
+    try {
+      const result = await mutateJson<{
+        payUrl?: string;
+        checkoutUrl?: string;
+      }>(
+        `/api/projects/${project.id}/deposit`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: depositAmount ? Number(depositAmount) : undefined,
+          }),
+        },
+        { action: "create" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      const url = result.data.payUrl || result.data.checkoutUrl;
+      if (url) {
+        try {
+          await navigator.clipboard.writeText(url);
+          push("Deposit link copied", "success");
+        } catch {
+          push("Deposit created", "success");
+        }
+      } else {
         push("Deposit created", "success");
       }
-    } else {
-      push("Deposit created", "success");
+      setDepositAmount("");
+      await refresh();
+    } finally {
+      setBusy(null);
     }
-    setDepositAmount("");
-    await refresh();
   }
 
   async function copyDepositLink() {
@@ -614,60 +809,77 @@ export function ProjectWorkflowPanel({
     }
     const to = project.email?.trim();
     if (!to) {
-      push("Add project email in Contact", "danger");
+      push(PROJECT_EMAIL_REQUIRED, "danger");
       return;
     }
     setBusy("deposit");
-    const res = await fetch("/api/payments/links", {
-      method: "POST",
-      headers: withIdempotencyHeaders(newIdempotencyKey(), {
-        "Content-Type": "application/json",
-      }),
-      body: JSON.stringify({
-        action: "email",
-        id: projectDepositLink.id,
-        email: to,
-      }),
-    });
-    setBusy(null);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      push(String(data.error || "Could not email pay link"), "danger");
-      return;
+    try {
+      const result = await mutateJson<{ emailed?: boolean }>(
+        "/api/payments/links",
+        {
+          method: "POST",
+          headers: withIdempotencyHeaders(newIdempotencyKey(), {
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            action: "email",
+            id: projectDepositLink.id,
+            email: to,
+          }),
+        },
+        { action: "send" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      const toast = toastAfterEmailAttempt(
+        result.data.emailed !== false,
+        "Pay link emailed",
+        "Pay link ready",
+      );
+      push(toast.message, toast.tone);
+    } finally {
+      setBusy(null);
     }
-    push(
-      data.emailed === false ? "Email skipped" : "Pay link emailed",
-      data.emailed === false ? "neutral" : "success",
-    );
   }
 
   async function createBalance() {
     setBusy("balance");
-    const res = await fetch(`/api/projects/${project.id}/balance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: balanceAmount ? Number(balanceAmount) : undefined,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setBusy(null);
-    if (!res.ok) {
-      push(String(data.error || "Could not create balance"), "danger");
-      return;
-    }
-    const url = (data.payUrl || data.checkoutUrl) as string | undefined;
-    if (url) {
-      try {
-        await navigator.clipboard.writeText(url);
-        push("Balance link copied", "success");
-      } catch {
+    try {
+      const result = await mutateJson<{
+        payUrl?: string;
+        checkoutUrl?: string;
+      }>(
+        `/api/projects/${project.id}/balance`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: balanceAmount ? Number(balanceAmount) : undefined,
+          }),
+        },
+        { action: "create" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      const url = result.data.payUrl || result.data.checkoutUrl;
+      if (url) {
+        try {
+          await navigator.clipboard.writeText(url);
+          push("Balance link copied", "success");
+        } catch {
+          push("Balance created", "success");
+        }
+      } else {
         push("Balance created", "success");
       }
-    } else {
-      push("Balance created", "success");
+      await refresh();
+    } finally {
+      setBusy(null);
     }
-    await refresh();
   }
 
   async function copyBalanceLink() {
@@ -696,31 +908,39 @@ export function ProjectWorkflowPanel({
     }
     const to = project.email?.trim();
     if (!to) {
-      push("Add project email in Contact", "danger");
+      push(PROJECT_EMAIL_REQUIRED, "danger");
       return;
     }
     setBusy("balance");
-    const res = await fetch("/api/payments/links", {
-      method: "POST",
-      headers: withIdempotencyHeaders(newIdempotencyKey(), {
-        "Content-Type": "application/json",
-      }),
-      body: JSON.stringify({
-        action: "email",
-        id: projectBalanceLink.id,
-        email: to,
-      }),
-    });
-    setBusy(null);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      push(String(data.error || "Could not email pay link"), "danger");
-      return;
+    try {
+      const result = await mutateJson<{ emailed?: boolean }>(
+        "/api/payments/links",
+        {
+          method: "POST",
+          headers: withIdempotencyHeaders(newIdempotencyKey(), {
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            action: "email",
+            id: projectBalanceLink.id,
+            email: to,
+          }),
+        },
+        { action: "send" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      const toast = toastAfterEmailAttempt(
+        result.data.emailed !== false,
+        "Pay link emailed",
+        "Pay link ready",
+      );
+      push(toast.message, toast.tone);
+    } finally {
+      setBusy(null);
     }
-    push(
-      data.emailed === false ? "Email skipped" : "Pay link emailed",
-      data.emailed === false ? "neutral" : "success",
-    );
   }
 
   async function createGallery() {
@@ -731,30 +951,36 @@ export function ProjectWorkflowPanel({
     }
     setBusy("delivery");
     const pin = String(Math.floor(1000 + Math.random() * 9000));
-    const res = await fetch("/api/galleries", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: session.id,
-        title: `${project.name} gallery`,
-        pin,
-        goLive: false,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setBusy(null);
-    if (!res.ok) {
-      push(String(data.error || "Could not create gallery"), "danger");
-      return;
-    }
     try {
-      await navigator.clipboard.writeText(pin);
-      push(`Gallery created · PIN ${pin} copied`, "success");
-    } catch {
-      push(`Gallery created · PIN ${pin}`, "success");
+      const result = await mutateJson(
+        "/api/galleries",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: session.id,
+            title: `${project.name} gallery`,
+            pin,
+            goLive: false,
+          }),
+        },
+        { action: "create" },
+      );
+      if (!result.ok) {
+        push(result.errorMessage, "danger");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(pin);
+        push(`Gallery created · PIN ${pin} copied`, "success");
+      } catch {
+        push(`Gallery created · PIN ${pin}`, "success");
+      }
+      onChanged?.();
+      window.location.href = `/admin/projects/${project.adminSlug || project.id}/sessions/${session.adminSlug || session.id}?step=delivery`;
+    } finally {
+      setBusy(null);
     }
-    onChanged?.();
-    window.location.href = `/admin/projects/${project.id}/sessions/${session.id}?step=delivery`;
   }
 
   function badgeTone(
@@ -777,6 +1003,17 @@ export function ProjectWorkflowPanel({
     ) {
       return "After payment";
     }
+    if (stepId === "prep" || stepId === "delivery") {
+      const agg =
+        stepId === "prep" ? sessionStepAgg.prep : sessionStepAgg.delivery;
+      const multi = multiSessionBadgeLabel(
+        state,
+        isCurrent,
+        agg.readyCount,
+        agg.total,
+      );
+      if (multi) return multi;
+    }
     if (state === "done") return "Done";
     if (isCurrent) return "Current";
     if (state === "active") return "In progress";
@@ -790,56 +1027,36 @@ export function ProjectWorkflowPanel({
 
   return (
     <section id="workflow" className="space-y-5 scroll-mt-24">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="font-display text-2xl">Workflow</h2>
-          <p className="mt-1 text-sm text-muted">
-            Quote to delivery · {workflowStepLabel(current)}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {nextStep ? (
-              <Button
-                type="button"
-                tone="neutral"
-                className="min-h-11"
-                pending={busy === "workflow"}
-                pendingLabel="Updating…"
-                onClick={() => void advanceWorkflow()}
-              >
-                Advance
-              </Button>
-            ) : null}
-            {prevStep ? (
-              <Button
-                type="button"
-                tone="ghost"
-                className="min-h-11"
-                pending={busy === "workflow"}
-                onClick={() => void reopenStep(prevStep)}
-              >
-                Reopen previous
-              </Button>
-            ) : null}
-          </div>
+      <div className="min-w-0">
+        <h2 className="font-display text-2xl">Workflow</h2>
+        <p className="mt-1 text-sm text-muted">
+          Quote to delivery · {workflowStepLabel(current)}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {nextStep ? (
+            <Button
+              type="button"
+              tone="neutral"
+              className="min-h-11"
+              pending={busy === "workflow"}
+              pendingLabel="Updating…"
+              onClick={() => void advanceWorkflow()}
+            >
+              Advance
+            </Button>
+          ) : null}
+          {prevStep ? (
+            <Button
+              type="button"
+              tone="ghost"
+              className="min-h-11"
+              pending={busy === "workflow"}
+              onClick={() => void reopenStep(prevStep)}
+            >
+              Reopen previous
+            </Button>
+          ) : null}
         </div>
-        {project.cancelToken ? (
-          <div className="flex min-w-0 flex-col gap-2 sm:items-end">
-            <Label>Cancel link</Label>
-            <div className="flex flex-wrap gap-2">
-              <code className="max-w-full truncate rounded-md border border-line bg-canvas px-2 py-2 text-xs">
-                /cancel/{project.cancelToken}
-              </code>
-              <Button
-                type="button"
-                tone="neutral"
-                className="min-h-11"
-                onClick={() => void copyCancelLink()}
-              >
-                Copy link
-              </Button>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className="space-y-3 md:hidden">
@@ -939,7 +1156,7 @@ export function ProjectWorkflowPanel({
                   <p className="text-sm text-muted">
                     {contractSigned
                       ? "Completed"
-                      : `${contracts.length} awaiting signature`}
+                      : `${awaitingCount} awaiting signature`}
                   </p>
                 ) : null}
 
@@ -1013,6 +1230,44 @@ export function ProjectWorkflowPanel({
                 ) : null}
 
                 {step.id === "pricing" ? (
+                  sessions.length === 0 ? (
+                    <form
+                      onSubmit={(e) => void createSessionForQuote(e)}
+                      className="grid max-w-xl gap-4 sm:grid-cols-2"
+                    >
+                      <Field className="sm:col-span-2">
+                        <Label>Session label</Label>
+                        <Input
+                          value={inlineSessionType}
+                          onChange={(e) =>
+                            setInlineSessionType(e.target.value)
+                          }
+                          required
+                        />
+                      </Field>
+                      <Field>
+                        <Label>Date</Label>
+                        <Input
+                          type="date"
+                          value={inlineSessionDate}
+                          onChange={(e) =>
+                            setInlineSessionDate(e.target.value)
+                          }
+                        />
+                      </Field>
+                      <div className="flex items-end">
+                        <Button
+                          type="submit"
+                          tone="accent"
+                          className="w-full min-h-11"
+                          pending={busy === "pricing-session"}
+                          pendingLabel="Adding…"
+                        >
+                          Add session
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
                   <>
                     {sessions.length > 1 ? (
                       <Field>
@@ -1117,6 +1372,7 @@ export function ProjectWorkflowPanel({
                       ]}
                     />
                   </>
+                  )
                 ) : null}
 
                 {step.id === "contract" ? (
@@ -1151,7 +1407,17 @@ export function ProjectWorkflowPanel({
                           pendingLabel: "Sending…",
                           onClick: () => void sendContract(),
                         },
-                        ...(contracts[0]
+                        {
+                          id: "preview",
+                          label: "Preview",
+                          tone: "ghost" as const,
+                          pending: busy === "contract-preview",
+                          pendingLabel: "Opening…",
+                          onClick: () => void previewContract(),
+                        },
+                        ...(contracts.some(
+                          (c) => c.status === "awaiting_signature",
+                        )
                           ? [
                               {
                                 id: "copy",

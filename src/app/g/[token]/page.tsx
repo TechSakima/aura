@@ -8,6 +8,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { differenceInCalendarDays, format } from "date-fns";
@@ -28,16 +29,14 @@ import {
 } from "@/components/gallery/GalleryIcons";
 import { GalleryHero } from "@/components/gallery/GalleryHero";
 import { MasonryGrid, type MasonryPhoto } from "@/components/gallery/MasonryGrid";
-import { PhotoLightbox } from "@/components/gallery/PhotoLightbox";
 import { GalleryCoachTips } from "@/components/gallery/GalleryCoachTips";
-import { GalleryContactDialog } from "@/components/gallery/GalleryContactDialog";
 import {
   GalleryGuestState,
   GalleryUnavailableInline,
   type GalleryGuestReason,
 } from "@/components/gallery/GalleryGuestState";
 import { GalleryPrintPartners } from "@/components/gallery/GalleryPrintPartners";
-import { PinModal } from "@/components/gallery/PinModal";
+import { OverlayChunkLoading } from "@/components/gallery/OverlayChunkLoading";
 import { InstallHint } from "@/components/pwa/InstallHint";
 import { PublicShell } from "@/components/shells/PublicShell";
 import {
@@ -52,18 +51,41 @@ import {
   useConfirm,
   useToast,
 } from "@/components/ui";
+
+const lazyOverlays = () => import("@/components/gallery/lazy-gallery-overlays");
+
+const PhotoLightbox = dynamic(
+  () => lazyOverlays().then((m) => ({ default: m.PhotoLightbox })),
+  { loading: () => <OverlayChunkLoading /> },
+);
+const PinModal = dynamic(
+  () => lazyOverlays().then((m) => ({ default: m.PinModal })),
+  { loading: () => <OverlayChunkLoading /> },
+);
+const GalleryContactDialog = dynamic(
+  () => lazyOverlays().then((m) => ({ default: m.GalleryContactDialog })),
+  { loading: () => <OverlayChunkLoading /> },
+);
+const PhotoCommentPanel = dynamic(
+  () => lazyOverlays().then((m) => ({ default: m.PhotoCommentPanel })),
+  { loading: () => null },
+);
 import {
   downloadConfirmCopy,
   downloadCopy,
   emptyDownloadMessage,
 } from "@/lib/download-copy";
-import { resolveGalleryBrandCssVars } from "@/lib/gallery-brand";
+import {
+  resolveGalleryBrandCssVars,
+  resolveGalleryFontPreset,
+} from "@/lib/gallery-brand";
 import { normalizeGalleryDesign } from "@/lib/gallery-design";
 import {
   galleryEnterStaggerMs,
   galleryShouldEnterMotion,
   galleryViewAnnouncement,
 } from "@/lib/gallery-experience";
+import { recordGalleryPhotoView } from "@/lib/gallery-photo-view";
 import { isNetworkError, mutationOfflineMessage } from "@/lib/offline";
 import { usePrefersReducedMotion } from "@/lib/use-prefers-reduced-motion";
 import type { Comment, Gallery, PrintPartner, StudioTheme } from "@/lib/types";
@@ -134,6 +156,8 @@ export default function PublicGalleryPage() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [downloadMode, setDownloadMode] = useState<DownloadMode>("all");
   const [downloadPhotoId, setDownloadPhotoId] = useState<string | null>(null);
+  /** Hub chrome: pick all vs favorites (AURA-148). */
+  const [downloadPickOpen, setDownloadPickOpen] = useState(false);
   const [commentName, setCommentName] = useState("");
   const [commentBody, setCommentBody] = useState("");
   const [commentCompany, setCommentCompany] = useState("");
@@ -285,6 +309,12 @@ export default function PublicGalleryPage() {
     void load();
   }, [load]);
 
+  // Warm lightbox / PIN / contact / comments chunk after first paint (AURA-411).
+  useEffect(() => {
+    if (!data?.gallery || guestReason) return;
+    void lazyOverlays();
+  }, [data?.gallery, guestReason]);
+
   const mainPhotos = useMemo(
     () =>
       data?.photos.filter((p) => p.kind === "main" || p.kind === "video") || [],
@@ -323,15 +353,16 @@ export default function PublicGalleryPage() {
   const selected =
     lightboxIndex != null ? albumPhotos[lightboxIndex] || null : null;
 
-  async function openPhoto(photo: MasonryPhoto, fromList: PublicPhoto[] = mainPhotos) {
+  // Session-dedupe photo_view — open + swipe, one RTT per photo (AURA-413).
+  useEffect(() => {
+    if (!token || !selected?.id) return;
+    recordGalleryPhotoView(token, selected.id);
+  }, [token, selected?.id]);
+
+  function openPhoto(photo: MasonryPhoto, fromList: PublicPhoto[] = mainPhotos) {
     const idx = fromList.findIndex((p) => p.id === photo.id);
     if (idx < 0) return;
     setLightboxIndex(idx);
-    await fetch(`/api/public/galleries/${token}/photo-view`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ photoId: photo.id }),
-    });
   }
 
   async function toggleFavorite(photoId: string) {
@@ -412,6 +443,18 @@ export default function PublicGalleryPage() {
       return;
     }
     setPinOpen(true);
+  }
+
+  function openChromeDownload() {
+    if (view === "favorites") {
+      void startDownload("favorites");
+      return;
+    }
+    if (favorites.length > 0) {
+      setDownloadPickOpen(true);
+      return;
+    }
+    void startDownload("all");
   }
 
   async function fetchDownloadPayload(body: Record<string, unknown>) {
@@ -719,6 +762,7 @@ export default function PublicGalleryPage() {
     design,
     studio.theme,
   ) as CSSProperties;
+  const fontPreset = resolveGalleryFontPreset(design, studio.theme);
 
   const dateLabel = gallery.liveAt
     ? format(new Date(gallery.liveAt), "MMMM do, yyyy").toUpperCase()
@@ -755,7 +799,7 @@ export default function PublicGalleryPage() {
       favoritesLabel={favoritesLabel}
       favoritesActive={view === "favorites"}
       onFavorites={() => setView("favorites")}
-      onDownload={() => void startDownload("all")}
+      onDownload={openChromeDownload}
       onShare={() => void shareAlbum()}
       showContact={showGalleryContact}
       onContact={() => setContactOpen(true)}
@@ -795,6 +839,7 @@ export default function PublicGalleryPage() {
       <PublicShell
         bare
         style={themeStyle}
+        fontPreset={fontPreset}
         className={chromePad}
         galleryMotion={design.motion}
         galleryDensity={design.density}
@@ -906,6 +951,7 @@ export default function PublicGalleryPage() {
     <PublicShell
       bare
       style={themeStyle}
+      fontPreset={fontPreset}
       className={chromePad}
       galleryMotion={design.motion}
       galleryDensity={design.density}
@@ -913,9 +959,15 @@ export default function PublicGalleryPage() {
       {viewAnnouncer}
       {chrome}
 
-      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(4.75rem+env(safe-area-inset-bottom))]">
+      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(4.75rem+env(safe-area-inset-bottom))] desk:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="mx-auto max-w-md">
-          <InstallHint storageKey="aura-install-dismiss-gallery" />
+          <InstallHint
+            storageKey={
+              token
+                ? `aura-install-dismiss-g-${token}`
+                : "aura-install-dismiss-g"
+            }
+          />
         </div>
       </div>
 
@@ -1064,6 +1116,14 @@ export default function PublicGalleryPage() {
       ) : null}
 
       <footer className="border-t border-ink/10 py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] text-center text-sm text-muted">
+        {studio.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={studio.logoUrl}
+            alt=""
+            className="mx-auto mb-3 h-10 w-auto max-w-[10rem] object-contain"
+          />
+        ) : null}
         <p className="font-medium text-ink">{studio.name}</p>
         {studio.brandTagline ? (
           <p className="mt-1">{studio.brandTagline}</p>
@@ -1121,58 +1181,16 @@ export default function PublicGalleryPage() {
                     ) : null}
                   </div>
                   {gallery.commentsEnabled && view !== "peek" ? (
-                    <div className="space-y-3">
-                      {photoComments.length ? (
-                        <ul className="space-y-2">
-                          {photoComments.map((c) => (
-                            <li key={c.id} className="text-sm text-ink">
-                              <span className="font-medium">{c.authorName}</span>
-                              <span className="text-muted"> · </span>
-                              {c.body}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                      <div className="relative flex flex-col gap-2 sm:flex-row sm:items-end">
-                        <div
-                          aria-hidden
-                          className="pointer-events-none absolute -left-[9999px] h-0 w-0 overflow-hidden opacity-0"
-                        >
-                          <Label htmlFor="lb-comment-company">Company</Label>
-                          <Input
-                            id="lb-comment-company"
-                            name="company"
-                            tabIndex={-1}
-                            autoComplete="off"
-                            value={commentCompany}
-                            onChange={(e) => setCommentCompany(e.target.value)}
-                          />
-                        </div>
-                        <Field className="min-w-0 flex-1">
-                          <Label htmlFor="lb-comment-name">Name</Label>
-                          <Input
-                            id="lb-comment-name"
-                            value={commentName}
-                            onChange={(e) => setCommentName(e.target.value)}
-                          />
-                        </Field>
-                        <Field className="min-w-0 flex-[2]">
-                          <Label htmlFor="lb-comment-body">Comment</Label>
-                          <Input
-                            id="lb-comment-body"
-                            value={commentBody}
-                            onChange={(e) => setCommentBody(e.target.value)}
-                          />
-                        </Field>
-                        <Button
-                          size="sm"
-                          className="min-h-11 w-full sm:w-auto"
-                          onClick={() => void submitComment()}
-                        >
-                          Post
-                        </Button>
-                      </div>
-                    </div>
+                    <PhotoCommentPanel
+                      comments={photoComments}
+                      name={commentName}
+                      body={commentBody}
+                      company={commentCompany}
+                      onNameChange={setCommentName}
+                      onBodyChange={setCommentBody}
+                      onCompanyChange={setCommentCompany}
+                      onSubmit={() => void submitComment()}
+                    />
                   ) : null}
                 </div>
               ) : null
@@ -1180,9 +1198,9 @@ export default function PublicGalleryPage() {
           />
         ) : null}
 
-        {showGalleryContact ? (
+        {showGalleryContact && contactOpen ? (
           <GalleryContactDialog
-            open={contactOpen}
+            open
             onClose={() => setContactOpen(false)}
             token={token}
             studioName={studio.name}
@@ -1190,20 +1208,51 @@ export default function PublicGalleryPage() {
           />
         ) : null}
 
-        <PinModal
-          open={pinOpen}
-          onClose={() => {
-            setPinOpen(false);
-            setPinError(null);
-          }}
-          onSubmit={handleDownload}
-          title={pinCopy.title}
-          description={pinCopy.description}
-          footnote={pinCopy.footnote}
-          confirmLabel={pinCopy.confirmLabel}
-          error={pinError}
-          onClearError={() => setPinError(null)}
-        />
+        {pinOpen ? (
+          <PinModal
+            open
+            onClose={() => {
+              setPinOpen(false);
+              setPinError(null);
+            }}
+            onSubmit={handleDownload}
+            title={pinCopy.title}
+            description={pinCopy.description}
+            footnote={pinCopy.footnote}
+            confirmLabel={pinCopy.confirmLabel}
+            error={pinError}
+            onClearError={() => setPinError(null)}
+          />
+        ) : null}
+
+        <Dialog
+          open={downloadPickOpen}
+          onClose={() => setDownloadPickOpen(false)}
+          title="Download"
+        >
+          <div className="flex flex-col gap-2 pb-1">
+            <Button
+              tone="accent"
+              className="min-h-11 w-full"
+              onClick={() => {
+                setDownloadPickOpen(false);
+                void startDownload("all");
+              }}
+            >
+              All photos
+            </Button>
+            <Button
+              tone="neutral"
+              className="min-h-11 w-full"
+              onClick={() => {
+                setDownloadPickOpen(false);
+                void startDownload("favorites");
+              }}
+            >
+              Favorites ({favorites.length})
+            </Button>
+          </div>
+        </Dialog>
 
         <Dialog
           open={subOpen}

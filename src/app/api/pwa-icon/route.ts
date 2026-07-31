@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { renderPwaIconPng, resolvePwaIconSource } from "@/lib/pwa-icon";
 
 /**
- * Same-origin PNG icons for Web App Manifests (AURA-289 / 299).
+ * Same-origin PNG icons for Web App Manifests (AURA-289 / 299 / 400).
  * Query: size=192|512, purpose=any|maskable, plus
- * token= | slug= | surface=admin | proposal= | contract= | pay=
+ * token= | slug= | studio= | surface=admin | proposal= | contract= | pay= |
+ * questionnaire= | cancel=
+ * Admin installs use `studio=` (no cookie). Legacy `surface=admin` fails open to static.
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -16,10 +18,13 @@ export async function GET(req: Request) {
   const resolved = await resolvePwaIconSource({
     token: url.searchParams.get("token") || undefined,
     slug: url.searchParams.get("slug") || undefined,
+    studio: url.searchParams.get("studio") || undefined,
     surface: url.searchParams.get("surface") || undefined,
     proposal: url.searchParams.get("proposal") || undefined,
     contract: url.searchParams.get("contract") || undefined,
     pay: url.searchParams.get("pay") || undefined,
+    questionnaire: url.searchParams.get("questionnaire") || undefined,
+    cancel: url.searchParams.get("cancel") || undefined,
   });
 
   if ("error" in resolved) {

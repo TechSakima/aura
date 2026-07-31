@@ -2,16 +2,13 @@ import { createHash } from "crypto";
 import { COL } from "@/lib/db/collections";
 import { firebaseAdminConfigured, getAdminDb } from "@/lib/firebase/admin";
 
+export { clientIp } from "@/lib/client-ip";
+
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
 export type RateLimitResult =
   | { ok: true }
   | { ok: false; retryAfterSec: number };
-
-/** Client IP from proxy headers (AURA-270). */
-export function clientIp(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-}
 
 function memoryLimit(
   key: string,
@@ -91,8 +88,9 @@ export async function rateLimitShared(
 }
 
 /**
- * In-memory rate limiter (per-process). Prefer `rateLimitShared` for PIN/download
- * and other multi-instance sensitive paths (AURA-107).
+ * In-memory rate limiter (per-process). Prefer `rateLimitShared` for auth,
+ * pay/book/docs, PIN/download, and other multi-instance sensitive paths
+ * (AURA-107 / AURA-392).
  */
 export function rateLimit(
   key: string,

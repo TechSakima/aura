@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth";
 import { mediaBackend, storageBackend } from "@/lib/db/store";
 import { firebaseReady } from "@/lib/db/require-firebase";
 import { firebaseConfigured } from "@/lib/firebase/client";
@@ -9,10 +10,16 @@ import {
 } from "@/lib/storage/media-store";
 import { isR2Configured } from "@/lib/storage/r2-store";
 
-export async function GET() {
-  const ready = firebaseReady();
+function publicStatus(ready: boolean) {
+  return {
+    ok: ready,
+    error: ready ? null : "Service unavailable",
+  };
+}
+
+function detailedStatus(ready: boolean) {
   const r2 = isR2Configured();
-  return NextResponse.json({
+  return {
     ok: ready,
     firebaseClient: firebaseConfigured(),
     firebaseAdmin: firebaseAdminConfigured(),
@@ -32,5 +39,21 @@ export async function GET() {
         ? null
         : "R2 required in production for media (set R2_* secrets)."
       : "Firebase Admin + Storage bucket required. On App Hosting, associate a web app and set NEXT_PUBLIC_* / FIREBASE_STORAGE_BUCKET.",
-  });
+  };
+}
+
+export async function GET() {
+  const ready = firebaseReady();
+  const isProd = process.env.NODE_ENV === "production";
+
+  // Production: full diagnostics for admins only (AURA-408).
+  // Non-prod keeps detailed payload for local setup (`curl /api/status`).
+  if (isProd) {
+    const admin = await requireAdmin();
+    if (!admin) {
+      return NextResponse.json(publicStatus(ready));
+    }
+  }
+
+  return NextResponse.json(detailedStatus(ready));
 }

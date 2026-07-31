@@ -36,6 +36,8 @@ export default function GalleryHomepagePage() {
   const [pending, setPending] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const fontPreset =
+    data?.studio.theme?.fontPreset || gate?.theme?.fontPreset;
   const themeStyle = useMemo(() => {
     const theme = data?.studio.theme || gate?.theme;
     const preset = resolveStudioThemePreset(theme);
@@ -97,7 +99,7 @@ export default function GalleryHomepagePage() {
 
   if (error && !data) {
     return (
-      <PublicShell style={themeStyle}>
+      <PublicShell style={themeStyle} fontPreset={fontPreset}>
         <EmptyState variant="error" title={error} />
       </PublicShell>
     );
@@ -106,7 +108,7 @@ export default function GalleryHomepagePage() {
   if (needsPassword && !data) {
     const name = gate?.name || "Studio";
     return (
-      <PublicShell style={themeStyle}>
+      <PublicShell style={themeStyle} fontPreset={fontPreset}>
         <form
           onSubmit={onPassword}
           className="mx-auto max-w-sm space-y-5 py-10 sm:py-16"
@@ -152,7 +154,7 @@ export default function GalleryHomepagePage() {
 
   if (loading || !data) {
     return (
-      <PublicShell style={themeStyle}>
+      <PublicShell style={themeStyle} fontPreset={fontPreset}>
         <EmptyState variant="loading" title="Loading…" />
       </PublicShell>
     );

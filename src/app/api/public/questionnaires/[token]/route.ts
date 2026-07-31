@@ -4,7 +4,7 @@ import { assertFirebaseReady } from "@/lib/db/require-firebase";
 import { getProjectById, patchStudioDoc, readStudioDb } from "@/lib/db/store";
 import { notifyStudio } from "@/lib/notify/send";
 import { resolveBrowseMediaUrl } from "@/lib/media-url-server";
-import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { clientIp, rateLimitShared } from "@/lib/rate-limit";
 import type { QuestionnaireResponse } from "@/lib/types";
 
 async function findByToken(token: string): Promise<{
@@ -66,7 +66,11 @@ export async function POST(
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
-  const limited = rateLimit(`questionnaire:${token}:${clientIp(req)}`, 10, 60_000);
+  const limited = await rateLimitShared(
+    `questionnaire:${token}:${clientIp(req)}`,
+    6,
+    60_000,
+  );
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },

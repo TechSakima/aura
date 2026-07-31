@@ -145,7 +145,7 @@ export function PrepStep({
 
       <div className="flex flex-wrap gap-2">
         <Button disabled={busy} onClick={() => void createOrRefreshPlan()}>
-          {plan ? "Refresh plan from template" : "Create shoot plan"}
+          {plan ? "Refresh plan from template" : "Create plan"}
         </Button>
         {plan ? (
           <Button tone="ghost" disabled={busy} onClick={() => void saveNotes()}>

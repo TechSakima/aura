@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { updateStudioDb } from "@/lib/db/store";
-import { reprocessGalleryWatermarks } from "@/lib/images/rewatermark";
+import { getGalleryById } from "@/lib/db/store";
+import {
+  drainWatermarkJobs,
+  enqueueWatermarkReprocess,
+} from "@/lib/jobs/watermark-reprocess";
 
 export async function POST(
   _req: Request,
@@ -11,12 +14,23 @@ export async function POST(
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
 
-  const result = await updateStudioDb(admin.studioId, async (db) => {
-    const gallery = db.galleries.find((g) => g.id === id);
-    if (!gallery) return null;
-    return reprocessGalleryWatermarks(db, id);
+  const gallery = await getGalleryById(id);
+  if (!gallery || gallery.studioId !== admin.studioId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const { job, alreadyQueued } = await enqueueWatermarkReprocess({
+    studioId: admin.studioId,
+    galleryId: id,
   });
 
-  if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(result);
+  /* Kick one slice now (photo patches only); remainder via cron. */
+  const progress = await drainWatermarkJobs({ limit: 1 }).catch(() => null);
+
+  return NextResponse.json({
+    queued: true,
+    alreadyQueued,
+    jobId: job.id,
+    progress,
+  });
 }

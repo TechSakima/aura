@@ -22,6 +22,8 @@ import {
   useToast,
 } from "@/components/ui";
 
+import { projectHref, sessionToolsHref } from "@/lib/admin-deep-links";
+import { adminPathSegment } from "@/lib/admin-slug";
 import { mutateJson } from "@/lib/client/mutation";
 import {
   confirmArchiveProject,
@@ -94,6 +96,11 @@ export default function ProjectDetailPage() {
     setEmail(p.email);
     setPhone(p.phone || "");
     setNotes(p.notes || "");
+
+    const pretty = projectHref(adminPathSegment(p));
+    if (pretty !== `/admin/projects/${id}`) {
+      router.replace(pretty);
+    }
 
     const summaries = (data.sessions || []) as SessionRow[];
     if (summaries.some((s) => s.currentStep != null)) {
@@ -199,7 +206,11 @@ export default function ProjectDetailPage() {
     }
     const data = await res.json();
     const session = data.session as ProjectSession;
-    const prepHref = `/admin/projects/${id}/sessions/${session.id}?step=prep`;
+    const prepHref = sessionToolsHref({
+      project: project || { id },
+      session,
+      step: "prep",
+    });
 
     if (data.calendarSyncFailed) {
       push("Session created · calendar not updated", "danger");
@@ -227,6 +238,17 @@ export default function ProjectDetailPage() {
     setSessionType("Wedding");
     setSessionDate("");
     await load();
+  }
+
+  async function copyCancelLink() {
+    if (!project?.cancelToken) return;
+    const url = `${window.location.origin}/cancel/${project.cancelToken}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      push("Link copied", "success");
+    } catch {
+      push("Could not copy", "danger");
+    }
   }
 
   async function archiveProjectAction() {
@@ -313,7 +335,11 @@ export default function ProjectDetailPage() {
           <ActionStack
             primaryId="all"
             moreLabel="More"
-            menuIds={["archive", "delete"]}
+            menuIds={[
+              ...(project.cancelToken ? ["cancel-link"] : []),
+              "archive",
+              "delete",
+            ]}
             actions={[
               {
                 id: "all",
@@ -321,6 +347,16 @@ export default function ProjectDetailPage() {
                 href: "/admin/projects",
                 tone: "ghost",
               },
+              ...(project.cancelToken
+                ? [
+                    {
+                      id: "cancel-link",
+                      label: "Copy change link",
+                      tone: "ghost" as const,
+                      onClick: () => void copyCancelLink(),
+                    },
+                  ]
+                : []),
               {
                 id: "archive",
                 label:
@@ -389,7 +425,7 @@ export default function ProjectDetailPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
+                placeholder="Optional until you send"
               />
             </Field>
             <Field>
@@ -406,7 +442,9 @@ export default function ProjectDetailPage() {
           <dl className="grid gap-4 border-y border-line py-5 text-sm sm:grid-cols-3">
             <div>
               <dt className="text-xs uppercase tracking-wider text-muted">Email</dt>
-              <dd className="mt-1 break-all">{project.email}</dd>
+              <dd className="mt-1 break-all">
+                {project.email?.trim() || "—"}
+              </dd>
             </div>
             <div>
               <dt className="text-xs uppercase tracking-wider text-muted">Phone</dt>
@@ -481,13 +519,20 @@ export default function ProjectDetailPage() {
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <Link
-                    href={`/admin/projects/${id}/sessions/${s.id}?step=${
-                      s.currentStep === "intake" ||
-                      s.currentStep === "proposal" ||
-                      !s.currentStep
-                        ? "prep"
-                        : s.currentStep
-                    }`}
+                    href={sessionToolsHref({
+                      project: project || { id },
+                      session: s,
+                      step:
+                        s.currentStep === "intake" ||
+                        s.currentStep === "proposal" ||
+                        !s.currentStep
+                          ? "prep"
+                          : (s.currentStep as
+                              | "prep"
+                              | "shoot-day"
+                              | "delivery"
+                              | "wrap"),
+                    })}
                   >
                     <Button size="sm">Open session</Button>
                   </Link>

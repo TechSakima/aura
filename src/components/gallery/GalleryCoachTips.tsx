@@ -71,8 +71,8 @@ export function GalleryCoachTips({
           <li>Heart photos to save favorites.</li>
           <li>
             {hasDownloadPin
-              ? "Download originals with your PIN."
-              : "Download originals from Download."}
+              ? "Download all or favorites from Download — PIN required."
+              : "Download all or favorites from Download."}
           </li>
           <li>Tap a photo to open it.</li>
           {showContact ? <li>Message the studio from Message.</li> : null}

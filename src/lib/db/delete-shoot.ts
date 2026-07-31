@@ -40,29 +40,34 @@ export async function deletePhotosByIds(
   await deleteStudioDocs(COL.photos, photoIds, { studioId });
   await deleteStudioDocs(COL.comments, commentIds, { studioId });
 
-  await updateStudioDb(studioId, (d) => {
-    d.photos = d.photos.filter((p) => !idSet.has(p.id));
-    d.comments = d.comments.filter((c) => !idSet.has(c.photoId));
-    for (const g of d.galleries) {
-      if (g.favoritePhotoIds?.length) {
-        g.favoritePhotoIds = g.favoritePhotoIds.filter((id) => !idSet.has(id));
-      }
-      if (g.coverPhotoUrl) {
-        const coverGone = photos.some(
-          (p) =>
-            p.galleryId === g.id &&
-            (p.thumbUrl === g.coverPhotoUrl ||
-              p.webUrl === g.coverPhotoUrl ||
-              p.watermarkedUrl === g.coverPhotoUrl),
-        );
-        if (coverGone) {
-          const next = d.photos.find((p) => p.galleryId === g.id);
-          g.coverPhotoUrl = next?.watermarkedUrl;
+  /* Need photos graph for cover reassignment after delete (AURA-055 opt-in). */
+  await updateStudioDb(
+    studioId,
+    (d) => {
+      d.photos = d.photos.filter((p) => !idSet.has(p.id));
+      d.comments = d.comments.filter((c) => !idSet.has(c.photoId));
+      for (const g of d.galleries) {
+        if (g.favoritePhotoIds?.length) {
+          g.favoritePhotoIds = g.favoritePhotoIds.filter((id) => !idSet.has(id));
         }
+        if (g.coverPhotoUrl) {
+          const coverGone = photos.some(
+            (p) =>
+              p.galleryId === g.id &&
+              (p.thumbUrl === g.coverPhotoUrl ||
+                p.webUrl === g.coverPhotoUrl ||
+                p.watermarkedUrl === g.coverPhotoUrl),
+          );
+          if (coverGone) {
+            const next = d.photos.find((p) => p.galleryId === g.id);
+            g.coverPhotoUrl = next?.watermarkedUrl;
+          }
+        }
+        g.updatedAt = new Date().toISOString();
       }
-      g.updatedAt = new Date().toISOString();
-    }
-  });
+    },
+    { photos: true },
+  );
   return photos.length;
 }
 

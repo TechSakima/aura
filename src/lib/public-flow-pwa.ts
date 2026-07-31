@@ -4,6 +4,8 @@ import { listStudiosWithPaymentLink } from "@/lib/db/payments";
 import {
   findContractByToken,
   findProposalByToken,
+  findQuestionnaireResponseByToken,
+  findStudioIdByProjectCancelToken,
   getStudioDoc,
 } from "@/lib/db/store";
 import {
@@ -13,7 +15,12 @@ import {
 } from "@/lib/studio-pwa-manifest";
 import type { Studio } from "@/lib/types";
 
-export type PublicFlowKind = "proposal" | "contract" | "pay";
+export type PublicFlowKind =
+  | "proposal"
+  | "contract"
+  | "pay"
+  | "questionnaire"
+  | "cancel";
 
 type FlowChrome = {
   studio: Studio | null;
@@ -42,6 +49,14 @@ const flowLabels: Record<
     namePrefix: "Pay",
     description: (s) => `Pay ${s}`,
   },
+  questionnaire: {
+    namePrefix: "Questionnaire",
+    description: (s) => `Questionnaire from ${s}`,
+  },
+  cancel: {
+    namePrefix: "Change or cancel",
+    description: (s) => `Change or cancel with ${s}`,
+  },
 };
 
 async function studioForFlow(
@@ -60,6 +75,18 @@ async function studioForFlow(
     const studio = await getStudioDoc(hit.studioId);
     return { studio, detailTitle: hit.title?.trim() || undefined };
   }
+  if (kind === "questionnaire") {
+    const hit = await findQuestionnaireResponseByToken(id);
+    if (!hit?.studioId) return { studio: null };
+    const studio = await getStudioDoc(hit.studioId);
+    return { studio, detailTitle: hit.title?.trim() || undefined };
+  }
+  if (kind === "cancel") {
+    const studioId = await findStudioIdByProjectCancelToken(id);
+    if (!studioId) return { studio: null };
+    const studio = await getStudioDoc(studioId);
+    return { studio };
+  }
   const hit = await listStudiosWithPaymentLink(id);
   if (!hit) return { studio: null };
   const studio = await getStudioDoc(hit.studioId);
@@ -72,16 +99,20 @@ async function studioForFlow(
 function pathForFlow(kind: PublicFlowKind, id: string): string {
   if (kind === "proposal") return `/p/${id}`;
   if (kind === "contract") return `/c/${id}`;
+  if (kind === "questionnaire") return `/q/${id}`;
+  if (kind === "cancel") return `/cancel/${id}`;
   return `/pay/${id}`;
 }
 
 function iconQueryForFlow(kind: PublicFlowKind, id: string): string {
   if (kind === "proposal") return `proposal=${encodeURIComponent(id)}`;
   if (kind === "contract") return `contract=${encodeURIComponent(id)}`;
+  if (kind === "questionnaire") return `questionnaire=${encodeURIComponent(id)}`;
+  if (kind === "cancel") return `cancel=${encodeURIComponent(id)}`;
   return `pay=${encodeURIComponent(id)}`;
 }
 
-/** Studio brand chrome for quote / contract / pay (AURA-299). */
+/** Studio brand chrome for quote / contract / pay / q / cancel (AURA-299 / 418). */
 export const publicFlowPwaChrome = cache(
   async (kind: PublicFlowKind, id: string): Promise<FlowChrome> => {
     const { studio, detailTitle } = await studioForFlow(kind, id);

@@ -10,10 +10,13 @@ import {
   EmptyState,
   Field,
   Label,
+  Select,
   useToast,
 } from "@/components/ui";
 import { formatStudioDate } from "@/lib/date-format";
 import type { DateFormat } from "@/lib/types";
+
+type CalendarOption = { id: string; summary: string; primary?: boolean };
 
 function formatCheckedAt(
   iso: string | null | undefined,
@@ -49,6 +52,9 @@ export function SettingsIntegrations() {
   const [gcalConnected, setGcalConnected] = useState(false);
   const [gcalLastSyncAt, setGcalLastSyncAt] = useState<string | null>(null);
   const [gcalLastError, setGcalLastError] = useState<string | null>(null);
+  const [gcalCalendars, setGcalCalendars] = useState<CalendarOption[]>([]);
+  const [gcalCalendarId, setGcalCalendarId] = useState("primary");
+  const [gcalCalendarBusy, setGcalCalendarBusy] = useState(false);
   const [stripeConfigured, setStripeConfigured] = useState(true);
   const [stripeReady, setStripeReady] = useState(false);
   const [stripeLastCheckedAt, setStripeLastCheckedAt] = useState<string | null>(
@@ -70,17 +76,25 @@ export function SettingsIntegrations() {
     setGcalConnected(Boolean(studio.googleCalendarConnected));
     setGcalLastSyncAt(studio.googleCalendarLastSyncAt || null);
     setGcalLastError(studio.googleCalendarLastSyncError || null);
+    setGcalCalendarId(studio.googleCalendarId || "primary");
     setDateFormat(studio.dateFormat || "mm/dd/yyyy");
     setTimeZone(studio.timeZone || "America/Denver");
 
     const gcalReady = Boolean(studio.googleCalendarConnected);
-    const [connectPut, healthRes] = await Promise.all([
+    const [connectPut, healthRes, calendarsRes] = await Promise.all([
       fetch("/api/payments/connect", { method: "PUT" }),
       gcalReady
         ? fetch("/api/integrations/google", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "health" }),
+          })
+        : Promise.resolve(null),
+      gcalReady
+        ? fetch("/api/integrations/google", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "calendars" }),
           })
         : Promise.resolve(null),
     ]);
@@ -113,7 +127,37 @@ export function SettingsIntegrations() {
       if (h.connected === false) setGcalConnected(false);
     }
 
+    if (calendarsRes?.ok) {
+      const c = await calendarsRes.json().catch(() => ({}));
+      const list = Array.isArray(c.calendars)
+        ? (c.calendars as CalendarOption[])
+        : [];
+      setGcalCalendars(list);
+      if (typeof c.selectedId === "string" && c.selectedId) {
+        setGcalCalendarId(c.selectedId);
+      }
+    } else if (!gcalReady) {
+      setGcalCalendars([]);
+    }
+
     setLoading(false);
+  }
+
+  async function saveCalendarId(nextId: string) {
+    setGcalCalendarBusy(true);
+    const res = await fetch("/api/integrations/google", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "setCalendar", calendarId: nextId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setGcalCalendarBusy(false);
+    if (!res.ok) {
+      push(String(data.error || "Could not save calendar"), "danger");
+      return;
+    }
+    setGcalCalendarId(String(data.calendarId || nextId));
+    push("Calendar saved", "success");
   }
 
   useEffect(() => {
@@ -245,11 +289,36 @@ export function SettingsIntegrations() {
               </div>
             </div>
             {gcalConnected ? (
-              <div className="mt-3 space-y-1 text-xs text-muted">
-                {gcalWhen ? <p>Last sync {gcalWhen}</p> : <p>No sync yet</p>}
-                {gcalError ? (
-                  <p className="text-danger">{gcalError}</p>
+              <div className="mt-3 space-y-3">
+                {gcalCalendars.length > 0 ? (
+                  <Field>
+                    <Label htmlFor="gcal-calendar">Sync calendar</Label>
+                    <Select
+                      id="gcal-calendar"
+                      className="mt-1 min-h-11"
+                      value={gcalCalendarId}
+                      disabled={gcalCalendarBusy || busy}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setGcalCalendarId(next);
+                        void saveCalendarId(next);
+                      }}
+                    >
+                      {gcalCalendars.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.summary}
+                          {c.primary ? " (primary)" : ""}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
                 ) : null}
+                <div className="space-y-1 text-xs text-muted">
+                  {gcalWhen ? <p>Last sync {gcalWhen}</p> : <p>No sync yet</p>}
+                  {gcalError ? (
+                    <p className="text-danger">{gcalError}</p>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </Field>

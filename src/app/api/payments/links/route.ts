@@ -5,6 +5,12 @@ import { readStudioDb, updateStudioDb } from "@/lib/db/store";
 import { readIdempotencyKey, withIdempotency } from "@/lib/idempotency";
 import { grossUpAmount } from "@/lib/stripe";
 import { absoluteUrl, emailPaymentLink } from "@/lib/notify/send";
+import {
+  OPEN_LINK_DEFAULT_MAX,
+  OPEN_LINK_DEFAULT_MIN,
+  parseOpenLinkLimits,
+} from "@/lib/payments/open-link-limits";
+import { PROJECT_EMAIL_REQUIRED } from "@/lib/project-contact";
 import type { PaymentLinkMode, PaymentLinkTemplate } from "@/lib/types";
 
 function publicLinkUrl(id: string) {
@@ -41,9 +47,12 @@ export async function POST(req: Request) {
     const to = String(body.email || body.to || "")
       .trim()
       .toLowerCase();
-    if (!id || !to) {
+    if (!id) {
+      return NextResponse.json({ error: "id required" }, { status: 400 });
+    }
+    if (!to || !to.includes("@")) {
       return NextResponse.json(
-        { error: "id and email required" },
+        { error: PROJECT_EMAIL_REQUIRED },
         { status: 400 },
       );
     }
@@ -96,6 +105,16 @@ export async function POST(req: Request) {
     ? "customer_chooses"
     : "fixed") as PaymentLinkMode;
   const amount = typeof body.amount === "number" ? body.amount : Number(body.amount) || 0;
+  let minAmount: number | undefined;
+  let maxAmount: number | undefined;
+  if (mode === "customer_chooses") {
+    const limits = parseOpenLinkLimits(body);
+    if ("error" in limits) {
+      return NextResponse.json({ error: limits.error }, { status: 400 });
+    }
+    minAmount = limits.minAmount;
+    maxAmount = limits.maxAmount;
+  }
   const now = new Date().toISOString();
   const id = nanoid();
   const breakdown = mode === "fixed" ? grossUpAmount(amount) : null;
@@ -106,8 +125,8 @@ export async function POST(req: Request) {
     description: body.description ? String(body.description) : undefined,
     mode,
     amount: mode === "fixed" ? amount : undefined,
-    minAmount: mode === "customer_chooses" ? Number(body.minAmount) || 1 : undefined,
-    maxAmount: mode === "customer_chooses" ? Number(body.maxAmount) || 500 : undefined,
+    minAmount,
+    maxAmount,
     active: true,
     publicUrl: publicLinkUrl(id),
     projectId: body.projectId ? String(body.projectId) : undefined,
@@ -129,6 +148,33 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
+  const db0 = await readStudioDb(admin.studioId);
+  const existing = db0.paymentLinks.find((l) => l.id === id && !l.archived);
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const nextMode: PaymentLinkMode =
+    body.mode === "fixed" || body.mode === "customer_chooses"
+      ? body.mode
+      : existing.mode;
+  let openLimits: { minAmount: number; maxAmount: number } | undefined;
+  if (nextMode === "customer_chooses") {
+    const limits = parseOpenLinkLimits({
+      minAmount:
+        body.minAmount != null
+          ? body.minAmount
+          : (existing.minAmount ?? OPEN_LINK_DEFAULT_MIN),
+      maxAmount:
+        body.maxAmount != null
+          ? body.maxAmount
+          : (existing.maxAmount ?? OPEN_LINK_DEFAULT_MAX),
+    });
+    if ("error" in limits) {
+      return NextResponse.json({ error: limits.error }, { status: 400 });
+    }
+    openLimits = limits;
+  }
+
   const updated = await updateStudioDb(admin.studioId, (db) => {
     const link = db.paymentLinks.find((l) => l.id === id);
     if (!link || link.archived) return null;
@@ -141,21 +187,13 @@ export async function PATCH(req: Request) {
       const desc = String(body.description).trim();
       link.description = desc || undefined;
     }
-    if (body.mode === "fixed" || body.mode === "customer_chooses") {
-      link.mode = body.mode;
-    }
+    link.mode = nextMode;
     if (body.amount != null || link.mode === "fixed") {
       const amount =
         typeof body.amount === "number" ? body.amount : Number(body.amount);
       if (Number.isFinite(amount) && amount >= 0) {
         link.amount = amount;
       }
-    }
-    if (body.minAmount != null) {
-      link.minAmount = Number(body.minAmount) || link.minAmount;
-    }
-    if (body.maxAmount != null) {
-      link.maxAmount = Number(body.maxAmount) || link.maxAmount;
     }
     if (typeof body.active === "boolean") {
       link.active = body.active;
@@ -167,10 +205,10 @@ export async function PATCH(req: Request) {
     if (link.mode === "fixed") {
       link.minAmount = undefined;
       link.maxAmount = undefined;
-    } else {
+    } else if (openLimits) {
       link.amount = undefined;
-      if (link.minAmount == null) link.minAmount = 1;
-      if (link.maxAmount == null) link.maxAmount = 500;
+      link.minAmount = openLimits.minAmount;
+      link.maxAmount = openLimits.maxAmount;
     }
     link.publicUrl = publicLinkUrl(link.id);
     link.updatedAt = now;

@@ -27,6 +27,8 @@ export type PublicGalleryPhoto = {
   url: string | undefined;
   videoUrl: string | undefined;
   aspect?: number;
+  width?: number;
+  height?: number;
   version: number;
   filename?: string;
 };
@@ -55,6 +57,8 @@ export async function mapPublicGalleryPhotos(
         url,
         videoUrl,
         aspect: p.aspect,
+        width: p.width > 0 ? p.width : undefined,
+        height: p.height > 0 ? p.height : undefined,
         version: p.version,
         filename: p.originalFilename || undefined,
       };

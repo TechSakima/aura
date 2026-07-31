@@ -4,7 +4,8 @@
   --surface: #fffdf8;
   --surface-elevated: #ffffff;
   --ink: #1c1915;
-  --muted: #6b645a;
+  /* Darkened for AA at text-xs / small UI on canvas (AURA-409). */
+  --muted: #5a544c;
   --line: #ddd4c5;
   --accent: #8a6a2f;
   --accent-ink: #fffdf8;
@@ -82,9 +83,10 @@
    * safe-area + py-2 + min-h-11 row (+ border). Use --admin-sticky-top for
    * panels that stick under the shell header.
    * --admin-tab-bar: mobile bottom tab content height (excl. safe-area).
+   * Sized for icon + text-xs label (AURA-141).
    */
   --admin-header-inner: 3.75rem;
-  --admin-tab-bar: 3.25rem;
+  --admin-tab-bar: 3.5rem;
   --admin-sticky-top: calc(
     env(safe-area-inset-top, 0px) + var(--admin-header-inner) + 0.75rem
   );

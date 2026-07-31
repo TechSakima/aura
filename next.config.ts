@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { securityHeaders } from "./src/lib/security-headers";
 
 const sharpNativeGlobs = [
   "./node_modules/@img/sharp-libvips-linux-x64/**/*",
@@ -15,6 +16,14 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/*": sharpNativeGlobs,
     "/api/**/*": sharpNativeGlobs,
+  },
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: securityHeaders(),
+      },
+    ];
   },
 };
 

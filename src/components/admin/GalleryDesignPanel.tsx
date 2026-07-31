@@ -621,7 +621,7 @@ export function GalleryDesignPanel({
                   <p className="text-xs uppercase tracking-[0.14em] text-muted">
                     Light
                   </p>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                     {lightThemes.map((t) => (
                       <ThemeSwatch
                         key={t.id}
@@ -642,7 +642,7 @@ export function GalleryDesignPanel({
                   <p className="text-xs uppercase tracking-[0.14em] text-muted">
                     Dark
                   </p>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                     {darkThemes.map((t) => (
                       <ThemeSwatch
                         key={t.id}

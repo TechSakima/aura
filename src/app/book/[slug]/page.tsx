@@ -8,6 +8,7 @@ import { PublicSuccess } from "@/components/public/PublicSuccess";
 import { InstallHint } from "@/components/pwa/InstallHint";
 import { PublicShell } from "@/components/shells/PublicShell";
 import { Button, Field, Input, Label, Select, Textarea } from "@/components/ui";
+import { mutateJson } from "@/lib/client/mutation";
 import {
   resolveStudioThemePreset,
   studioThemeCssVars,
@@ -50,12 +51,13 @@ export default function PublicBookPage() {
 
   const selected = types.find((t) => t.id === sessionTypeId);
   const showPrice = selected?.pricingMode === "upfront";
+  const fontPreset = studioTheme?.fontPreset;
   const themeStyle = useMemo(() => {
     const preset = resolveStudioThemePreset(studioTheme);
     return studioThemeCssVars(preset, {
-      fontPreset: studioTheme?.fontPreset,
+      fontPreset,
     }) as CSSProperties;
-  }, [studioTheme]);
+  }, [studioTheme, fontPreset]);
 
   useEffect(() => {
     fetch(`/api/public/book/${params.slug}`)
@@ -138,32 +140,41 @@ export default function PublicBookPage() {
       return;
     }
     setPending(true);
-    const res = await fetch(`/api/public/book/${params.slug}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        email,
-        phone: phone.trim() || undefined,
-        notes: notes.trim() || undefined,
-        sessionTypeId,
-        startsAt: start.toISOString(),
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setPending(false);
-    if (!res.ok) {
-      setError(String(data.error || "Could not book"));
-      if (data.calendarSyncFailed) setAvailability("sync_failed");
-      else if (res.status === 409) setAvailability("busy");
-      return;
+    try {
+      const result = await mutateJson<{
+        error?: string;
+        calendarSyncFailed?: boolean;
+      }>(
+        `/api/public/book/${params.slug}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            email,
+            phone: phone.trim() || undefined,
+            notes: notes.trim() || undefined,
+            sessionTypeId,
+            startsAt: start.toISOString(),
+          }),
+        },
+        { action: "book" },
+      );
+      if (!result.ok) {
+        setError(result.errorMessage);
+        if (result.data?.calendarSyncFailed) setAvailability("sync_failed");
+        else if (result.status === 409) setAvailability("busy");
+        return;
+      }
+      setDone(true);
+    } finally {
+      setPending(false);
     }
-    setDone(true);
   }
 
   if (error && !studioName && types.length === 0) {
     return (
-      <PublicShell style={themeStyle}>
+      <PublicShell style={themeStyle} fontPreset={fontPreset}>
         <p className="py-16 text-center text-muted">{error}</p>
       </PublicShell>
     );
@@ -171,7 +182,7 @@ export default function PublicBookPage() {
 
   if (done) {
     return (
-      <PublicShell style={themeStyle}>
+      <PublicShell style={themeStyle} fontPreset={fontPreset}>
         <PublicSuccess title="Request received">
           <p>We’ll confirm your session shortly.</p>
         </PublicSuccess>
@@ -181,7 +192,7 @@ export default function PublicBookPage() {
 
   if (studioName && types.length === 0) {
     return (
-      <PublicShell style={themeStyle}>
+      <PublicShell style={themeStyle} fontPreset={fontPreset}>
         <div className="mx-auto flex max-w-md flex-col items-center py-16 text-center">
           <StudioMark name={studioName} tone="dark" className="mb-2" />
           <h1 className="font-display text-3xl sm:text-4xl">{studioName}</h1>
@@ -218,7 +229,7 @@ export default function PublicBookPage() {
     : "aura-install-dismiss-book";
 
   return (
-    <PublicShell style={themeStyle}>
+    <PublicShell style={themeStyle} fontPreset={fontPreset}>
       <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="mx-auto max-w-md">
           <InstallHint storageKey={installKey} />

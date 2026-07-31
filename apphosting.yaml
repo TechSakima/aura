@@ -88,6 +88,14 @@ env:
     secret: STRIPE_WEBHOOK_SECRET
     availability:
       - RUNTIME
+  # HMAC / seal (AURA-389) — required in production (backs session + media/homepage/Google fallbacks):
+  #   firebase apphosting:secrets:set AURA_SESSION_SECRET --data-file -
+  # Optional dedicated secrets (add bindings when created): MEDIA_PROXY_SECRET,
+  # HOMEPAGE_UNLOCK_SECRET, GOOGLE_TOKEN_SECRET
+  - variable: AURA_SESSION_SECRET
+    secret: AURA_SESSION_SECRET
+    availability:
+      - RUNTIME
   # Cloudflare R2 (AURA-358) — secrets via:
   #   firebase apphosting:secrets:set R2_ACCOUNT_ID --data-file -
   #   firebase apphosting:secrets:set R2_ACCESS_KEY_ID --data-file -

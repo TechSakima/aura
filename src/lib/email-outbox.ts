@@ -8,10 +8,14 @@ import {
   patchStudioDoc,
 } from "@/lib/db/store";
 import { emailContactToStudio, notifyDeliveryIssue } from "@/lib/notify/send";
-import type { ContactMessage, EmailOutboxJob } from "@/lib/types";
+import type {
+  ContactMessage,
+  EmailOutboxJob,
+  EmailOutboxPayload,
+} from "@/lib/types";
 
-/** Backoff after each failed attempt (AURA-313). */
-const CONTACT_BACKOFF_MS = [
+/** Backoff after each failed attempt (AURA-313 / AURA-149). */
+const EMAIL_BACKOFF_MS = [
   60_000,
   5 * 60_000,
   15 * 60_000,
@@ -19,22 +23,20 @@ const CONTACT_BACKOFF_MS = [
   6 * 60 * 60_000,
 ] as const;
 
-const MAX_ATTEMPTS = CONTACT_BACKOFF_MS.length;
+const MAX_ATTEMPTS = EMAIL_BACKOFF_MS.length;
 
-async function alertDeadContactEmail(opts: {
+async function alertDeadEmail(opts: {
   studioId: string;
-  contactMessageId?: string;
+  title: string;
   reason: string;
+  href: string;
 }) {
-  const href = opts.contactMessageId
-    ? "/admin#messages"
-    : "/admin/settings/notifications";
   await notifyDeliveryIssue({
     studioId: opts.studioId,
     kind: "email",
-    title: "Message email failed",
+    title: opts.title,
     body: opts.reason.slice(0, 200),
-    href,
+    href: opts.href,
   }).catch((err) => {
     console.error("[email-outbox] notify dead", err);
   });
@@ -64,7 +66,7 @@ export async function enqueueContactEmailOutbox(opts: {
     refId: opts.contactMessageId,
     status: "pending",
     attempts: 0,
-    nextAttemptAt: new Date(Date.now() + CONTACT_BACKOFF_MS[0]).toISOString(),
+    nextAttemptAt: new Date(Date.now() + EMAIL_BACKOFF_MS[0]).toISOString(),
     lastError: opts.lastError,
     createdAt: now,
     updatedAt: now,
@@ -74,6 +76,33 @@ export async function enqueueContactEmailOutbox(opts: {
     emailStatus: "queued",
     emailLastError: opts.lastError,
   });
+  return job;
+}
+
+/** Queue a rendered transactional email for retry (AURA-149). */
+export async function enqueueTransactionalEmail(opts: {
+  studioId: string;
+  payload: EmailOutboxPayload;
+  lastError?: string;
+}): Promise<EmailOutboxJob> {
+  const now = new Date().toISOString();
+  const refId =
+    opts.payload.idempotencyKey?.trim() ||
+    `tx/${opts.studioId}/${nanoid(12)}`;
+  const job: EmailOutboxJob = {
+    id: nanoid(),
+    studioId: opts.studioId,
+    kind: "transactional",
+    refId,
+    status: "pending",
+    attempts: 0,
+    nextAttemptAt: new Date(Date.now() + EMAIL_BACKOFF_MS[0]).toISOString(),
+    lastError: opts.lastError,
+    payload: opts.payload,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await appendStudioDoc(COL.emailOutbox, job);
   return job;
 }
 
@@ -89,9 +118,11 @@ async function processContactOutboxJob(
       lastError: "Contact message missing",
       attempts: job.attempts + 1,
     });
-    await alertDeadContactEmail({
+    await alertDeadEmail({
       studioId: job.studioId,
+      title: "Message email failed",
       reason: "Contact message missing",
+      href: "/admin/settings/notifications",
     });
     return "dead";
   }
@@ -107,10 +138,11 @@ async function processContactOutboxJob(
       lastError: "Studio missing",
       attempts: job.attempts + 1,
     });
-    await alertDeadContactEmail({
+    await alertDeadEmail({
       studioId: job.studioId,
-      contactMessageId: message.id,
+      title: "Message email failed",
       reason: "Studio missing",
+      href: "/admin#messages",
     });
     return "dead";
   }
@@ -141,10 +173,11 @@ async function processContactOutboxJob(
       emailStatus: "skipped",
       emailLastError: skipErr,
     });
-    await alertDeadContactEmail({
+    await alertDeadEmail({
       studioId: job.studioId,
-      contactMessageId: message.id,
+      title: "Message email failed",
       reason: skipErr,
+      href: "/admin#messages",
     });
     return "dead";
   }
@@ -160,16 +193,17 @@ async function processContactOutboxJob(
       emailStatus: "failed",
       emailLastError: err,
     });
-    await alertDeadContactEmail({
+    await alertDeadEmail({
       studioId: job.studioId,
-      contactMessageId: message.id,
+      title: "Message email failed",
       reason: err,
+      href: "/admin#messages",
     });
     return "dead";
   }
 
   const delay =
-    CONTACT_BACKOFF_MS[Math.min(attempts, CONTACT_BACKOFF_MS.length - 1)]!;
+    EMAIL_BACKOFF_MS[Math.min(attempts, EMAIL_BACKOFF_MS.length - 1)]!;
   await patchStudioDoc(COL.emailOutbox, job.id, {
     status: "pending",
     attempts,
@@ -183,9 +217,93 @@ async function processContactOutboxJob(
   return "retry";
 }
 
+async function processTransactionalOutboxJob(
+  job: EmailOutboxJob,
+): Promise<"sent" | "retry" | "dead" | "skip"> {
+  if (job.kind !== "transactional") return "skip";
+  const payload = job.payload;
+  if (!payload?.to || !payload.subject || !payload.html) {
+    await patchStudioDoc(COL.emailOutbox, job.id, {
+      status: "dead",
+      lastError: "Transactional payload missing",
+      attempts: job.attempts + 1,
+    });
+    await alertDeadEmail({
+      studioId: job.studioId,
+      title: "Email failed",
+      reason: "Transactional payload missing",
+      href: "/admin/settings/notifications",
+    });
+    return "dead";
+  }
+
+  const { emailClient } = await import("@/lib/notify/send");
+  const attempts = job.attempts + 1;
+  const delivered = await emailClient({
+    to: payload.to,
+    subject: payload.subject,
+    html: payload.html,
+    text: payload.text,
+    replyTo: payload.replyTo,
+    fromDisplayName: payload.fromDisplayName,
+    idempotencyKey: payload.idempotencyKey,
+    skipOutbox: true,
+  });
+
+  if (delivered.ok) {
+    await patchStudioDoc(COL.emailOutbox, job.id, {
+      status: "sent",
+      attempts,
+      lastError: null,
+    });
+    return "sent";
+  }
+
+  if (delivered.skipped) {
+    const skipErr = delivered.error || "Email skipped";
+    await patchStudioDoc(COL.emailOutbox, job.id, {
+      status: "dead",
+      attempts,
+      lastError: skipErr,
+    });
+    await alertDeadEmail({
+      studioId: job.studioId,
+      title: "Email failed",
+      reason: skipErr,
+      href: "/admin/settings/notifications",
+    });
+    return "dead";
+  }
+
+  const err = delivered.error || "Send failed";
+  if (attempts >= MAX_ATTEMPTS) {
+    await patchStudioDoc(COL.emailOutbox, job.id, {
+      status: "dead",
+      attempts,
+      lastError: err,
+    });
+    await alertDeadEmail({
+      studioId: job.studioId,
+      title: "Email failed",
+      reason: `${payload.subject}: ${err}`,
+      href: "/admin/settings/notifications",
+    });
+    return "dead";
+  }
+
+  const delay =
+    EMAIL_BACKOFF_MS[Math.min(attempts, EMAIL_BACKOFF_MS.length - 1)]!;
+  await patchStudioDoc(COL.emailOutbox, job.id, {
+    status: "pending",
+    attempts,
+    lastError: err,
+    nextAttemptAt: new Date(Date.now() + delay).toISOString(),
+  });
+  return "retry";
+}
+
 /**
- * Process due outbox jobs. Contact-only for AURA-313; AURA-149 widens kinds.
- * O(pending jobs scanned), not full studio RMW.
+ * Process due outbox jobs (contact + transactional). O(pending scanned).
  */
 export async function drainEmailOutbox(opts?: {
   limit?: number;
@@ -213,7 +331,10 @@ export async function drainEmailOutbox(opts?: {
   let dead = 0;
   for (const job of due) {
     try {
-      const result = await processContactOutboxJob(job);
+      const result =
+        job.kind === "transactional"
+          ? await processTransactionalOutboxJob(job)
+          : await processContactOutboxJob(job);
       if (result === "sent") sent += 1;
       else if (result === "dead") dead += 1;
     } catch (err) {
@@ -224,7 +345,7 @@ export async function drainEmailOutbox(opts?: {
   return { processed: due.length, sent, dead };
 }
 
-/** Count dead contact email jobs for dashboard attention (AURA-279). */
+/** Count dead email jobs for dashboard attention (AURA-279). */
 export async function countDeadContactOutbox(
   studioId: string,
 ): Promise<number> {

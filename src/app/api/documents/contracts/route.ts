@@ -135,6 +135,63 @@ export async function POST(req: Request) {
     );
   }
 
+  /** Draft for admin `/c/` preview before send (AURA-133). */
+  if (action === "preview") {
+    const db0 = await readStudioDb(admin.studioId);
+    const project = db0.projects.find((p) => p.id === projectId);
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+    const templateId = body.templateId ? String(body.templateId) : undefined;
+    const fromTemplate = templateId
+      ? db0.contractTemplates.find((t) => t.id === templateId)
+      : resolveDefaultContractTemplate(db0);
+    const title =
+      String(body.title || "").trim() ||
+      fromTemplate?.name ||
+      "Photography agreement";
+    const contractBody =
+      String(body.body || "").trim() ||
+      fromTemplate?.body ||
+      defaultContractBody();
+    const policy = cancelPolicy || fromTemplate?.cancelPolicy;
+
+    const contract = await updateStudioDb(admin.studioId, (db) => {
+      const existing = db.contracts.find(
+        (c) => c.projectId === projectId && c.status === "draft",
+      );
+      if (existing) {
+        existing.title = title;
+        existing.body = contractBody;
+        existing.templateId = fromTemplate?.id;
+        existing.cancelPolicy = policy;
+        existing.updatedAt = now;
+        return existing;
+      }
+      const created: Contract = {
+        id: nanoid(),
+        studioId: admin.studioId,
+        projectId,
+        templateId: fromTemplate?.id,
+        title,
+        body: contractBody,
+        token: publicToken(),
+        status: "draft",
+        cancelPolicy: policy,
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.contracts.unshift(created);
+      return created;
+    });
+
+    return NextResponse.json({
+      contract,
+      url: absoluteUrl(`/c/${contract.token}`),
+      preview: true,
+    });
+  }
+
   return withIdempotency(
     idempotencyKey,
     `contract-send/${admin.studioId}/${projectId}`,
@@ -154,23 +211,9 @@ export async function POST(req: Request) {
         defaultContractBody();
       const policy = cancelPolicy || fromTemplate?.cancelPolicy;
 
-      const contract: Contract = {
-        id: nanoid(),
-        studioId: admin.studioId,
-        projectId,
-        templateId: fromTemplate?.id,
-        title,
-        body: contractBody,
-        token: publicToken(),
-        status: "awaiting_signature",
-        cancelPolicy: policy,
-        createdAt: now,
-        updatedAt: now,
-      };
       let projectEmail = "";
       let projectName = "";
-      await updateStudioDb(admin.studioId, (db) => {
-        db.contracts.unshift(contract);
+      const contract = await updateStudioDb(admin.studioId, (db) => {
         const project = db.projects.find((p) => p.id === projectId);
         projectEmail = project?.email || "";
         projectName = project?.name || "";
@@ -178,7 +221,37 @@ export async function POST(req: Request) {
           project.workflowStep = "contract";
           project.updatedAt = now;
         }
+
+        const draft = db.contracts.find(
+          (c) => c.projectId === projectId && c.status === "draft",
+        );
+        if (draft) {
+          draft.title = title;
+          draft.body = contractBody;
+          draft.templateId = fromTemplate?.id;
+          draft.cancelPolicy = policy;
+          draft.status = "awaiting_signature";
+          draft.updatedAt = now;
+          return draft;
+        }
+
+        const created: Contract = {
+          id: nanoid(),
+          studioId: admin.studioId,
+          projectId,
+          templateId: fromTemplate?.id,
+          title,
+          body: contractBody,
+          token: publicToken(),
+          status: "awaiting_signature",
+          cancelPolicy: policy,
+          createdAt: now,
+          updatedAt: now,
+        };
+        db.contracts.unshift(created);
+        return created;
       });
+
       const url = absoluteUrl(`/c/${contract.token}`);
       if (projectEmail) {
         await emailContractToSign({

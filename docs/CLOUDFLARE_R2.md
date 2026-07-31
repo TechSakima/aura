@@ -163,6 +163,6 @@ Bulk   → signed URL list + client-side zip (no App Hosting buffer)
 - **PIN** (when set) is checked only on the **download** API before minting original signed URLs.
 - Previews are not PIN-gated. Expired galleries may still show meta; downloads stay blocked (`mutate`).
 
-### Residual risk (not secrecy theater)
+### Media proxy (AURA-386)
 
-Object paths under `studios/{studioId}/…/derivatives/…` are hard to guess but not authorization. `/api/media` will re-mint a derivative signed URL if the path is known (no gallery token). Prefer browse URLs from the gallery API; treat proxy re-mint binding as optional hardening (see backlog).
+`/api/media` requires HMAC query params (`exp` + `sig`) minted server-side. Path-only requests get **403**. Prefer gallery/admin API browse URLs (`resolveBrowseMediaUrl` → R2 signed GET when configured). Stored photo fields may still hold stable `/api/media/…` paths without query — reminted on read.

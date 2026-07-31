@@ -12,7 +12,10 @@ import { GalleryContactDialog } from "@/components/gallery/GalleryContactDialog"
 import { PhotoLightbox } from "@/components/gallery/PhotoLightbox";
 import { PublicShell } from "@/components/shells/PublicShell";
 import { Button, EmptyState, useToast } from "@/components/ui";
-import { resolveGalleryBrandCssVars } from "@/lib/gallery-brand";
+import {
+  resolveGalleryBrandCssVars,
+  resolveGalleryFontPreset,
+} from "@/lib/gallery-brand";
 import { normalizeGalleryDesign } from "@/lib/gallery-design";
 import type { GalleryDesign, StudioTheme } from "@/lib/types";
 
@@ -94,6 +97,7 @@ export default function PeekGalleryPage() {
       resolveGalleryBrandCssVars(design, data?.studio.theme) as CSSProperties,
     [design, data?.studio.theme],
   );
+  const fontPreset = resolveGalleryFontPreset(design, data?.studio.theme);
 
   async function shareNative() {
     const shareUrl = `${window.location.origin}/g/${token}/peek`;
@@ -150,6 +154,7 @@ export default function PeekGalleryPage() {
     <PublicShell
       bare
       style={themeStyle}
+      fontPreset={fontPreset}
       galleryMotion={design.motion}
       galleryDensity={design.density}
     >
