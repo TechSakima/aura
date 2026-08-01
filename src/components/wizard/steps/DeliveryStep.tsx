@@ -5,6 +5,7 @@ import {
   ActionStack,
   Button,
   ButtonLink,
+  Checkbox,
   EmptyState,
   Field,
   FileUploadButton,
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui";
 import { GalleryDesignPanel } from "@/components/admin/GalleryDesignPanel";
 import { DeliveryPublishChecklist } from "@/components/wizard/DeliveryPublishChecklist";
+import { adminPreviewHref } from "@/lib/admin-preview-paths";
 import { cn } from "@/lib/cn";
 import { mutateJson } from "@/lib/client/mutation";
 import { toastAfterEmailAttempt } from "@/lib/copy/email-toast";
@@ -427,8 +429,13 @@ export function DeliveryStep({
               {
                 id: "preview",
                 label: "Preview",
-                href: `/g/${gallery.publicToken}`,
-                external: true,
+                href: adminPreviewHref(
+                  "g",
+                  gallery.publicToken,
+                  shoot.projectId
+                    ? `/admin/projects/${shoot.projectId}/sessions/${shoot.id}`
+                    : undefined,
+                ),
                 tone: isDraft ? ("neutral" as const) : ("accent" as const),
               },
               {
@@ -477,11 +484,15 @@ export function DeliveryStep({
               </Button>
             ) : null}
             <ButtonLink
-              href={`/g/${gallery.publicToken}`}
+              href={adminPreviewHref(
+                "g",
+                gallery.publicToken,
+                shoot.projectId
+                  ? `/admin/projects/${shoot.projectId}/sessions/${shoot.id}`
+                  : undefined,
+              )}
               tone={isDraft ? "neutral" : "accent"}
               className="min-h-11 w-full justify-center"
-              target="_blank"
-              rel="noreferrer"
             >
               Preview
             </ButtonLink>
@@ -661,22 +672,28 @@ export function DeliveryStep({
             <h3 className="font-display text-xl">Settings</h3>
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="space-y-4">
-                <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
-                  <span>Comments</span>
+                <div className="flex min-h-11 items-center justify-between gap-3">
+                  <Label htmlFor="delivery-comments" className="min-w-0 flex-1 font-normal">
+                    Comments
+                  </Label>
                   <Switch
+                    id="delivery-comments"
                     checked={gallery.commentsEnabled}
                     onCheckedChange={(v) => void patch({ commentsEnabled: v })}
                     label="Comments"
                   />
-                </label>
-                <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
-                  <span>Watermark</span>
+                </div>
+                <div className="flex min-h-11 items-center justify-between gap-3">
+                  <Label htmlFor="delivery-watermark" className="min-w-0 flex-1 font-normal">
+                    Watermark
+                  </Label>
                   <Switch
+                    id="delivery-watermark"
                     checked={gallery.watermarkEnabled}
                     onCheckedChange={(v) => void patch({ watermarkEnabled: v })}
                     label="Watermark"
                   />
-                </label>
+                </div>
                 {gallery.watermarkEnabled ? (
                   <Field>
                     <Label htmlFor="wm-preset">Watermark preset</Label>
@@ -804,7 +821,7 @@ export function DeliveryStep({
                         onClick={async () => {
                           const ok = await confirm({
                             title: "Expire gallery now?",
-                            message: "Clients will no longer be able to view or download.",
+                            message: "Visitors will no longer be able to view or download.",
                             confirmLabel: "Expire now",
                             tone: "danger",
                           });
@@ -860,13 +877,15 @@ function PhotoGroup({
           {title}{" "}
           <span className="font-normal text-muted">({photos.length})</span>
         </h3>
-        <button
+        <Button
           type="button"
-          className="min-h-11 text-sm text-muted hover:text-ink"
+          tone="ghost"
+          size="sm"
+          className="min-h-11"
           onClick={() => onToggleAll(!allSelected)}
         >
           {allSelected ? "Deselect all" : "Select all"}
-        </button>
+        </Button>
       </div>
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {photos.map((p) => {
@@ -876,14 +895,13 @@ function PhotoGroup({
               key={p.id}
               className="group relative overflow-hidden border border-line"
             >
-              <button
-                type="button"
-                className="absolute left-2 top-2 z-10 flex h-11 w-11 items-center justify-center border border-line bg-surface/95 text-sm"
-                aria-label={on ? "Deselect" : "Select"}
-                onClick={() => onToggle(p.id)}
-              >
-                {on ? "✓" : ""}
-              </button>
+              <span className="absolute left-1 top-1 z-10 rounded-md bg-surface/95">
+                <Checkbox
+                  checked={on}
+                  aria-label={on ? "Deselect" : "Select"}
+                  onChange={() => onToggle(p.id)}
+                />
+              </span>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={p.thumbUrl}

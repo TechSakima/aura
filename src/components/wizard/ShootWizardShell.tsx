@@ -142,8 +142,8 @@ export function ShootWizardShell({
         <div
           className={cn(
             "sticky z-30 flex flex-wrap items-center justify-between gap-3 border-t border-line bg-canvas/95 py-3 backdrop-blur",
-            /* Clear AdminShell bottom tabs + home indicator on phone */
-            "bottom-[calc(var(--admin-tab-bar)+env(safe-area-inset-bottom))] md:bottom-0",
+            /* Clear AdminShell tabs + InstallHint + home indicator on phone */
+            "bottom-[calc(var(--admin-tab-bar)+env(safe-area-inset-bottom)+var(--install-hint-clearance,0px))] md:bottom-[var(--install-hint-clearance,0px)]",
           )}
         >
           <Button

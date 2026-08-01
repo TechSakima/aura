@@ -22,6 +22,7 @@ import {
   ButtonLink,
   Chip,
   type ChipTone,
+  EmptyState,
   Panel,
   SegmentedControl,
   Select,
@@ -208,7 +209,7 @@ function MonthAgenda({
   if (daysWithSessions.length === 0) {
     return (
       <Panel className="p-4">
-        <p className="text-sm text-muted">No sessions this month.</p>
+        <EmptyState variant="inline" title="No sessions this month." />
       </Panel>
     );
   }
@@ -283,20 +284,13 @@ function sessionHelperHref(s: CalendarSession) {
 }
 
 /** Decorative in month grid (day cell is the hit target — AURA-282). */
-function EventChip({
-  s,
-  href,
-}: {
-  s: CalendarSession;
-  /** When set (week desktop), chip navigates; omit inside day buttons. */
-  href?: string;
-}) {
+function EventChip({ s }: { s: CalendarSession }) {
   const label = `${s.projectName || s.type} · ${sessionTimeLabel(s.startsAt)}`;
   return (
     <Chip
       tone={sessionChipTone(s.status)}
-      href={href}
-      className={cn("w-full", !href && "pointer-events-none")}
+      title={label}
+      className="pointer-events-none w-full"
     >
       {label}
     </Chip>
@@ -312,7 +306,9 @@ function SessionListLink({ s }: { s: CalendarSession }) {
       tone="ghost"
       className="min-h-11 w-full justify-start border border-line bg-surface text-left"
     >
-      <span className="truncate">{label}</span>
+      <span className="truncate" title={label}>
+        {label}
+      </span>
     </ButtonLink>
   );
 }
@@ -512,7 +508,9 @@ export function SessionsCalendar({
                   ) : null}
                 </button>
                 {items.length === 0 ? (
-                  <p className="mt-2 text-sm text-muted">No sessions</p>
+                  <div className="mt-2">
+                    <EmptyState variant="inline" title="No sessions" />
+                  </div>
                 ) : (
                   <ul className="mt-2 space-y-2">
                     {items.map((s) => (
@@ -550,11 +548,7 @@ export function SessionsCalendar({
                 >
                   <div className="space-y-1">
                     {items.map((s) => (
-                      <EventChip
-                        key={s.id}
-                        s={s}
-                        href={sessionHelperHref(s)}
-                      />
+                      <SessionListLink key={s.id} s={s} />
                     ))}
                   </div>
                 </div>
@@ -570,7 +564,9 @@ export function SessionsCalendar({
             {format(cursor, "EEEE, MMMM d")}
           </p>
           {sessionsOnDay(dated, cursor).length === 0 ? (
-            <p className="mt-4 text-sm text-muted">No sessions this day.</p>
+            <div className="mt-4">
+              <EmptyState variant="inline" title="No sessions this day." />
+            </div>
           ) : (
             <ul className="mt-4 divide-y divide-line">
               {sessionsOnDay(dated, cursor).map((s) => (

@@ -15,6 +15,7 @@ import {
   type GalleryGuestReason,
 } from "@/components/gallery/GalleryGuestState";
 import type { MasonryPhoto } from "@/components/gallery/MasonryGrid";
+import { LightboxPhotoFooter } from "@/components/gallery/LightboxPhotoFooter";
 import { PhotoLightbox } from "@/components/gallery/PhotoLightbox";
 import { GalleryContactDialog } from "@/components/gallery/GalleryContactDialog";
 import { PinModal } from "@/components/gallery/PinModal";
@@ -30,6 +31,7 @@ import {
   resolveGalleryFontPreset,
 } from "@/lib/gallery-brand";
 import { normalizeGalleryDesign } from "@/lib/gallery-design";
+import { mutationOfflineMessage } from "@/lib/offline";
 import {
   galleryHref,
   galleryPeekHref,
@@ -80,6 +82,8 @@ export function SubAlbumClient({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
+  const [downloadPhotoId, setDownloadPhotoId] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [contactOpen, setContactOpen] = useState(false);
   const [guestReason, setGuestReason] = useState<GalleryGuestReason | null>(
     null,
@@ -141,6 +145,29 @@ export function SubAlbumClient({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const hub = data?.gallery?.publicToken;
+    if (!hub) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/public/galleries/${hub}/favorites`, {
+          credentials: "include",
+        });
+        if (!res.ok || cancelled) return;
+        const json = (await res.json().catch(() => ({}))) as {
+          favoritePhotoIds?: string[];
+        };
+        if (!cancelled) setFavorites(json.favoritePhotoIds || []);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.gallery?.publicToken]);
+
   const navItems = useMemo((): AlbumNavItem[] => {
     if (!data?.gallery?.publicToken) return [];
     const hub = data.gallery.publicToken;
@@ -196,11 +223,93 @@ export function SubAlbumClient({
     }
   }
 
+  async function toggleFavorite(photoId: string) {
+    const hub = data?.gallery?.publicToken || galleryToken;
+    try {
+      const res = await fetch(`/api/public/galleries/${hub}/favorites`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoId }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        favoritePhotoIds?: string[];
+      };
+      if (!res.ok) {
+        push(String(json.error || "Could not update favorites"), "danger");
+        return;
+      }
+      setFavorites(json.favoritePhotoIds || []);
+    } catch {
+      push(mutationOfflineMessage("update favorites"), "danger");
+    }
+  }
+
+  async function runSingleDownload(pin: string, photoId: string) {
+    const hub = data?.gallery?.publicToken || galleryToken;
+    try {
+      const res = await fetch(`/api/public/galleries/${hub}/download`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin, photoId }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        url?: string;
+        filename?: string;
+      };
+      if (!res.ok) {
+        throw new Error(String(payload.error || "Download failed"));
+      }
+      if (!payload.url) {
+        await alert({
+          title: "Nothing to download",
+          message: emptyDownloadMessage("single"),
+        });
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = payload.url;
+      a.download = payload.filename || "photo.jpg";
+      a.rel = "noopener";
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setPinOpen(false);
+      setPinError(null);
+      setDownloadPhotoId(null);
+      push("Downloading", "success");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Download failed";
+      if (pinOpen && /invalid pin/i.test(msg)) {
+        setPinError(msg);
+        throw e instanceof Error ? e : new Error(msg);
+      }
+      await alert({
+        title: "Download failed",
+        message: msg,
+      });
+    }
+  }
+
+  async function startSingleDownload(photoId: string) {
+    setDownloadPhotoId(photoId);
+    setPinError(null);
+    if (data?.gallery?.hasDownloadPin) {
+      setPinOpen(true);
+      return;
+    }
+    void runSingleDownload("", photoId);
+  }
+
   async function runAlbumDownload(pin: string) {
-    const galleryToken = data?.gallery?.publicToken;
+    const hubToken = data?.gallery?.publicToken;
     const photoIds =
       data?.album?.photoIds || data?.photos.map((p) => p.id) || [];
-    if (!galleryToken || !photoIds.length) {
+    if (!hubToken || !photoIds.length) {
       await alert({
         title: "Download failed",
         message: "No photos to download",
@@ -218,7 +327,7 @@ export function SubAlbumClient({
     try {
       while (nextIndex != null) {
         const res: Response = await fetch(
-          `/api/public/galleries/${galleryToken}/download`,
+          `/api/public/galleries/${hubToken}/download`,
           {
             method: "POST",
             credentials: "include",
@@ -312,6 +421,7 @@ export function SubAlbumClient({
 
   async function startDownload() {
     if (!data?.photos.length) return;
+    setDownloadPhotoId(null);
     setPinError(null);
     if (data.gallery?.hasDownloadPin) {
       setPinOpen(true);
@@ -460,6 +570,22 @@ export function SubAlbumClient({
           index={lightboxIndex}
           onIndexChange={setLightboxIndex}
           onClose={() => setLightboxIndex(null)}
+          footer={
+            data.photos[lightboxIndex] ? (
+              <LightboxPhotoFooter
+                photoId={data.photos[lightboxIndex].id}
+                favorited={favorites.includes(data.photos[lightboxIndex].id)}
+                commentsEnabled={false}
+                commentCount={0}
+                onDownload={() =>
+                  void startSingleDownload(data.photos[lightboxIndex!].id)
+                }
+                onToggleFavorite={() =>
+                  void toggleFavorite(data.photos[lightboxIndex!].id)
+                }
+              />
+            ) : null
+          }
         />
       ) : null}
 
@@ -478,12 +604,35 @@ export function SubAlbumClient({
         onClose={() => {
           setPinOpen(false);
           setPinError(null);
+          setDownloadPhotoId(null);
         }}
-        onSubmit={runAlbumDownload}
-        title={albumPinCopy.title}
-        description={albumPinCopy.description}
-        footnote={albumPinCopy.footnote}
-        confirmLabel={albumPinCopy.confirmLabel}
+        onSubmit={async (pin) => {
+          if (downloadPhotoId) {
+            await runSingleDownload(pin, downloadPhotoId);
+            return;
+          }
+          await runAlbumDownload(pin);
+        }}
+        title={
+          downloadPhotoId
+            ? downloadCopy("single").title
+            : albumPinCopy.title
+        }
+        description={
+          downloadPhotoId
+            ? downloadCopy("single").description
+            : albumPinCopy.description
+        }
+        footnote={
+          downloadPhotoId
+            ? downloadCopy("single").footnote
+            : albumPinCopy.footnote
+        }
+        confirmLabel={
+          downloadPhotoId
+            ? downloadCopy("single").confirmLabel
+            : albumPinCopy.confirmLabel
+        }
         error={pinError}
         onClearError={() => setPinError(null)}
       />

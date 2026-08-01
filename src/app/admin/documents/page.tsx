@@ -321,9 +321,13 @@ function DocumentsPageInner() {
             <h2 className="font-display text-2xl">Sent contracts</h2>
             <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
               {loading ? (
-                <li className="py-4 text-sm text-muted">Loading documents…</li>
+                <li className="py-4">
+                  <EmptyState variant="loading" title="Loading documents…" />
+                </li>
               ) : contracts.filter((c) => c.status !== "draft").length === 0 ? (
-                <li className="py-4 text-sm text-muted">No contracts yet.</li>
+                <li className="py-4">
+                  <EmptyState variant="inline" title="No contracts yet." />
+                </li>
               ) : (
                 contracts
                   .filter((c) => c.status !== "draft")
@@ -419,9 +423,13 @@ function DocumentsPageInner() {
             <h2 className="font-display text-2xl">Responses</h2>
             <ul className="space-y-3 sm:space-y-0 sm:divide-y sm:divide-line sm:border-y sm:border-line">
               {loading ? (
-                <li className="py-4 text-sm text-muted">Loading…</li>
+                <li className="py-4">
+                  <EmptyState variant="loading" title="Loading…" />
+                </li>
               ) : responses.length === 0 ? (
-                <li className="py-4 text-sm text-muted">None yet.</li>
+                <li className="py-4">
+                  <EmptyState variant="inline" title="None yet." />
+                </li>
               ) : (
                 responses.map((r) => {
                   const open = expandedResponseId === r.id;

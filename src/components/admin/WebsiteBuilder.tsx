@@ -403,9 +403,9 @@ export function WebsiteBuilder() {
               type="button"
               tone="ghost"
               className="w-full sm:w-auto"
-              onClick={() =>
-                window.open(`/h/${meta.slug}`, "_blank", "noopener")
-              }
+              onClick={() => {
+                window.location.assign(`/h/${meta.slug}`);
+              }}
             >
               View live site
             </Button>
@@ -525,8 +525,9 @@ export function WebsiteBuilder() {
                           />
                         </Field>
                         <div className="flex min-h-11 items-center justify-between gap-3">
-                          <Label>Logo</Label>
+                          <Label htmlFor={`hero-logo-${mod.id}`}>Logo</Label>
                           <Switch
+                            id={`hero-logo-${mod.id}`}
                             checked={mod.props.showLogo !== false}
                             onCheckedChange={(next) =>
                               patchHero(mod.id, { showLogo: next })
@@ -535,8 +536,11 @@ export function WebsiteBuilder() {
                           />
                         </div>
                         <div className="flex min-h-11 items-center justify-between gap-3">
-                          <Label>Studio name</Label>
+                          <Label htmlFor={`hero-name-${mod.id}`}>
+                            Studio name
+                          </Label>
                           <Switch
+                            id={`hero-name-${mod.id}`}
                             checked={mod.props.showName !== false}
                             onCheckedChange={(next) =>
                               patchHero(mod.id, { showName: next })
@@ -545,8 +549,9 @@ export function WebsiteBuilder() {
                           />
                         </div>
                         <div className="flex min-h-11 items-center justify-between gap-3">
-                          <Label>Book CTA</Label>
+                          <Label htmlFor={`hero-cta-${mod.id}`}>Book CTA</Label>
                           <Switch
+                            id={`hero-cta-${mod.id}`}
                             checked={Boolean(mod.props.showCta)}
                             onCheckedChange={(next) =>
                               patchHero(mod.id, { showCta: next })

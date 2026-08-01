@@ -52,11 +52,12 @@ Work top → bottom. Within a wave, keep listed sequence.
 | **W15** | Web/PWA audit residuals         | **complete** (through **418**) | W0–W14 done; full report [`WEB_PWA_AUDIT.md`](WEB_PWA_AUDIT.md)           |
 | **W16** | Contact vs booking IA           | **complete** (through **421**) | After W15; Bookings = intake; project Messages only after project exists |
 | **W17** | UI / responsive residuals       | **complete** (through **460**) | After W16; deep dive + second pass 2026-07-31 — canvas `ui-responsive-audit` |
+| **W18** | Post-W17 residual audit         | **complete** (through **479**) | After W17; third-pass audit 2026-07-31 — canvas `post-w17-residual-audit` |
 
 
-**Next to implement:** first open checkbox after **W17** (none in wave order — backlog complete through **460**).
+**Next to implement:** first open checkbox after **W18** (none in wave order — backlog complete through **479**).
 
-**R2:** **W0–W17** complete.
+**R2:** **W0–W18** complete.
 
 **Dedup (do not double-implement):**
 
@@ -1193,6 +1194,77 @@ Do **not** reopen closed Phase 18 PWA IDs — these are residual gaps found agai
 
 - [x] **AURA-460** · P3 · Polish · Delivery Tabs + print + focus rings + peek hint  
   Delivery Photos/Layout → shared `Tabs`; `@media print` hide sticky Sign; Dialog/Masonry focus-ring clip; peek InstallHint; contact email `break-all`; Jump/palette `title` on truncate.
+
+---
+
+## Phase 24 — Post-W17 residual audit (W18)
+
+**Problem:** Declaring W17 “complete” without a third pass left ship-visible defects (Checkbox label overlap from AURA-375 hit padding; InstallHint gaps; admin Preview still leaving PWA scope).  
+**Source:** 2026-07-31 parallel explore agents + user repro → canvas `post-w17-residual-audit`.  
+**Rule:** One open item per prompt. Do not batch.
+
+### Primitive / PWA / chrome
+
+- [x] **AURA-461** · P0 · Bug · Checkbox hit pad overlaps labels  
+  AURA-375 `box-content p-3 -m-3` kept layout width at 20px while paint was 32px; `gap-2` put “Show archived” into the square. **Done:** `size-11` hit wrapper; no negative margin; real `border`.
+
+- [x] **AURA-462** · P1 · PWA · Admin Preview still leaves scope
+  Dashboard / galleries / workflow / Delivery still `target="_blank"` or ActionStack `external` to `/p|/g|/q`. Route through `adminPreviewHref` (finish AURA-445). **Done:** Preview → `adminPreviewHref`; homepage live → same-tab `location.assign`.
+
+- [x] **AURA-463** · P1 · PWA · InstallHint vs wizard sticky footer  
+  AdminShell InstallHint `z-50` shares bottom offset with wizard Back/Continue (`z-30`). Use InstallHintDock + raise wizard bottom by `--install-hint-clearance`.  
+  **Done:** `InstallHintDock` `aboveChrome` on admin; wizard footer + `--wizard-scroll-pad-bottom` clear `--install-hint-clearance`.
+
+- [x] **AURA-464** · P1 · PWA · InstallHint incomplete on public  
+  `/q` `/cancel` still raw InstallHint (no dock/pad); homepage fullBleed Book CTA and gallery print/footer lack clearance; peek dock without content pad.  
+  **Done:** Dock+pad on `/q` `/cancel`; homepage hero/footer + gallery/PublicShell footer clearance; `/g` dock; peek `install-hint-pad`.
+
+- [x] **AURA-465** · P1 · Responsive · Gallery hero CTA under thumb bar
+  Immersive/cinematic heroes `pb-10`–`pb-16` while thumb bar is `--gallery-thumb-bar` + safe-area — “View gallery” buried at 375.
+
+- [x] **AURA-466** · P1 · UX · Contract sticky Sign vs iOS keyboard
+  Dialog uses `useVisualViewportFrame`; sticky Sign does not — keyboard covers Sign/submit.
+
+- [x] **AURA-467** · P1 · Responsive · Peek/sub-album sticky chrome eats viewport
+  Sticky AlbumView header + AlbumNav ≈ 200px on SE; collapse nav or unstick on phone/short-vh.
+
+- [x] **AURA-468** · P1 · UX · Admin More drawer → Sheet
+  No scrim/focus trap; Close/Log out/Account are raw controls. Portaled Sheet + primitives.
+
+- [x] **AURA-469** · P1 · UI · Delivery Switch-in-label + ad-hoc photo select
+  Comments/Watermark Switch nested in `<label>`; Select-all / thumb select use raw buttons. Fix association + use Button/Checkbox.
+
+- [x] **AURA-470** · P1 · Responsive · Week calendar chips &lt;44px on md+
+  Desktop week session chips are `py-0.5 text-[10px]` links — use min-h-11 rows like phone.
+
+### Admin / a11y / public polish
+
+- [x] **AURA-471** · P2 · UX · EmptyState coverage gaps
+  Documents, NotificationBell, calendar, Settings Library/Watermarks/Website featured, Wrap, SessionShootDay, login soft-load — bare muted text.
+
+- [x] **AURA-472** · P2 · UX · Truncation without `title`
+  Projects list, galleries, dashboard delivery issues, calendar chips, AdminSurfacePreview URL.
+
+- [x] **AURA-473** · P2 · A11y · Form label associations
+  WebsiteBuilder Switches lack htmlFor; share-photos Dialog Label/Input; SessionTypes duration row; ListEditor Required alignment.
+
+- [x] **AURA-474** · P2 · UI · Ad-hoc public controls  
+  AlbumNav chips, SocialLinks pills, favorites heart overlay, homepage mailto/tel, PrintPartners, GalleryDesignPanel cover treatments.
+
+- [x] **AURA-475** · P2 · Responsive · Public long-text residuals  
+  `/q` `/cancel` `/book` titles, StudioMark, AlbumTile, contract signed-by, PhotoCommentPanel bodies, datetime-local crush.
+
+- [x] **AURA-476** · P2 · Copy · Entity language residuals  
+  Workflow “shoot day”; Prep “Shoot plan ready”; Delivery expire “Clients will…”; mark-accepted “the client”.
+
+- [x] **AURA-477** · P2 · UI · Sheet focus clip + z-index tokens  
+  Sheet panel still `overflow-hidden` (Dialog fixed in 460); prefer `--z-*` over hardcoded z-40/50/55/60.
+
+- [x] **AURA-478** · P2 · UX · Sub-album lightbox missing actions  
+  No download/favorite footer on sub-album lightbox (hub has LightboxPhotoFooter).
+
+- [x] **AURA-479** · P3 · Polish · Misc residuals  
+  Video “Download via single” badge; public FOUC on themed flows; bare “Loading photos…” / q empty; print-hide admin chrome; install-hint-bar height underestimates tall cards.
 
 ---
 
@@ -2357,8 +2429,28 @@ Do not narrate “Aura / Resend / Firebase” in UI copy — labels like “Mess
 | AURA-458     | 2026-07-31 | ThemeSwatch cover: `--scrim` gradient + `text-on-media` (no hex/rgba)                                   |
 | AURA-459     | 2026-07-31 | Public loading/error for p/c/pay/s/q/cancel/peek; client soft errors → EmptyState                       |
 | AURA-460     | 2026-07-31 | Delivery Tabs; print:hidden Sign; Dialog/Masonry focus rings; peek InstallHint; email/titles           |
+| Audit        | 2026-07-31 | Post-W17 third pass → Phase 24 / W18 **461–479**; canvas `post-w17-residual-audit`                    |
+| AURA-461     | 2026-07-31 | Checkbox: size-11 hit wrapper (no p-3 -m-3 label overlap)                                            |
+| AURA-462     | 2026-07-31 | Admin Preview → adminPreviewHref (no _blank/external); /h live same-tab                            |
+| AURA-463     | 2026-07-31 | Admin InstallHintDock aboveChrome; wizard sticky/scroll pad clears install-hint-clearance         |
+| AURA-464     | 2026-07-31 | /q /cancel dock+pad; homepage/gallery/PublicShell footer clearance; peek install-hint-pad         |
+| AURA-465     | 2026-07-31 | GalleryHero phone pb clears `--gallery-thumb-bar`+safe-area for CTA (immersive/cinematic/minimal) |
+| AURA-466     | 2026-07-31 | Contract Sign chrome → `useVisualViewportFrame` (above iOS keyboard)                               |
+| AURA-467     | 2026-07-31 | AlbumView `max-sm:static`; AlbumNav outside sticky header + compact phone pad                    |
+| AURA-468     | 2026-07-31 | Admin More → Sheet (scrim/focus trap); ButtonLink/Button for nav + Account/Log out               |
+| AURA-469     | 2026-07-31 | Delivery/Feature Switch via Label+id; Select-all Button; thumb Checkbox                          |
+| AURA-470     | 2026-07-31 | md+ week calendar sessions → SessionListLink (min-h-11)                                          |
+| AURA-471     | 2026-07-31 | EmptyState for docs/bell/calendar/settings/Wrap/ShootDay/login bare muted empties               |
+| AURA-472     | 2026-07-31 | `title` on truncated projects/galleries/dashboard/calendar chips/AdminSurfacePreview + Chip    |
+| AURA-473     | 2026-07-31 | WebsiteBuilder Switch htmlFor; share Dialog ids; duration stack; ListEditor Required center    |
+| AURA-474     | 2026-07-31 | AlbumNav/Social/PrintPartners/Guest/homepage → ButtonLink; favorites overlay → IconButton   |
+| AURA-475     | 2026-07-31 | break-words on q/cancel/book/StudioMark/AlbumTile/contract/comments; datetime min-w-0         |
+| AURA-476     | 2026-07-31 | session day; Plan ready; Visitors will…; mark-accepted skips “the client”                    |
+| AURA-477     | 2026-07-31 | Sheet no overflow-hidden; Dialog/Sheet/InstallHint/Toast use --z-* tokens                    |
+| AURA-478     | 2026-07-31 | SubAlbumClient LightboxPhotoFooter (download + favorite via hub APIs)                        |
+| AURA-479     | 2026-07-31 | Video badge only; Loading/EmptyState on g/q/collections; zip project-details.txt             |
 
 
 ---
 
-*Living document. Amend in place — do not start parallel lists. **Execution order** (waves) beats ID number. Performance, Responsive, and PWA bars apply to every fix. Media = Cloudflare R2 (Phase 0b / W1). Contact = Resend (Phase 19). Settings = Phase 20. Web/PWA audit residuals = Phase 21 / W15 — [`WEB_PWA_AUDIT.md`](WEB_PWA_AUDIT.md). Contact vs booking IA = Phase 22 / W16. UI/responsive residuals = Phase 23 / W17.*
+*Living document. Amend in place — do not start parallel lists. **Execution order** (waves) beats ID number. Performance, Responsive, and PWA bars apply to every fix. Media = Cloudflare R2 (Phase 0b / W1). Contact = Resend (Phase 19). Settings = Phase 20. Web/PWA audit residuals = Phase 21 / W15 — [`WEB_PWA_AUDIT.md`](WEB_PWA_AUDIT.md). Contact vs booking IA = Phase 22 / W16. UI/responsive residuals = Phase 23 / W17. Post-W17 residuals = Phase 24 / W18.*

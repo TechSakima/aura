@@ -51,7 +51,7 @@ export function PublicShell({
       )}
       {footer ? (
         <footer className="border-t border-line">
-          <div className="shell-pad mx-auto max-w-[var(--public-max)] py-8 pb-[max(2rem,var(--safe-inset-bottom))] text-sm text-muted">
+          <div className="shell-pad mx-auto max-w-[var(--public-max)] py-8 pb-[calc(var(--install-hint-clearance,0px)+max(2rem,var(--safe-inset-bottom)))] text-sm text-muted">
             {footer}
           </div>
         </footer>

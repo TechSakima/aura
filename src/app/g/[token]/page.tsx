@@ -35,7 +35,7 @@ import {
 import { GalleryPrintPartners } from "@/components/gallery/GalleryPrintPartners";
 import { LightboxPhotoFooter } from "@/components/gallery/LightboxPhotoFooter";
 import { OverlayChunkLoading } from "@/components/gallery/OverlayChunkLoading";
-import { InstallHint } from "@/components/pwa/InstallHint";
+import { InstallHintDock } from "@/components/pwa/InstallHintDock";
 import { ChromeBottom } from "@/components/shells/ChromeBottom";
 import { PublicShell } from "@/components/shells/PublicShell";
 import {
@@ -43,6 +43,7 @@ import {
   Dialog,
   EmptyState,
   Field,
+  IconButton,
   Input,
   Label,
   PublicCta,
@@ -887,18 +888,17 @@ export default function PublicGalleryPage() {
             view === "peek"
               ? undefined
               : (photo) => (
-                  <button
-                    type="button"
+                  <IconButton
                     aria-label="Toggle favorite"
                     disabled={Boolean(selectsSubmittedAt)}
-                    className="flex h-11 w-11 items-center justify-center bg-surface/90 disabled:opacity-40"
+                    className="size-11 min-h-11 min-w-11 rounded-none bg-surface/90 hover:bg-ink/5 disabled:opacity-40"
                     onClick={(e) => {
                       e.stopPropagation();
                       void toggleFavorite(photo.id);
                     }}
                   >
                     <IconHeart filled={favorites.includes(photo.id)} />
-                  </button>
+                  </IconButton>
                 )
           }
           primaryActionId={
@@ -972,17 +972,14 @@ export default function PublicGalleryPage() {
       {chrome}
 
       {!coachVisible ? (
-        <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(var(--gallery-thumb-bar)+env(safe-area-inset-bottom))] desk:bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-          <div className="mx-auto max-w-md">
-            <InstallHint
-              storageKey={
-                token
-                  ? `aura-install-dismiss-g-${token}`
-                  : "aura-install-dismiss-g"
-              }
-            />
-          </div>
-        </div>
+        <InstallHintDock
+          storageKey={
+            token
+              ? `aura-install-dismiss-g-${token}`
+              : "aura-install-dismiss-g"
+          }
+          aboveChrome={Boolean(chromePad)}
+        />
       ) : null}
 
       {coverStyle !== "none" ? (
@@ -1104,9 +1101,11 @@ export default function PublicGalleryPage() {
                 )}
               />
               {loadingMore ? (
-                <p className="gallery-pad-x gallery-pad-x-md py-6 text-center text-sm text-muted">
-                  Loading photos…
-                </p>
+                <EmptyState
+                  variant="loading"
+                  title="Loading photos…"
+                  className="gallery-pad-x gallery-pad-x-md py-6 text-center"
+                />
               ) : null}
             </div>
 
@@ -1132,7 +1131,7 @@ export default function PublicGalleryPage() {
         <GalleryPrintPartners partners={studio.printPartners} />
       ) : null}
 
-      <footer className="border-t border-ink/10 py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] text-center text-sm text-muted">
+      <footer className="border-t border-ink/10 py-10 pb-[calc(var(--install-hint-clearance,0px)+max(2.5rem,env(safe-area-inset-bottom)))] text-center text-sm text-muted">
         {studio.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -1267,16 +1266,18 @@ export default function PublicGalleryPage() {
               Creates a link with only these photos.
             </p>
             <Field>
-              <Label>Album label</Label>
+              <Label htmlFor="share-album-label">Album label</Label>
               <Input
+                id="share-album-label"
                 value={subLabel}
                 onChange={(e) => setSubLabel(e.target.value)}
                 placeholder="Shared album"
               />
             </Field>
             <Field>
-              <Label>Note</Label>
+              <Label htmlFor="share-album-note">Note</Label>
               <Textarea
+                id="share-album-note"
                 value={`${subSelected.length} photo${subSelected.length === 1 ? "" : "s"} selected`}
                 readOnly
                 rows={2}

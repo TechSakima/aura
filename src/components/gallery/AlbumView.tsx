@@ -84,8 +84,8 @@ export function AlbumView({
         <header
           className={
             stickyHeader
-              ? /* Short landscape: don't pin back+title+actions+AlbumNav (AURA-286) */
-                "sticky top-0 z-20 border-b border-line bg-canvas/95 pt-[env(safe-area-inset-top)] backdrop-blur short-vh:static"
+              ? /* Phone / short landscape: don't pin title+actions (AURA-286 / AURA-467). */
+                "sticky top-0 z-20 border-b border-line bg-canvas/95 pt-[env(safe-area-inset-top)] backdrop-blur max-sm:static short-vh:static"
               : /* Under GalleryChrome — chrome already pads the notch (AURA-433). */
                 "border-b border-line bg-canvas/95"
           }
@@ -115,9 +115,10 @@ export function AlbumView({
               ) : null}
             </div>
           </div>
-          {headerExtra}
         </header>
       ) : null}
+      {/* AlbumNav outside sticky header — never pins on phone (AURA-467). */}
+      {headerExtra}
 
       <main
         className={

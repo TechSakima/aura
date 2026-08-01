@@ -21,7 +21,7 @@ export function StudioMark({
     return (
       <p
         className={cn(
-          "mb-4 text-xs uppercase tracking-[0.2em]",
+          "mb-4 max-w-full break-words text-xs uppercase tracking-[0.2em]",
           tone === "light" ? "text-surface/70" : "text-muted",
           className,
         )}

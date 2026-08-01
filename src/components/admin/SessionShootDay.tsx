@@ -289,30 +289,38 @@ export function SessionShootDay({
 
   const empty = (
     <Card className="space-y-4 p-5">
-      <p className="text-muted">No plan yet.</p>
-      {!embedded && templates.length > 0 ? (
-        <>
-          <Field>
-            <Label>Template</Label>
-            <Select
-              value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
+      <EmptyState
+        variant="inline"
+        title="No plan yet."
+        action={
+          !embedded && templates.length > 0 ? (
+            <div className="space-y-3">
+              <Field>
+                <Label>Template</Label>
+                <Select
+                  value={templateId}
+                  onChange={(e) => setTemplateId(e.target.value)}
+                >
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Button onClick={() => void createPlan()}>Start plan</Button>
+            </div>
+          ) : embedded ? (
+            <ButtonLink
+              href="/admin/prep?tab=shots"
+              tone="ghost"
+              className="min-h-11"
             >
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Button onClick={() => void createPlan()}>Start plan</Button>
-        </>
-      ) : null}
-      {embedded ? (
-        <ButtonLink href="/admin/prep?tab=shots" tone="ghost" className="min-h-11">
-          Open Library
-        </ButtonLink>
-      ) : null}
+              Open Library
+            </ButtonLink>
+          ) : undefined
+        }
+      />
     </Card>
   );
 

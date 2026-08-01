@@ -17,6 +17,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { ADMIN_LIST_PAGE } from "@/lib/admin-list-page";
+import { adminPreviewHref } from "@/lib/admin-preview-paths";
 import type { GalleryStatus } from "@/lib/types";
 
 type GalleryRow = {
@@ -168,12 +169,17 @@ export default function GalleriesPage() {
               <ListRow key={g.id}>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium">{g.title}</p>
+                    <p className="truncate font-medium" title={g.title}>
+                      {g.title}
+                    </p>
                     <Badge tone={statusTone(g.status)}>
                       {statusLabel(g.status)}
                     </Badge>
                   </div>
-                  <p className="mt-0.5 truncate text-sm text-muted">
+                  <p
+                    className="mt-0.5 truncate text-sm text-muted"
+                    title={`${g.projectName || "Project"}${g.expiresAt ? ` · Expires ${formatExpiry(g.expiresAt)}` : ""}`}
+                  >
                     {g.projectName || "Project"}
                     {g.expiresAt ? ` · Expires ${formatExpiry(g.expiresAt)}` : ""}
                   </p>
@@ -181,9 +187,7 @@ export default function GalleriesPage() {
                 <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                   <a
                     className="inline-flex min-h-11 items-center justify-center text-sm text-muted no-underline hover:text-ink"
-                    href={`/g/${g.publicToken}`}
-                    target="_blank"
-                    rel="noreferrer"
+                    href={adminPreviewHref("g", g.publicToken, "/admin/galleries")}
                   >
                     Preview
                   </a>

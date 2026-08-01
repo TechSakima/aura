@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
-import { InstallHint } from "@/components/pwa/InstallHint";
+import { Suspense, useEffect, useId, useState, type ReactNode } from "react";
+import { InstallHintDock } from "@/components/pwa/InstallHintDock";
 import { AdminCommandPalette } from "@/components/shells/AdminCommandPalette";
 import { ChromeBottom } from "@/components/shells/ChromeBottom";
 import { NotificationBell } from "@/components/shells/NotificationBell";
 import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button-link";
+import { Sheet } from "@/components/ui/sheet";
 import { rememberAdminRoute } from "@/lib/admin-last-route";
 import { clientLogout } from "@/lib/client-logout";
 import { cn } from "@/lib/cn";
@@ -214,6 +216,7 @@ export function AdminShell({
   const logo = resolveMediaUrl(logoUrl);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingBookings, setPendingBookings] = useState(0);
+  const moreSheetId = useId();
   const moreActive = moreNav.some((item) => item.match(pathname));
 
   function badgeFor(item: NavItem) {
@@ -249,15 +252,6 @@ export function AdminShell({
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
 
   if (pathname.startsWith("/admin/login")) {
     return <>{children}</>;
@@ -327,73 +321,16 @@ export function AdminShell({
           </div>
         </div>
 
-        {menuOpen ? (
-          <div className="max-h-[min(70dvh,calc(100dvh-8rem))] overflow-y-auto border-t border-line bg-canvas pb-[calc(var(--admin-tab-bar)+env(safe-area-inset-bottom))] md:hidden">
-            <nav aria-label="More" className="shell-pad py-3">
-              <div className="mb-2 flex items-center justify-between px-3">
-                <p className="text-xs uppercase tracking-[0.14em] text-muted">
-                  More
-                </p>
-                <button
-                  type="button"
-                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-sm text-muted hover:bg-line/50 hover:text-ink"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  Close
-                </button>
-              </div>
-              <ul className="flex flex-col gap-1">
-                {moreNav.map((item) => (
-                  <li key={item.href}>
-                    <NavLink
-                      item={item}
-                      pathname={pathname}
-                      onNavigate={() => setMenuOpen(false)}
-                      className="w-full"
-                      badgeCount={badgeFor(item)}
-                    />
-                  </li>
-                ))}
-                {standalone ? (
-                  <>
-                    <li className="mt-2 border-t border-line pt-2">
-                      <Link
-                        href="/admin/settings/account"
-                        onClick={() => setMenuOpen(false)}
-                        className="inline-flex min-h-11 w-full items-center rounded-md px-3 text-sm text-muted no-underline hover:bg-line/50 hover:text-ink"
-                      >
-                        Account
-                      </Link>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        className="inline-flex min-h-11 w-full items-center rounded-md px-3 text-sm text-muted hover:bg-line/50 hover:text-ink"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          void signOut();
-                        }}
-                      >
-                        Log out
-                      </button>
-                    </li>
-                  </>
-                ) : null}
-              </ul>
-            </nav>
-          </div>
-        ) : null}
       </header>
 
       <main className="shell-pad mx-auto w-full max-w-[var(--shell-max)] animate-enter pt-[var(--density-section-y,2rem)] pb-[calc(var(--admin-tab-bar)+env(safe-area-inset-bottom)+0.75rem)] md:pb-[var(--density-section-y,2.5rem)]">
         {children}
       </main>
 
-      <div className="pointer-events-none fixed inset-x-0 z-50 shell-pad md:bottom-4 bottom-[calc(var(--admin-tab-bar)+env(safe-area-inset-bottom))]">
-        <div className="mx-auto max-w-[var(--shell-max)]">
-          <InstallHint storageKey="aura-install-dismiss-admin" />
-        </div>
-      </div>
+      <InstallHintDock
+        storageKey="aura-install-dismiss-admin"
+        aboveChrome
+      />
 
       {/* Mobile bottom tabs — icon + text labels (AURA-096 / AURA-141) */}
       <nav
@@ -432,6 +369,7 @@ export function AdminShell({
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
               aria-expanded={menuOpen}
+              aria-controls={moreSheetId}
               aria-label={menuOpen ? "Close more menu" : "Open more menu"}
               className={cn(
                 "flex min-h-11 w-full flex-col items-center justify-center gap-0.5 px-0.5 text-xs font-medium leading-tight",
@@ -444,6 +382,65 @@ export function AdminShell({
           </li>
         </ul>
       </nav>
+
+      <Sheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title="More"
+        id={moreSheetId}
+      >
+        <nav aria-label="More">
+          <ul className="flex flex-col gap-1">
+            {moreNav.map((item) => {
+              const active = item.match(pathname);
+              const count = badgeFor(item);
+              return (
+                <li key={item.href}>
+                  <ButtonLink
+                    href={item.href}
+                    tone="ghost"
+                    onClick={() => setMenuOpen(false)}
+                    className={cn(
+                      "w-full justify-start",
+                      active && "bg-ink text-surface hover:bg-ink hover:opacity-100",
+                    )}
+                  >
+                    <span>{item.label}</span>
+                    <NavBadge count={count} />
+                  </ButtonLink>
+                </li>
+              );
+            })}
+            {standalone ? (
+              <>
+                <li className="mt-2 border-t border-line pt-2">
+                  <ButtonLink
+                    href="/admin/settings/account"
+                    tone="ghost"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full justify-start text-muted"
+                  >
+                    Account
+                  </ButtonLink>
+                </li>
+                <li>
+                  <Button
+                    type="button"
+                    tone="ghost"
+                    className="w-full justify-start text-muted"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      void signOut();
+                    }}
+                  >
+                    Log out
+                  </Button>
+                </li>
+              </>
+            ) : null}
+          </ul>
+        </nav>
+      </Sheet>
     </div>
   );
 }

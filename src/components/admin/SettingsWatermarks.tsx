@@ -179,7 +179,7 @@ export function SettingsWatermarks({
       </div>
 
       {presets.length === 0 ? (
-        <p className="text-sm text-muted">No watermark presets yet.</p>
+        <EmptyState variant="inline" title="No watermark presets yet." />
       ) : (
         <ul className="divide-y divide-line border-y border-line">
           {presets.map((p) => (

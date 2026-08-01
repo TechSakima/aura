@@ -129,7 +129,7 @@
   --wizard-sticky-footer: calc(var(--touch-min) + 1.5rem + 1px);
   --wizard-scroll-pad-bottom: calc(
     var(--wizard-sticky-footer) + var(--admin-tab-bar) +
-      env(safe-area-inset-bottom, 0px)
+      env(safe-area-inset-bottom, 0px) + var(--install-hint-clearance, 0px)
   );
 
   /*
@@ -157,7 +157,9 @@
     --density-section-y: var(--space-10);
     /* AdminShell header: py-4 + min-h-11 */
     --admin-header-inner: 4.75rem;
-    /* No admin tab bar on md+ (AURA-441). */
-    --wizard-scroll-pad-bottom: var(--wizard-sticky-footer);
+    /* No admin tab bar on md+ (AURA-441); still clear InstallHint (AURA-463). */
+    --wizard-scroll-pad-bottom: calc(
+      var(--wizard-sticky-footer) + var(--install-hint-clearance, 0px)
+    );
   }
 }

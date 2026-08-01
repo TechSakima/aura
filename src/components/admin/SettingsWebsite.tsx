@@ -270,7 +270,9 @@ export function SettingsWebsite() {
               type="button"
               tone="neutral"
               className="w-full sm:w-auto"
-              onClick={() => window.open(`/h/${slug}`, "_blank", "noopener")}
+              onClick={() => {
+                window.location.assign(`/h/${slug}`);
+              }}
             >
               View live site
             </Button>
@@ -515,17 +517,20 @@ export function SettingsWebsite() {
             Live galleries on the public site portfolio.
           </p>
           {galleries.length === 0 ? (
-            <div className="space-y-2">
-              <p className="text-sm text-muted">No live galleries.</p>
-              <ButtonLink
-                href="/admin/galleries"
-                tone="ghost"
-                size="sm"
-                className="min-h-11"
-              >
-                Open galleries
-              </ButtonLink>
-            </div>
+            <EmptyState
+              variant="inline"
+              title="No live galleries."
+              action={
+                <ButtonLink
+                  href="/admin/galleries"
+                  tone="ghost"
+                  size="sm"
+                  className="min-h-11"
+                >
+                  Open galleries
+                </ButtonLink>
+              }
+            />
           ) : (
             <ul className="space-y-2">
               {galleries.map((g) => (
@@ -538,8 +543,15 @@ export function SettingsWebsite() {
                     <p className="text-xs text-muted">{g.status}</p>
                   </div>
                   <div className="flex min-h-11 flex-wrap items-center gap-3">
-                    <label className="inline-flex min-h-11 items-center gap-2">
+                    <div className="inline-flex min-h-11 items-center gap-2">
+                      <Label
+                        htmlFor={`feature-${g.id}`}
+                        className="font-normal"
+                      >
+                        Feature
+                      </Label>
                       <Switch
+                        id={`feature-${g.id}`}
                         checked={Boolean(g.showOnHomepage)}
                         disabled={g.status !== "live"}
                         label={`Feature ${g.title}`}
@@ -547,8 +559,7 @@ export function SettingsWebsite() {
                           void toggleGallery(g.id, next)
                         }
                       />
-                      Feature
-                    </label>
+                    </div>
                   </div>
                 </li>
               ))}

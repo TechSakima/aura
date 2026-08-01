@@ -73,7 +73,7 @@ export function PrepStep({
           return;
         }
       }
-      push("Shoot plan ready", "success");
+      push("Plan ready", "success");
       await onChanged();
     } finally {
       setBusy(false);

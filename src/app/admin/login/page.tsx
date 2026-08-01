@@ -9,6 +9,7 @@ import {
 } from "firebase/auth";
 import {
   Button,
+  EmptyState,
   Field,
   Input,
   Label,
@@ -160,7 +161,7 @@ function LoginForm() {
     return (
       <div className="mx-auto w-full max-w-md space-y-3">
         <h1 className="font-display text-4xl text-ink">Aura</h1>
-        <p className="text-muted">Signing you in…</p>
+        <EmptyState variant="loading" title="Signing you in…" />
       </div>
     );
   }

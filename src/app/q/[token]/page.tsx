@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
-import { InstallHint } from "@/components/pwa/InstallHint";
+import { InstallHintDock } from "@/components/pwa/InstallHintDock";
 import { PublicShell } from "@/components/shells/PublicShell";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
 import {
@@ -96,19 +96,15 @@ export default function PublicQuestionnairePage() {
 
   return (
     <PublicShell {...shell}>
-      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-        <div className="mx-auto max-w-md">
-          <InstallHint storageKey={`aura-install-dismiss-q-${params.token}`} />
-        </div>
-      </div>
-      <div className="mx-auto max-w-lg">
+      <InstallHintDock storageKey={`aura-install-dismiss-q-${params.token}`} />
+      <div className="install-hint-pad mx-auto max-w-lg">
         <StudioMark
           logoUrl={studioLogoUrl || undefined}
           name={studioName}
           tone="dark"
           className="mb-2"
         />
-        <h1 className="font-display text-3xl">{title}</h1>
+        <h1 className="min-w-0 break-words font-display text-3xl">{title}</h1>
         {submitted ? (
           <PublicSuccess title="Answers saved">
             <dl className="mt-6 space-y-4 border-t border-line pt-6 text-left">
@@ -125,7 +121,11 @@ export default function PublicQuestionnairePage() {
             </dl>
           </PublicSuccess>
         ) : questions.length === 0 ? (
-          <p className="mt-6 text-muted">No questions to answer.</p>
+          <EmptyState
+            variant="inline"
+            title="No questions to answer."
+            className="mt-6"
+          />
         ) : (
           <form onSubmit={onSubmit} className="mt-8 space-y-4">
             {questions.map((q) => (

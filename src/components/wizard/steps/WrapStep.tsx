@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Button, ButtonLink, useConfirm, useToast } from "@/components/ui";
+import {
+  Button,
+  ButtonLink,
+  EmptyState,
+  useConfirm,
+  useToast,
+} from "@/components/ui";
 import {
   confirmArchiveGallery,
   confirmMarkDelivered,
@@ -127,7 +133,7 @@ export function WrapStep({
         const JSZip = (await import("jszip")).default;
         const { saveBlobDownload } = await import("@/lib/client/zip-downloads");
         const zip = new JSZip();
-        zip.file("client-details.txt", detailsText);
+        zip.file("project-details.txt", detailsText);
         for (const item of items) {
           const res = await fetch(item.url, { mode: "cors" });
           if (!res.ok) throw new Error(`fetch ${item.filename}`);
@@ -179,7 +185,10 @@ export function WrapStep({
       </div>
 
       {!gallery ? (
-        <p className="text-sm text-muted">No gallery yet — finish Delivery first.</p>
+        <EmptyState
+          variant="inline"
+          title="No gallery yet — finish Delivery first."
+        />
       ) : (
         <>
           <dl className="divide-y divide-line border-y border-line text-sm">

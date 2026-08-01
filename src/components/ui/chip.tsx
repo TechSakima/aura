@@ -18,11 +18,13 @@ export function Chip({
   tone = "accent",
   href,
   className,
+  title,
 }: {
   children: ReactNode;
   tone?: ChipTone;
   href?: string;
   className?: string;
+  title?: string;
 }) {
   const classes = cn(
     "inline-flex max-w-full truncate rounded-sm px-1.5 py-0.5 text-[10px] font-medium leading-tight sm:text-[11px]",
@@ -34,6 +36,7 @@ export function Chip({
     return (
       <Link
         href={href}
+        title={title}
         className={cn(classes, "block no-underline hover:opacity-90")}
       >
         {children}
@@ -41,5 +44,9 @@ export function Chip({
     );
   }
 
-  return <span className={classes}>{children}</span>;
+  return (
+    <span className={classes} title={title}>
+      {children}
+    </span>
+  );
 }

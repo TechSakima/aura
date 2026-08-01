@@ -105,11 +105,6 @@ function MasonryTile({
               Video
             </span>
           ) : null}
-          {photo.kind === "video" ? (
-            <span className="absolute bottom-2 right-2 bg-scrim px-2 py-0.5 text-[10px] text-on-media-muted">
-              Download via single
-            </span>
-          ) : null}
         </span>
       </button>
 

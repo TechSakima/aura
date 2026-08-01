@@ -157,42 +157,44 @@ export default function PeekGalleryPage() {
       galleryDensity={design.density}
     >
       <InstallHintDock storageKey={`aura-install-dismiss-g-peek-${token}`} />
-      <AlbumView
-        title="Sneak peek"
-        subtitle={`${data.gallery.title}${
-          data.projectName || data.clientName
-            ? ` · ${data.projectName || data.clientName}`
-            : ""
-        } · ${peekPhotos.length} photo${peekPhotos.length === 1 ? "" : "s"}`}
-        photos={peekPhotos}
-        backHref={`/g/${token}`}
-        backLabel="All albums"
-        onPhotoClick={(photo) => {
-          const idx = peekPhotos.findIndex((p) => p.id === photo.id);
-          if (idx >= 0) setLightboxIndex(idx);
-        }}
-        emptyMessage="No sneak peek photos yet."
-        headerExtra={<AlbumNav items={navItems} />}
-        primaryActionId="share"
-        actionItems={[
-          {
-            id: "share",
-            label: "Share",
-            tone: "ghost",
-            onClick: () => void shareNative(),
-          },
-          ...(showGalleryContact
-            ? [
-                {
-                  id: "message",
-                  label: "Message",
-                  tone: "ghost" as const,
-                  onClick: () => setContactOpen(true),
-                },
-              ]
-            : []),
-        ]}
-      />
+      <div className="install-hint-pad">
+        <AlbumView
+          title="Sneak peek"
+          subtitle={`${data.gallery.title}${
+            data.projectName || data.clientName
+              ? ` · ${data.projectName || data.clientName}`
+              : ""
+          } · ${peekPhotos.length} photo${peekPhotos.length === 1 ? "" : "s"}`}
+          photos={peekPhotos}
+          backHref={`/g/${token}`}
+          backLabel="All albums"
+          onPhotoClick={(photo) => {
+            const idx = peekPhotos.findIndex((p) => p.id === photo.id);
+            if (idx >= 0) setLightboxIndex(idx);
+          }}
+          emptyMessage="No sneak peek photos yet."
+          headerExtra={<AlbumNav items={navItems} />}
+          primaryActionId="share"
+          actionItems={[
+            {
+              id: "share",
+              label: "Share",
+              tone: "ghost",
+              onClick: () => void shareNative(),
+            },
+            ...(showGalleryContact
+              ? [
+                  {
+                    id: "message",
+                    label: "Message",
+                    tone: "ghost" as const,
+                    onClick: () => setContactOpen(true),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </div>
 
       {lightboxIndex != null ? (
         <PhotoLightbox

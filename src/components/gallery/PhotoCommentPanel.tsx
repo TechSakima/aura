@@ -28,7 +28,7 @@ export function PhotoCommentPanel({
       {comments.length ? (
         <ul className="space-y-2">
           {comments.map((c) => (
-            <li key={c.id} className="text-sm text-ink">
+            <li key={c.id} className="break-words text-sm text-ink">
               <span className="font-medium">{c.authorName}</span>
               <span className="text-muted"> · </span>
               {c.body}

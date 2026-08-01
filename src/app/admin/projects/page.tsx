@@ -359,17 +359,27 @@ function ProjectsPageInner() {
                       href={`/admin/projects/${c.adminSlug || c.id}`}
                     >
                       <div className="min-w-0">
-                        <p className="font-display text-xl text-ink">
+                        <p
+                          className="truncate font-display text-xl text-ink"
+                          title={c.name}
+                        >
                           {c.name}
                         </p>
                         <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
-                          <span className="truncate">
+                          <span
+                            className="truncate"
+                            title={c.type || "Project"}
+                          >
                             {c.type || "Project"}
                           </span>
                           <StatusBadge domain="projectStage" value={stage} />
-                          <span className="truncate">· {stepLabel}</span>
+                          <span className="truncate" title={stepLabel}>
+                            · {stepLabel}
+                          </span>
                           {c.email ? (
-                            <span className="truncate">· {c.email}</span>
+                            <span className="truncate" title={c.email}>
+                              · {c.email}
+                            </span>
                           ) : null}
                         </p>
                       </div>

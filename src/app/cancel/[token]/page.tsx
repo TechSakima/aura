@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { StudioMark } from "@/components/brand/StudioMark";
-import { InstallHint } from "@/components/pwa/InstallHint";
+import { InstallHintDock } from "@/components/pwa/InstallHintDock";
 import { PublicShell } from "@/components/shells/PublicShell";
 import { PublicSoftFailureContact } from "@/components/public/PublicSoftFailureContact";
 import { PublicSuccess } from "@/components/public/PublicSuccess";
@@ -155,17 +155,13 @@ export default function PublicCancelPage() {
 
   return (
     <PublicShell {...shell}>
-      <div className="pointer-events-none fixed inset-x-0 z-40 shell-pad bottom-[calc(1rem+env(safe-area-inset-bottom))]">
-        <div className="mx-auto max-w-md">
-          <InstallHint storageKey={`aura-install-dismiss-cancel-${token}`} />
-        </div>
-      </div>
-      <div className="mx-auto max-w-md py-12 sm:py-16">
+      <InstallHintDock storageKey={`aura-install-dismiss-cancel-${token}`} />
+      <div className="install-hint-pad mx-auto max-w-md py-12 sm:py-16">
         {studioName ? (
           <StudioMark name={studioName} tone="dark" className="mb-2" />
         ) : null}
         <h1 className="font-display text-3xl">Change or cancel</h1>
-        <p className="mt-2 text-muted">
+        <p className="mt-2 break-words text-muted">
           {name}
           {startsAt
             ? ` · ${new Date(startsAt).toLocaleString(undefined, {
@@ -210,14 +206,14 @@ export default function PublicCancelPage() {
                 {!canCancel && blockReason ? (
                   <p className="text-sm text-muted">{blockReason}</p>
                 ) : null}
-                <Field>
+                <Field className="min-w-0 max-w-full">
                   <Label htmlFor="preferred">Preferred time</Label>
                   <Input
                     id="preferred"
                     type="datetime-local"
                     value={preferredLocal}
                     onChange={(e) => setPreferredLocal(e.target.value)}
-                    className="min-h-11"
+                    className="min-h-11 min-w-0 max-w-full"
                   />
                 </Field>
                 <Field>

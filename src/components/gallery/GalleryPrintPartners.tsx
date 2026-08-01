@@ -1,3 +1,4 @@
+import { ButtonLink } from "@/components/ui";
 import type { PrintPartner } from "@/lib/types";
 import { publicPrintPartners } from "@/lib/print-partners";
 
@@ -21,14 +22,16 @@ export function GalleryPrintPartners({
       <ul className="mt-4 space-y-4">
         {items.map((p) => (
           <li key={p.id}>
-            <a
+            <ButtonLink
               href={p.url.trim()}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex min-h-11 items-center text-sm font-medium text-ink underline-offset-4 hover:underline"
+              tone="ghost"
+              size="sm"
+              className="justify-start px-0 font-medium underline-offset-4 hover:underline"
             >
               {p.name.trim()}
-            </a>
+            </ButtonLink>
             {p.note?.trim() ? (
               <p className="mt-0.5 text-sm text-muted">{p.note.trim()}</p>
             ) : null}

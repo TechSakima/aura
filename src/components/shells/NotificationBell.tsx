@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { IconButton } from "@/components/ui/icon-button";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/cn";
@@ -155,8 +156,8 @@ export function NotificationBell() {
         ) : null}
         <ul className="-mx-5">
           {items.length === 0 ? (
-            <li className="px-5 py-4 text-sm text-muted">
-              No notifications yet.
+            <li className="px-5 py-4">
+              <EmptyState variant="inline" title="No notifications yet." />
             </li>
           ) : (
             items.map((n) => {

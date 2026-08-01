@@ -207,7 +207,7 @@ export function IntakeListEditor({
                   <option value="date">Date</option>
                 </Select>
               </Field>
-              <label className="flex min-h-11 items-end gap-2 pb-2 text-sm">
+              <label className="flex min-h-11 items-center gap-2 text-sm">
                 <Checkbox
                   checked={Boolean(q.required)}
                   onChange={(e) => {

@@ -195,7 +195,9 @@ export default function PublicBookPage() {
       <PublicShell style={themeStyle} fontPreset={fontPreset}>
         <div className="mx-auto flex max-w-md flex-col items-center py-16 text-center">
           <StudioMark name={studioName} tone="dark" className="mb-2" />
-          <h1 className="font-display text-3xl sm:text-4xl">{studioName}</h1>
+          <h1 className="min-w-0 break-words font-display text-3xl sm:text-4xl">
+            {studioName}
+          </h1>
           <p className="mt-4 text-muted">Booking is not open yet.</p>
           <PublicSoftFailureContact
             studioName={studioName}
@@ -235,7 +237,7 @@ export default function PublicBookPage() {
         {studioName ? (
           <StudioMark name={studioName} tone="dark" className="mb-2" />
         ) : null}
-        <h1 className="font-display text-3xl sm:text-4xl">
+        <h1 className="min-w-0 break-words font-display text-3xl sm:text-4xl">
           {studioName || "Book"}
         </h1>
         <p className="mt-2 text-muted">Request a session.</p>
@@ -299,7 +301,7 @@ export default function PublicBookPage() {
               disabled={pending}
             />
           </Field>
-          <Field>
+          <Field className="min-w-0 max-w-full">
             <Label htmlFor="when">Preferred date & time</Label>
             <Input
               id="when"
@@ -308,7 +310,7 @@ export default function PublicBookPage() {
               min={minStartsAt}
               onChange={(e) => setStartsAt(e.target.value)}
               required
-              className="min-h-11"
+              className="min-h-11 min-w-0 max-w-full"
               disabled={pending}
             />
             {tz ? (

@@ -229,15 +229,20 @@ export function SettingsLibrary() {
         </p>
 
         {templates.length === 0 ? (
-          <div className="mt-6 space-y-3">
-            <p className="text-sm text-muted">No contract templates yet.</p>
-            <ButtonLink
-              href="/admin/documents?tab=templates"
-              tone="accent"
-              className="w-full sm:w-auto"
-            >
-              Create contract template
-            </ButtonLink>
+          <div className="mt-6">
+            <EmptyState
+              variant="inline"
+              title="No contract templates yet."
+              action={
+                <ButtonLink
+                  href="/admin/documents?tab=templates"
+                  tone="accent"
+                  className="w-full sm:w-auto"
+                >
+                  Create contract template
+                </ButtonLink>
+              }
+            />
           </div>
         ) : (
           <form onSubmit={saveLegal} className="mt-6 space-y-6">

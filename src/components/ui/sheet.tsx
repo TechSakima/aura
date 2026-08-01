@@ -88,9 +88,9 @@ export function Sheet({
     <div
       ref={rootRef}
       data-aura-sheet-root
-      /* Above lightbox (z-50); below toast (z-60) — AURA-449.
+      /* Above lightbox (--z-overlay); below toast — AURA-449 / AURA-477.
        * top/left/w/h overridden by visualViewport (AURA-457). */
-      className="fixed top-0 left-0 z-[55] flex h-full w-full items-end justify-center pt-[max(1rem,var(--safe-inset-top))] sm:items-end sm:justify-center sm:p-4 sm:pb-[max(1rem,var(--safe-inset-bottom))] sm:pt-[max(1rem,var(--safe-inset-top))]"
+      className="fixed top-0 left-0 z-[calc(var(--z-overlay)+5)] flex h-full w-full items-end justify-center pt-[max(1rem,var(--safe-inset-top))] sm:items-end sm:justify-center sm:p-4 sm:pb-[max(1rem,var(--safe-inset-bottom))] sm:pt-[max(1rem,var(--safe-inset-top))]"
     >
       <button
         type="button"
@@ -108,7 +108,8 @@ export function Sheet({
         aria-label={title ? undefined : label || "Sheet"}
         tabIndex={-1}
         className={cn(
-          "relative z-10 flex w-full max-w-lg flex-col overflow-hidden outline-none animate-enter",
+          /* No overflow-hidden — focus rings must not clip (AURA-477 / Dialog AURA-460). */
+          "relative z-10 flex w-full max-w-lg flex-col outline-none animate-enter",
           /* % of visualViewport frame — not layout dvh under keyboard (AURA-457). */
           "max-h-[min(90%,calc(100%-max(1rem,var(--safe-inset-top))))]",
           "rounded-t-xl border border-b-0 border-line bg-surface shadow-lg",

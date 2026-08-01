@@ -88,9 +88,9 @@ export default function WebsiteDraftPreviewPage() {
               type="button"
               tone="neutral"
               className="w-full sm:w-auto"
-              onClick={() =>
-                window.open(`/h/${slug}`, "_blank", "noopener")
-              }
+              onClick={() => {
+                window.location.assign(`/h/${slug}`);
+              }}
             >
               View live site
             </Button>

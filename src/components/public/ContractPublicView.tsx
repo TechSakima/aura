@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Button, Checkbox, Field, Input, Label } from "@/components/ui";
+import { useVisualViewportFrame } from "@/lib/use-visual-viewport-frame";
 
 export type ContractPublicViewProps = {
   title: string;
@@ -42,8 +43,12 @@ export function ContractPublicView({
   const [completedAt, setCompletedAt] = useState(signedAt);
   const [completedDate, setCompletedDate] = useState(savedSignedDate);
   const [localStatus, setLocalStatus] = useState(status);
+  const signChromeRef = useRef<HTMLDivElement>(null);
 
   const isCompleted = localStatus === "completed";
+  const showSignChrome = !preview && !isCompleted;
+  /* Pin sticky Sign above iOS keyboard (AURA-466 / AURA-457). */
+  useVisualViewportFrame(showSignChrome, signChromeRef);
   const displayDate =
     completedDate ||
     (completedAt ? format(new Date(completedAt), "MMM d, yyyy") : null);
@@ -97,7 +102,9 @@ export function ContractPublicView({
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-muted">Signed by</dt>
-              <dd className="mt-1 font-display text-2xl italic">{name}</dd>
+              <dd className="mt-1 break-words font-display text-2xl italic">
+                {name}
+              </dd>
             </div>
             <div>
               <dt className="text-muted">Date</dt>
@@ -107,25 +114,31 @@ export function ContractPublicView({
         </div>
       ) : (
         <>
-          {!preview ? (
-            <div className="fixed inset-x-0 z-40 border-t border-line bg-canvas/95 py-3 pl-[max(1rem,var(--safe-inset-left))] pr-[max(1rem,var(--safe-inset-right))] pb-[max(0.75rem,var(--safe-inset-bottom))] backdrop-blur print:hidden desk:hidden bottom-[var(--install-hint-clearance,0px)]">
-              <div className="mx-auto flex max-w-2xl min-w-0 items-center justify-between gap-3">
-                <p className="min-w-0 truncate text-sm text-muted">
-                  {acknowledged ? "Ready to sign" : "Read & agree below"}
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="shrink-0"
-                  disabled={busy || !acknowledged}
-                  onClick={() =>
-                    document
-                      .getElementById("sign-contract-form")
-                      ?.scrollIntoView({ behavior: "smooth", block: "end" })
-                  }
-                >
-                  Sign
-                </Button>
+          {showSignChrome ? (
+            <div
+              ref={signChromeRef}
+              /* top/left/w/h overridden by visualViewport (AURA-466). */
+              className="pointer-events-none fixed top-0 left-0 z-40 h-full w-full print:hidden desk:hidden"
+            >
+              <div className="pointer-events-auto absolute inset-x-0 border-t border-line bg-canvas/95 py-3 pl-[max(1rem,var(--safe-inset-left))] pr-[max(1rem,var(--safe-inset-right))] pb-[max(0.75rem,var(--safe-inset-bottom))] backdrop-blur bottom-[var(--install-hint-clearance,0px)]">
+                <div className="mx-auto flex max-w-2xl min-w-0 items-center justify-between gap-3">
+                  <p className="min-w-0 truncate text-sm text-muted">
+                    {acknowledged ? "Ready to sign" : "Read & agree below"}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="shrink-0"
+                    disabled={busy || !acknowledged}
+                    onClick={() =>
+                      document
+                        .getElementById("sign-contract-form")
+                        ?.scrollIntoView({ behavior: "smooth", block: "end" })
+                    }
+                  >
+                    Sign
+                  </Button>
+                </div>
               </div>
             </div>
           ) : null}
@@ -160,7 +173,7 @@ export function ContractPublicView({
                 disabled={preview}
               />
             </Field>
-            <p className="font-display text-3xl italic text-ink/80">
+            <p className="break-words font-display text-3xl italic text-ink/80">
               {name.trim() || "Your signature"}
             </p>
             <label className="flex min-h-11 items-start gap-3 text-sm">

@@ -71,12 +71,14 @@ function secondaryContactLinks(studio?: GalleryGuestStudio | null): ReactNode {
   return (
     <div className="flex flex-wrap items-center justify-center gap-1">
       {email ? (
-        <a
+        <ButtonLink
           href={mailtoHref(email)}
-          className="inline-flex min-h-11 items-center px-3 text-sm text-muted no-underline hover:text-ink"
+          tone="ghost"
+          size="sm"
+          className="text-muted hover:text-ink"
         >
           Email
-        </a>
+        </ButtonLink>
       ) : null}
       {email && phone ? (
         <span className="text-line" aria-hidden>
@@ -84,12 +86,14 @@ function secondaryContactLinks(studio?: GalleryGuestStudio | null): ReactNode {
         </span>
       ) : null}
       {phone ? (
-        <a
+        <ButtonLink
           href={telHref(phone)}
-          className="inline-flex min-h-11 items-center px-3 text-sm text-muted no-underline hover:text-ink"
+          tone="ghost"
+          size="sm"
+          className="text-muted hover:text-ink"
         >
           Call
-        </a>
+        </ButtonLink>
       ) : null}
     </div>
   );

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { MediaGrid } from "@/components/media/MediaGrid";
 import { HomepageCoverImage } from "@/components/public/homepage/HomepageCoverImage";
-import { ScrollRail } from "@/components/ui";
+import { EmptyState, ScrollRail } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { homepageLayoutToMediaMode } from "@/lib/media-grid";
 import type { HomepageGalleryCard } from "@/lib/homepage-payload";
@@ -22,7 +22,11 @@ export function HomepageCollections({
   if (galleries.length === 0) {
     return (
       <section className="shell-pad mx-auto max-w-[var(--public-max)] py-14 @sm:py-16">
-        <p className="text-center text-muted">No collections yet.</p>
+        <EmptyState
+          variant="inline"
+          title="No collections yet."
+          className="text-center"
+        />
       </section>
     );
   }

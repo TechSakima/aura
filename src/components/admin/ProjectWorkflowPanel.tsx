@@ -619,7 +619,7 @@ export function ProjectWorkflowPanel({
     const ok = await confirm({
       title: "Mark quote accepted?",
       message:
-        `Skips the client accepting the quote link. Moves to ${workflowStepLabel("contract")}, then ${workflowStepLabel("deposit")}.`,
+        `Skips quote-link acceptance. Moves to ${workflowStepLabel("contract")}, then ${workflowStepLabel("deposit")}.`,
       confirmLabel: "Mark accepted",
       tone: "neutral",
     });
@@ -1222,8 +1222,11 @@ export function ProjectWorkflowPanel({
                               {
                                 id: "questionnaire-link",
                                 label: "Questionnaire link",
-                                href: `/q/${questionnaires[0].token}`,
-                                external: true,
+                                href: adminPreviewHref(
+                                  "q",
+                                  questionnaires[0].token,
+                                  `/admin/projects/${project.id}`,
+                                ),
                                 tone: "ghost" as const,
                               },
                             ]
@@ -1360,8 +1363,11 @@ export function ProjectWorkflowPanel({
                               {
                                 id: "preview",
                                 label: "Preview",
-                                href: `/p/${proposal.token}`,
-                                external: true,
+                                href: adminPreviewHref(
+                                  "p",
+                                  proposal.token,
+                                  `/admin/projects/${project.id}`,
+                                ),
                                 tone: "ghost" as const,
                               },
                             ]
@@ -1575,7 +1581,7 @@ export function ProjectWorkflowPanel({
                   <p className="text-sm text-muted">{HANDOFF_COPY}.</p>
                 ) : step.id === "prep" ? (
                   <p className="text-sm text-muted">
-                    Continues: plan → shoot day → deliver → wrap
+                    Continues: plan → session day → deliver → wrap
                   </p>
                 ) : null}
               </div>
@@ -1655,8 +1661,11 @@ export function ProjectWorkflowPanel({
                               {
                                 id: "gallery",
                                 label: "Open gallery",
-                                href: `/g/${toolSession.galleryToken}`,
-                                external: true,
+                                href: adminPreviewHref(
+                                  "g",
+                                  toolSession.galleryToken,
+                                  `/admin/projects/${project.id}`,
+                                ),
                                 tone: "ghost" as const,
                               },
                             ]),

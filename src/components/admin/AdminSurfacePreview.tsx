@@ -47,7 +47,9 @@ export function AdminSurfacePreview({
           <p className="text-xs uppercase tracking-[0.14em] text-muted">
             {meta.label} preview
           </p>
-          <p className="mt-1 truncate text-sm text-muted">{src}</p>
+          <p className="mt-1 truncate text-sm text-muted" title={src}>
+            {src}
+          </p>
         </div>
         <ButtonLink
           href={backHref}

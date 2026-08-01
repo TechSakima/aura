@@ -2,14 +2,24 @@
 
 import { useCallback, useEffect } from "react";
 import { InstallHint } from "@/components/pwa/InstallHint";
+import { cn } from "@/lib/cn";
 
 const CLEARANCE_VAR = "--install-hint-clearance";
 
 /**
  * Fixed InstallHint + html clearance for content / sticky CTAs (AURA-451).
- * Never uses gallery thumb-bar phantom offset.
+ * Default dock is `1rem + safe-area` — never a phantom gallery offset on
+ * surfaces without thumbs. Pass `aboveChrome` when real bottom chrome is
+ * active (admin tabs / gallery thumbs via `--chrome-bottom`).
  */
-export function InstallHintDock({ storageKey }: { storageKey: string }) {
+export function InstallHintDock({
+  storageKey,
+  aboveChrome = false,
+}: {
+  storageKey: string;
+  /** Sit above `--chrome-bottom` (admin tab bar / gallery thumb bar). */
+  aboveChrome?: boolean;
+}) {
   const setClearance = useCallback((present: boolean) => {
     document.documentElement.style.setProperty(
       CLEARANCE_VAR,
@@ -24,7 +34,14 @@ export function InstallHintDock({ storageKey }: { storageKey: string }) {
   }, []);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 z-30 shell-pad bottom-[calc(1rem+var(--safe-inset-bottom))]">
+    <div
+      className={cn(
+        "pointer-events-none fixed inset-x-0 z-[var(--z-nav)] shell-pad",
+        aboveChrome
+          ? "bottom-[calc(var(--chrome-bottom,0px)+1rem+var(--safe-inset-bottom))]"
+          : "bottom-[calc(1rem+var(--safe-inset-bottom))]",
+      )}
+    >
       <div className="mx-auto max-w-md">
         <InstallHint
           storageKey={storageKey}

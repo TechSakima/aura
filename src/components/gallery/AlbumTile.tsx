@@ -47,10 +47,19 @@ export function AlbumTile({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-scrim-strong via-scrim/30 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-4 text-on-media sm:p-5">
-          <p className={cn("font-display", featured ? "text-2xl sm:text-3xl" : "text-xl")}>
+          <p
+            className={cn(
+              "break-words font-display line-clamp-2",
+              featured ? "text-2xl sm:text-3xl" : "text-xl",
+            )}
+          >
             {label}
           </p>
-          {meta ? <p className="mt-1 text-sm text-on-media-muted">{meta}</p> : null}
+          {meta ? (
+            <p className="mt-1 line-clamp-1 break-words text-sm text-on-media-muted">
+              {meta}
+            </p>
+          ) : null}
         </div>
       </div>
     </>

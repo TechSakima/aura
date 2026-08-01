@@ -1,3 +1,4 @@
+import { ButtonLink } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { resolveSocialNetwork, type SocialNetworkId } from "@/lib/social";
 import type { BrandSocialTreatment } from "@/lib/types";
@@ -131,15 +132,17 @@ export function SocialLinks({
         if (treatment === "pills") {
           return (
             <li key={`${s.label}-${s.url}`}>
-              <a
+              <ButtonLink
                 href={s.url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex min-h-11 items-center gap-2 border border-line bg-surface px-3 py-2 text-sm text-ink no-underline transition hover:border-ink/30"
+                tone="ghost"
+                size="sm"
+                className="border border-line bg-surface hover:border-ink/30"
               >
                 <SocialGlyph network={network} className="size-4" />
                 <span>{s.label}</span>
-              </a>
+              </ButtonLink>
             </li>
           );
         }

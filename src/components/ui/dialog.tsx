@@ -75,7 +75,7 @@ export function Dialog({
       ref={rootRef}
       data-aura-dialog-root
       /* top/left/w/h overridden by visualViewport (AURA-457). */
-      className="fixed top-0 left-0 z-50 flex h-full w-full items-end justify-center pt-[max(1rem,var(--safe-inset-top))] pr-[max(1rem,var(--safe-inset-right))] pb-[max(1rem,var(--safe-inset-bottom))] pl-[max(1rem,var(--safe-inset-left))] sm:items-center"
+      className="fixed top-0 left-0 z-[var(--z-overlay)] flex h-full w-full items-end justify-center pt-[max(1rem,var(--safe-inset-top))] pr-[max(1rem,var(--safe-inset-right))] pb-[max(1rem,var(--safe-inset-bottom))] pl-[max(1rem,var(--safe-inset-left))] sm:items-center"
     >
       <button
         type="button"

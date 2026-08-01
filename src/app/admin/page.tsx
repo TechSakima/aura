@@ -19,6 +19,7 @@ import {
   ADMIN_RESUME_ONCE_KEY,
   readAdminLastRoute,
 } from "@/lib/admin-last-route";
+import { adminPreviewHref } from "@/lib/admin-preview-paths";
 import type { FirstProjectGuide } from "@/lib/first-project-guide";
 import { useDisplayModeStandalone } from "@/lib/use-display-mode-standalone";
 
@@ -140,7 +141,10 @@ export default function AdminDashboard() {
               <ListRow key={issue.kind}>
                 <div className="min-w-0">
                   <p className="font-medium">{issue.title}</p>
-                  <p className="mt-0.5 truncate text-sm text-muted">
+                  <p
+                    className="mt-0.5 truncate text-sm text-muted"
+                    title={issue.body}
+                  >
                     {issue.body}
                   </p>
                 </div>
@@ -220,9 +224,7 @@ export default function AdminDashboard() {
                     </a>
                     <a
                       className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
-                      href={`/p/${p.token}`}
-                      target="_blank"
-                      rel="noreferrer"
+                      href={adminPreviewHref("p", p.token, "/admin")}
                     >
                       Preview
                     </a>
@@ -260,9 +262,7 @@ export default function AdminDashboard() {
                     </a>
                     <a
                       className="inline-flex min-h-11 items-center text-sm text-muted no-underline hover:text-ink"
-                      href={`/g/${g.publicToken}`}
-                      target="_blank"
-                      rel="noreferrer"
+                      href={adminPreviewHref("g", g.publicToken, "/admin")}
                     >
                       Preview
                     </a>

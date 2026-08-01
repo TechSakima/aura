@@ -124,7 +124,7 @@ function HeroModule({
           className="absolute inset-0 bg-gradient-to-t from-scrim-strong via-scrim/50 to-scrim/20"
           aria-hidden
         />
-        <div className="hero-fill-70 relative z-10 flex flex-col items-center justify-end shell-pad pb-[max(2rem,var(--safe-inset-bottom))] pt-16 text-center @sm:hero-fill-78 @sm:pl-[max(2.5rem,var(--safe-inset-left))] @sm:pr-[max(2.5rem,var(--safe-inset-right))] @sm:pb-16">
+        <div className="hero-fill-70 relative z-10 flex flex-col items-center justify-end shell-pad pb-[calc(var(--install-hint-clearance,0px)+max(2rem,var(--safe-inset-bottom)))] pt-16 text-center @sm:hero-fill-78 @sm:pl-[max(2.5rem,var(--safe-inset-left))] @sm:pr-[max(2.5rem,var(--safe-inset-right))] @sm:pb-[calc(var(--install-hint-clearance,0px)+4rem)]">
           <HeroMark
             studio={studio}
             showLogo={showLogo}
@@ -270,12 +270,14 @@ function ContactModule({
         {showForm && (email || phone) ? (
           <div className="flex flex-wrap items-center justify-center gap-1">
             {email ? (
-              <a
+              <ButtonLink
                 href={mailtoHref(email)}
-                className="inline-flex min-h-11 items-center px-3 text-sm text-muted no-underline hover:text-ink"
+                tone="ghost"
+                size="sm"
+                className="text-muted hover:text-ink"
               >
                 Email
-              </a>
+              </ButtonLink>
             ) : null}
             {email && phone ? (
               <span className="text-line" aria-hidden>
@@ -283,31 +285,37 @@ function ContactModule({
               </span>
             ) : null}
             {phone ? (
-              <a
+              <ButtonLink
                 href={telHref(phone)}
-                className="inline-flex min-h-11 items-center px-3 text-sm text-muted no-underline hover:text-ink"
+                tone="ghost"
+                size="sm"
+                className="text-muted hover:text-ink"
               >
                 Call
-              </a>
+              </ButtonLink>
             ) : null}
           </div>
         ) : (
           <>
             {email ? (
-              <a
+              <ButtonLink
                 href={mailtoHref(email)}
-                className="inline-flex min-h-11 max-w-full items-center break-all text-sm text-accent no-underline"
+                tone="ghost"
+                size="sm"
+                className="max-w-full break-all text-accent"
               >
                 {email}
-              </a>
+              </ButtonLink>
             ) : null}
             {phone ? (
-              <a
+              <ButtonLink
                 href={telHref(phone)}
-                className="inline-flex min-h-11 items-center text-sm text-accent no-underline"
+                tone="ghost"
+                size="sm"
+                className="text-accent"
               >
                 {phone}
-              </a>
+              </ButtonLink>
             ) : null}
           </>
         )}
@@ -497,7 +505,7 @@ function FooterModule({
       : [];
   if (!showName && !social.length) return null;
   return (
-    <footer className="shell-pad mx-auto max-w-[var(--public-max)] border-t border-line py-10 pb-[max(2.5rem,var(--safe-inset-bottom))] text-center">
+    <footer className="shell-pad mx-auto max-w-[var(--public-max)] border-t border-line py-10 pb-[calc(var(--install-hint-clearance,0px)+max(2.5rem,var(--safe-inset-bottom)))] text-center">
       {showName ? (
         <p className="font-sans text-xs uppercase tracking-[0.14em] text-muted">
           {studio.name}

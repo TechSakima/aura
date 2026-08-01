@@ -39,24 +39,51 @@ function titleClassFor(treatment: GalleryTitleTreatment): string {
   }
 }
 
-function frameClassFor(layout: GalleryHeroLayout): string {
+function frameClassFor(
+  layout: GalleryHeroLayout,
+  clearPhoneThumbBar = false,
+): string {
+  /* Full class strings — Tailwind JIT cannot see dynamic pb-[max(...)] (AURA-465). */
   switch (layout) {
     case "vertical":
       /* Extra start inset without overriding shell-pad / safe-area (AURA-435). */
       return cn(
-        "items-start justify-center pb-12",
+        "items-start justify-center",
+        clearPhoneThumbBar
+          ? "pb-[max(3rem,calc(var(--gallery-thumb-bar)+env(safe-area-inset-bottom)+1rem))] desk:pb-12"
+          : "pb-12",
         "pl-[max(1.5rem,var(--shell-gutter),var(--safe-inset-left))]",
         "sm:pl-[max(3rem,var(--shell-gutter),var(--safe-inset-left))]",
       );
     case "centered":
-      return "items-center justify-center pb-12 text-center";
+      return cn(
+        "items-center justify-center text-center",
+        clearPhoneThumbBar
+          ? "pb-[max(3rem,calc(var(--gallery-thumb-bar)+env(safe-area-inset-bottom)+1rem))] desk:pb-12"
+          : "pb-12",
+      );
     case "minimal":
-      return "items-end justify-start pb-10 sm:pb-12";
+      return cn(
+        "items-end justify-start",
+        clearPhoneThumbBar
+          ? "pb-[max(2.5rem,calc(var(--gallery-thumb-bar)+env(safe-area-inset-bottom)+1rem))] sm:pb-12 desk:pb-10"
+          : "pb-10 sm:pb-12",
+      );
     case "cinematic":
-      return "items-end justify-center pb-16 sm:pb-24 text-center";
+      return cn(
+        "items-end justify-center text-center",
+        clearPhoneThumbBar
+          ? "pb-[max(4rem,calc(var(--gallery-thumb-bar)+env(safe-area-inset-bottom)+1rem))] sm:pb-24 desk:pb-16"
+          : "pb-16 sm:pb-24",
+      );
     case "split":
     default:
-      return "items-end justify-center pb-14 sm:pb-16";
+      return cn(
+        "items-end justify-center",
+        clearPhoneThumbBar
+          ? "pb-[max(3.5rem,calc(var(--gallery-thumb-bar)+env(safe-area-inset-bottom)+1rem))] sm:pb-16 desk:pb-14"
+          : "pb-14 sm:pb-16",
+      );
   }
 }
 
@@ -102,6 +129,10 @@ export function GalleryHero({
   const showDays =
     cover.showDaysLeft && daysLeft != null && daysLeft >= 0 && layout !== "vertical";
   const showCta = cover.showCta && Boolean(onViewGallery);
+  /* Immersive / cinematic / minimal CTAs sit under the phone thumb bar (AURA-465). */
+  const clearPhoneThumbBar =
+    showCta &&
+    (immersive || layout === "cinematic" || layout === "minimal");
   const titleClass = titleClassFor(cover.titleTreatment);
 
   useEffect(() => {
@@ -179,7 +210,7 @@ export function GalleryHero({
             ? "pr-[max(var(--shell-gutter),var(--safe-inset-right))]"
             : "shell-pad",
           minH,
-          frameClassFor(layout),
+          frameClassFor(layout, clearPhoneThumbBar),
           entered ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
           "transition-all duration-emphasis ease-out",
         )}

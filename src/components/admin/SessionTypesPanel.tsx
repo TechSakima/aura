@@ -190,7 +190,7 @@ export function SessionTypesPanel() {
           </Field>
           <Field>
             <Label htmlFor="st-duration">Duration</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="st-duration"
                 type="number"
@@ -215,7 +215,7 @@ export function SessionTypesPanel() {
                       String(Math.max(1, Math.round(mins / (60 * 24)))),
                     );
                 }}
-                className="w-32"
+                className="w-full sm:w-32"
               >
                 <option value="minutes">Minutes</option>
                 <option value="hours">Hours</option>
