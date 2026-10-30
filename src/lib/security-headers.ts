@@ -57,7 +57,8 @@ export function buildContentSecurityPolicy(): string {
       "https://accounts.google.com",
       "https://*.firebaseapp.com",
     ].join(" "),
-    "frame-ancestors 'none'",
+    // Same-origin iframes only (admin preview). Third-party framing stays blocked.
+    "frame-ancestors 'self'",
     "upgrade-insecure-requests",
     "report-uri /api/csp-report",
   ];
@@ -82,7 +83,7 @@ export function securityHeaders(opts?: {
 
   const headers: SecurityHeader[] = [
     { key: "X-Content-Type-Options", value: "nosniff" },
-    { key: "X-Frame-Options", value: "DENY" },
+    { key: "X-Frame-Options", value: "SAMEORIGIN" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     {
       key: "Permissions-Policy",
