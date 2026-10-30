@@ -4,7 +4,7 @@ import type { PrintPartner } from "@/lib/types";
 export function publicPrintPartners(
   partners: PrintPartner[] | null | undefined,
 ): PrintPartner[] {
-  if (!partners?.length) return [];
+  if (!Array.isArray(partners) || partners.length === 0) return [];
   return partners.filter((p) => {
     const name = p.name?.trim();
     const url = p.url?.trim();

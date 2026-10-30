@@ -14,7 +14,11 @@ import {
 } from "@/lib/db/collections";
 
 export { deletedDocKey } from "@/lib/db/collections";
-import { assertFirebaseReady } from "@/lib/db/require-firebase";
+import {
+  assertFirebaseReady,
+  FirebaseNotConfiguredError,
+} from "@/lib/db/require-firebase";
+import { pageBySortOrder } from "@/lib/db/photo-page";
 import { normalizeDb } from "@/lib/db/normalize";
 import { linkedSessionId } from "@/lib/linked-session";
 import type {
@@ -1154,9 +1158,13 @@ export async function findGalleryByPublicToken(
     .where("publicToken", "==", token)
     .limit(1)
     .get();
-  if (snap.empty) return null;
-  const d = snap.docs[0]!;
-  return coerceGallerySession({ id: d.id, ...d.data() } as Gallery);
+  if (!snap.empty) {
+    const d = snap.docs[0]!;
+    return coerceGallerySession({ id: d.id, ...d.data() } as Gallery);
+  }
+  // Admin preview and some links use the gallery document id in `/g/{id}`.
+  if (!token || token.includes("/")) return null;
+  return getGalleryById(token);
 }
 
 export async function findStudioIdByProjectCancelToken(
@@ -1266,15 +1274,58 @@ export async function listPhotosByGalleryIdPage(
   const limit = Math.max(1, Math.floor(opts.limit) || 1);
   const base = db.collection(COL.photos).where("galleryId", "==", galleryId);
 
-  const [total, pageSnap] = await Promise.all([
-    countPhotosByGalleryId(galleryId),
-    base.orderBy("sortOrder", "asc").offset(offset).limit(limit).get(),
-  ]);
+  let total: number | undefined;
+  try {
+    total = await countPhotosByGalleryId(galleryId);
+  } catch (err) {
+    if (isFirebaseNotConfigured(err)) throw err;
+    console.error("[listPhotosByGalleryIdPage] count failed", err);
+  }
 
-  const photos = pageSnap.docs.map(
-    (d) => ({ id: d.id, ...d.data() }) as Photo,
+  const toPhotos = (
+    docs: ReadonlyArray<{ id: string; data: () => Record<string, unknown> }>,
+  ): Photo[] => docs.map((d) => ({ id: d.id, ...d.data() }) as Photo);
+
+  try {
+    const pageSnap = await base
+      .orderBy("sortOrder", "asc")
+      .offset(offset)
+      .limit(limit)
+      .get();
+    const photos = toPhotos(pageSnap.docs);
+    return {
+      photos,
+      total:
+        total ??
+        (photos.length === limit
+          ? offset + photos.length + 1
+          : offset + photos.length),
+    };
+  } catch (err) {
+    // orderBy(sortOrder) needs the composite index in firestore.indexes.json.
+    // Equality + limit uses the automatic galleryId index and stays O(page).
+    if (isFirebaseNotConfigured(err)) throw err;
+    console.error(
+      "[listPhotosByGalleryIdPage] indexed page failed; using bounded equality scan",
+      err,
+    );
+    const window = offset + limit;
+    const snap = await base.limit(window).get();
+    const photos = pageBySortOrder(toPhotos(snap.docs), offset, limit).photos;
+    const more = snap.size === window;
+    return {
+      photos,
+      total:
+        total ?? (more ? offset + photos.length + 1 : offset + photos.length),
+    };
+  }
+}
+
+function isFirebaseNotConfigured(err: unknown): boolean {
+  return (
+    err instanceof FirebaseNotConfiguredError ||
+    (err instanceof Error && err.name === "FirebaseNotConfiguredError")
   );
-  return { photos, total };
 }
 
 /**

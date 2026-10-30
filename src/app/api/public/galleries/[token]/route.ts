@@ -22,6 +22,7 @@ import {
   mapPublicGalleryPhotos,
   parsePublicPhotoPage,
 } from "@/lib/public-gallery-photos";
+import { toClientJson } from "@/lib/json-client";
 import { publicPrintPartners } from "@/lib/print-partners";
 
 export async function GET(
@@ -57,11 +58,15 @@ export async function GET(
   }
 
   if (gallery.status === "live" && new Date(gallery.expiresAt) < new Date()) {
-    await patchStudioDoc(COL.galleries, gallery.id, {
-      status: "expired",
-      updatedAt: new Date().toISOString(),
-    });
     gallery.status = "expired";
+    try {
+      await patchStudioDoc(COL.galleries, gallery.id, {
+        status: "expired",
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("[public gallery] expire write failed", err);
+    }
   }
 
   const { offset, limit } = parsePublicPhotoPage(new URL(req.url));
@@ -76,13 +81,15 @@ export async function GET(
 
   // Photos-only pages: skip meta/analytics (client progressive load).
   if (isPhotosPage) {
-    return NextResponse.json({
-      photos,
-      photoTotal,
-      photoOffset: offset,
-      photoLimit: limit,
-      hasMore,
-    });
+    return NextResponse.json(
+      toClientJson({
+        photos,
+        photoTotal,
+        photoOffset: offset,
+        photoLimit: limit,
+        hasMore,
+      }),
+    );
   }
 
   const sessionId = linkedSessionId(gallery);
@@ -101,7 +108,11 @@ export async function GET(
 
   // Cover thumbs: fetch candidate ids only (not the full gallery photo graph).
   const coverCandidates = [
-    ...new Set(rawSubAlbums.flatMap((s) => s.photoIds.slice(0, 8))),
+    ...new Set(
+      rawSubAlbums.flatMap((s) =>
+        Array.isArray(s.photoIds) ? s.photoIds.slice(0, 8) : [],
+      ),
+    ),
   ];
   const coverPhotos = coverCandidates.length
     ? await getPhotosByIds(coverCandidates)
@@ -110,25 +121,30 @@ export async function GET(
   const coverById = new Map(signedCovers.map((p) => [p.id, p]));
 
   const subAlbums = rawSubAlbums.map((s) => {
-    const coverId = s.photoIds.find((id) => coverById.has(id));
+    const photoIds = Array.isArray(s.photoIds) ? s.photoIds : [];
+    const coverId = photoIds.find((id) => coverById.has(id));
     const cover = coverId ? coverById.get(coverId) : undefined;
     return {
       id: s.id,
       token: s.token,
       label: s.label,
-      count: s.photoIds.length,
+      count: photoIds.length,
       coverUrl: cover?.thumbUrl || cover?.url,
     };
   });
 
   if (!access.preview) {
-    await recordEvent({
-      type: "gallery_view",
-      studioId: gallery.studioId,
-      galleryId: gallery.id,
-      sessionId,
-      projectId: session?.projectId || project?.id,
-    });
+    try {
+      await recordEvent({
+        type: "gallery_view",
+        studioId: gallery.studioId,
+        galleryId: gallery.id,
+        sessionId,
+        projectId: session?.projectId || project?.id,
+      });
+    } catch (err) {
+      console.error("[public gallery] view event failed", err);
+    }
   }
 
   const { downloadPinHash: _, favoritePhotoIds: _fav, ...safe } = gallery;
@@ -139,28 +155,30 @@ export async function GET(
     publicStudioContact(studio),
   ]);
 
-  return NextResponse.json({
-    gallery: {
-      ...safe,
-      // Per-visitor hearts — client loads via GET /favorites (AURA-005).
-      favoritePhotoIds: [] as string[],
-      coverPhotoUrl,
-      hasDownloadPin: Boolean(gallery.downloadPinHash),
-    },
-    photos,
-    photoTotal,
-    photoOffset: offset,
-    photoLimit: limit,
-    hasMore,
-    clientName: project?.name || null,
-    projectName: project?.name || null,
-    subAlbums,
-    studio: {
-      ...studioContact,
-      brandTagline: studio.brandTagline,
-      printPartners: publicPrintPartners(studio.printPartners),
-    },
-    comments,
-    preview: access.preview || undefined,
-  });
+  return NextResponse.json(
+    toClientJson({
+      gallery: {
+        ...safe,
+        // Per-visitor hearts — client loads via GET /favorites (AURA-005).
+        favoritePhotoIds: [] as string[],
+        coverPhotoUrl,
+        hasDownloadPin: Boolean(gallery.downloadPinHash),
+      },
+      photos,
+      photoTotal,
+      photoOffset: offset,
+      photoLimit: limit,
+      hasMore,
+      clientName: project?.name || null,
+      projectName: project?.name || null,
+      subAlbums,
+      studio: {
+        ...studioContact,
+        brandTagline: studio.brandTagline,
+        printPartners: publicPrintPartners(studio.printPartners),
+      },
+      comments,
+      preview: access.preview || undefined,
+    }),
+  );
 }

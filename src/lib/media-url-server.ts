@@ -21,7 +21,7 @@ export async function resolveBrowseMediaUrl(
   url?: string | null,
   opts?: { expiresInSec?: number },
 ): Promise<string | undefined> {
-  if (!url) return undefined;
+  if (typeof url !== "string" || !url) return undefined;
 
   if (
     url.startsWith("https://") &&
@@ -41,7 +41,7 @@ export async function resolveBrowseMediaUrl(
   const ttl = opts?.expiresInSec ?? BROWSE_SIGNED_TTL_SEC;
 
   if (!isR2Configured()) {
-    return mintMediaProxyUrl(objectPath, { expiresInSec: ttl });
+    return mintBrowseProxyUrl(objectPath, ttl);
   }
 
   try {
@@ -49,7 +49,19 @@ export async function resolveBrowseMediaUrl(
       expiresInSec: ttl,
     });
   } catch {
+    return mintBrowseProxyUrl(objectPath, ttl);
+  }
+}
+
+/** Proxy mint must not fail the public gallery JSON response. */
+function mintBrowseProxyUrl(
+  objectPath: string,
+  ttl: number,
+): string | undefined {
+  try {
     return mintMediaProxyUrl(objectPath, { expiresInSec: ttl });
+  } catch {
+    return undefined;
   }
 }
 
