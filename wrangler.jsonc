@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "aura",
+  "compatibility_date": "2026-11-04",
+  // D1 schema only. No Worker script, route, or custom domain.
+  // Do not deploy from this file, and do not switch DNS.
+  //
+  // Production database name: aura
+  // Local database name: aura-dev  (`--env dev`, `npm run d1:migrate:local`)
+  //
+  // `database_id` is omitted on purpose. Wrangler 4 treats it as optional.
+  // The UUID exists only after the D1 database is created in the dashboard.
+  // Paste that id into the matching binding before any `--remote` command or
+  // Worker deploy. Do not invent one. Until then, a remote command looks the
+  // database up by name and stops if it is missing; it does not create it.
+  // `remote: false` keeps local Wrangler off the live database.
+  // `d1_databases` is not inherited, so each environment lists its own binding.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "aura",
+      "migrations_dir": "migrations",
+      "remote": false
+    }
+  ],
+  "env": {
+    "dev": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "aura-dev",
+          "migrations_dir": "migrations",
+          "remote": false
+        }
+      ]
+    }
+  }
+}

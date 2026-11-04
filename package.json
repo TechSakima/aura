@@ -14,6 +14,8 @@
     "r2:cors": "node scripts/r2-cors.mjs",
     "r2:migrate": "node scripts/r2-migrate-from-firebase.mjs",
     "r2:secrets": "node scripts/r2-set-apphosting-secrets.mjs",
+    "d1:migrate:local": "wrangler d1 migrations apply aura-dev --local --env dev",
+    "d1:check": "node scripts/d1-schema-check.mjs",
     "firebase:deploy": "firebase deploy",
     "firebase:deploy:hosting": "node -r ./scripts/win-symlink-shim.cjs ./node_modules/firebase-tools/lib/bin/firebase.js deploy --only hosting --non-interactive",
     "firebase:rules": "firebase deploy --only firestore:rules,storage"
@@ -53,6 +55,7 @@
     "eslint-config-next": "16.2.12",
     "firebase-tools": "^15.24.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.157.0"
   }
 }
