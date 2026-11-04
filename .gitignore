@@ -56,3 +56,7 @@ firebase-debug.*.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Wrangler local D1 state and secret files
+.wrangler/
+.dev.vars
